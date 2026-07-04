@@ -1,134 +1,243 @@
 {
-  "version": 2,
-  "title": "GHOST//PROCESS",
-  "start": "intro",
-  "scenes": {
-    "intro": {
-      "id": "intro",
-      "kind": "title",
-      "bg": "scene_intro",
-      "music": "intro_theme.mp3",
-      "characters": [],
-      "hitboxes": [
-        {
-          "x": 0.35,
-          "y": 0.55,
-          "w": 0.30,
-          "h": 0.08,
-          "target": "alley",
-          "label": "PRESS START",
-          "label_size": "22px",
-          "label_font": "\"MadouFutoMaru\", monospace",
-          "label_color": "#ffffff",
-          "label_style": "normal"
+    "version": 3,
+    "title": "GHOST//PROCESS",
+    "start": "intro",
+    "next": {
+        "intro": "cold_open",
+        "cold_open": "alley",
+        "alley": "chase",
+        "chase": "corridor",
+        "corridor": "jailbreak",
+        "jailbreak": "eidolon_return",
+        "eidolon_return": "alley"
+    },
+    "scenes": {
+        "intro": {
+            "id": "intro",
+            "kind": "title",
+            "bg": "scene_intro",
+            "music": "intro_theme.mp3",
+            "characters": [],
+            "hitboxes": [
+                {
+                    "x": 0.35,
+                    "y": 0.55,
+                    "w": 0.30,
+                    "h": 0.08,
+                    "target": "alley",
+                    "label": "PRESS START",
+                    "label_size": "22px",
+                    "label_font": "\"MadouFutoMaru\", monospace",
+                    "label_color": "#ffffff",
+                    "label_style": "normal"
+                }
+            ]
+        },
+        "cold_open": {
+            "id": "cold_open",
+            "kind": "ink",
+            "bg": "scene_intro",
+            "music": "intro_theme.mp3",
+            "ink": "ink/cold_open.ink",
+            "start_node": "Start",
+            "characters": [],
+            "hitboxes": []
+        },
+        "alley": {
+            "id": "alley",
+            "kind": "ink",
+            "bg": "scene_alley",
+            "music": "alley_confrontation.mp3",
+            "ink": "ink/alley.ink",
+            "start_node": "Start",
+            "characters": [
+                {
+                    "id": "android",
+                    "speaker": "ANDROID",
+                    "position": "right",
+                    "scenes": {
+                        "alley": {
+                            "frames": "assets/sprites/android/alley/idle_*.png",
+                            "fps": 4,
+                            "loop": true
+                        }
+                    }
+                }
+            ],
+            "hitboxes": [
+                {
+                    "x": 0.15,
+                    "y": 0.55,
+                    "w": 0.10,
+                    "h": 0.15,
+                    "item": "rusty_key",
+                    "label": "Search the bins"
+                }
+            ]
+        },
+        "chase": {
+            "id": "chase",
+            "kind": "ink",
+            "bg": "scene_chase",
+            "music": "alley_confrontation.mp3",
+            "ink": "ink/chase.ink",
+            "start_node": "Start",
+            "characters": [
+                {
+                    "id": "android",
+                    "speaker": "ANDROID",
+                    "position": "closeup",
+                    "scenes": {
+                        "chase": {
+                            "frames": "assets/sprites/android/chase/idle_*.png",
+                            "fps": 6,
+                            "loop": true
+                        }
+                    }
+                }
+            ],
+            "hitboxes": []
+        },
+        "corridor": {
+            "id": "corridor",
+            "kind": "ink",
+            "bg": "scene_corridor",
+            "music": "clinic_tension.mp3",
+            "ink": "ink/corridor.ink",
+            "start_node": "Start",
+            "characters": [
+                {
+                    "id": "android",
+                    "speaker": "ANDROID",
+                    "position": "right",
+                    "scenes": {
+                        "corridor": {
+                            "frames": "assets/sprites/android/corridor/idle_*.png",
+                            "fps": 6,
+                            "loop": true
+                        }
+                    }
+                }
+            ],
+            "hitboxes": []
+        },
+        "jailbreak": {
+            "id": "jailbreak",
+            "kind": "ink",
+            "bg": "scene_jailbreak",
+            "music": "clinic_tension.mp3",
+            "ink": "ink/jailbreak.ink",
+            "start_node": "Start",
+            "characters": [
+                {
+                    "id": "thug",
+                    "speaker": "THUG",
+                    "position": "right",
+                    "scenes": {
+                        "jailbreak": {
+                            "frames": "assets/sprites/thug/jailbreak/idle_*.png",
+                            "fps": 6,
+                            "loop": true
+                        }
+                    }
+                }
+            ],
+            "hitboxes": []
+        },
+        "eidolon_return": {
+            "id": "eidolon_return",
+            "kind": "ink",
+            "bg": "scene_eidolon_return",
+            "music": "alley_confrontation.mp3",
+            "ink": "ink/eidolon_return.ink",
+            "start_node": "Start",
+            "characters": [
+                {
+                    "id": "android",
+                    "speaker": "ANDROID",
+                    "position": "left",
+                    "scenes": {
+                        "eidolon_return": {
+                            "frames": "assets/sprites/android/eidolon_return/idle_*.png",
+                            "fps": 6,
+                            "loop": true
+                        }
+                    }
+                }
+            ],
+            "hitboxes": []
         }
-      ]
     },
-    "cold_open": {
-      "id": "cold_open",
-      "kind": "ink",
-      "bg": "scene_intro",
-      "music": "intro_theme.mp3",
-      "ink": "ink/cold_open.ink",
-      "start_node": "Start",
-      "characters": [],
-      "hitboxes": []
-    },
-    "alley": {
-      "id": "alley",
-      "kind": "ink",
-      "bg": "scene_alley",
-      "music": "alley_confrontation.mp3",
-      "ink": "ink/alley.ink",
-      "start_node": "Start",
-      "characters": [
-        {
-          "id": "android",
-          "speaker": "ANDROID",
-          "position": "right",
-          "scenes": {
-            "alley": {
-              "frames": "assets/sprites/android/alley/idle_*.png",
-              "fps": 4,
-              "loop": true
-            }
-          }
+    "items": {
+        "rusty_key": {
+            "id": "rusty_key",
+            "name": "Rusty Key",
+            "description": "An old iron key, stained with verdigris. The teeth are filed in an unusual pattern — military, maybe, or police. It weighs more than it should.",
+            "icon": "assets/items/rusty_key.png",
+            "key": true,
+            "pickup_message": "You found a rusty key."
+        },
+        "scrap_metal": {
+            "id": "scrap_metal",
+            "name": "Scrap",
+            "description": "A twisted hunk of alloy pulled from the android's chest cavity. The serial stamp reads K-7 / EIDOLON-A12. Worth something to the right buyer.",
+            "icon": "assets/items/rusty_key.png",
+            "key": false,
+            "pickup_message": "You salvaged some scrap metal."
+        },
+        "battery": {
+            "id": "battery",
+            "name": "Battery",
+            "description": "A lithium cell still holding a partial charge. The label is in a script you can't read — Cyrillic, maybe, or something older. Smells faintly of ozone.",
+            "icon": "assets/items/battery.png",
+            "key": false,
+            "pickup_message": "You pocketed a battery."
+        },
+        "datacard": {
+            "id": "datacard",
+            "name": "Datacard",
+            "description": "A black credit-card-sized slab with a single gold contact strip. Proprietary format. The screen is dead, but the data might not be.",
+            "icon": "assets/items/datacard.png",
+            "key": false,
+            "pickup_message": "You lifted a datacard."
+        },
+        "oily_rag": {
+            "id": "oily_rag",
+            "name": "Oily Rag",
+            "description": "A shop rag soaked in synthetic lubricant. The brand stamped on the corner is the same one stenciled on the back door of the diner.",
+            "icon": "assets/items/oily_rag.png",
+            "key": false,
+            "pickup_message": "You picked up an oily rag."
+        },
+        "rusted_cog": {
+            "id": "rusted_cog",
+            "name": "Rusted Cog",
+            "description": "A clockwork gear, roughly the size of a half-dollar. Eight teeth, brass core, magnetized on one face. It ticks faintly when warmed in the hand.",
+            "icon": "assets/items/rusted_cog.png",
+            "key": false,
+            "pickup_message": "You found a rusted cog."
+        },
+        "door_key": {
+            "id": "door_key",
+            "name": "Door Key",
+            "description": "An old key. Says B2 on the shaft.",
+            "icon": "assets/items/rusty_key.png",
+            "key": true,
+            "pickup_message": "You fished a key out from under the grate."
         }
-      ],
-      "hitboxes": [
+    },
+    "recipes": [
         {
-          "x": 0.15,
-          "y": 0.55,
-          "w": 0.10,
-          "h": 0.15,
-          "item": "rusty_key",
-          "label": "Search the bins"
+            "input": ["rusty_key", "scrap_metal"],
+            "output": "tinkered_key"
+        },
+        {
+            "input": ["battery", "oily_rag"],
+            "output": "emergency_torch"
+        },
+        {
+            "input": ["datacard", "rusted_cog"],
+            "output": "hacked_terminal"
         }
-      ]
-    }
-  },
-  "items": {
-      "rusty_key": {
-        "id": "rusty_key",
-        "name": "Rusty Key",
-        "description": "An old iron key, stained with verdigris. The teeth are filed in an unusual pattern — military, maybe, or police. It weighs more than it should.",
-        "icon": "assets/items/rusty_key.png",
-        "key": true,
-        "pickup_message": "You found a rusty key."
-      },
-      "scrap_metal": {
-        "id": "scrap_metal",
-        "name": "Scrap",
-        "description": "A twisted hunk of alloy pulled from the android's chest cavity. The serial stamp reads K-7 / EIDOLON-A12. Worth something to the right buyer.",
-        "icon": "assets/items/rusty_key.png",
-        "key": false,
-        "pickup_message": "You salvaged some scrap metal."
-      },
-      "battery": {
-        "id": "battery",
-        "name": "Battery",
-        "description": "A lithium cell still holding a partial charge. The label is in a script you can't read — Cyrillic, maybe, or something older. Smells faintly of ozone.",
-        "icon": "assets/items/battery.png",
-        "key": false,
-        "pickup_message": "You pocketed a battery."
-      },
-      "datacard": {
-        "id": "datacard",
-        "name": "Datacard",
-        "description": "A black credit-card-sized slab with a single gold contact strip. Proprietary format. The screen is dead, but the data might not be.",
-        "icon": "assets/items/datacard.png",
-        "key": false,
-        "pickup_message": "You lifted a datacard."
-      },
-      "oily_rag": {
-        "id": "oily_rag",
-        "name": "Oily Rag",
-        "description": "A shop rag soaked in synthetic lubricant. The brand stamped on the corner is the same one stenciled on the back door of the diner.",
-        "icon": "assets/items/oily_rag.png",
-        "key": false,
-        "pickup_message": "You picked up an oily rag."
-      },
-      "rusted_cog": {
-        "id": "rusted_cog",
-        "name": "Rusted Cog",
-        "description": "A clockwork gear, roughly the size of a half-dollar. Eight teeth, brass core, magnetized on one face. It ticks faintly when warmed in the hand.",
-        "icon": "assets/items/rusted_cog.png",
-        "key": false,
-        "pickup_message": "You found a rusted cog."
-      }
-  },
-  "recipes": [
-    {
-      "input": ["rusty_key", "scrap_metal"],
-      "output": "tinkered_key"
-    },
-    {
-      "input": ["battery", "oily_rag"],
-      "output": "emergency_torch"
-    },
-    {
-      "input": ["datacard", "rusted_cog"],
-      "output": "hacked_terminal"
-    }
-  ]
+    ]
 }

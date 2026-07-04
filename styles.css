@@ -361,6 +361,60 @@ html, body {
     cursor: pointer;        /* explicit click target — advances dialogue */
 }
 
+/* Choice buttons (above the dialogue box). Each is a full-width chunky
+   PC-98 button rendered from `_renderChoices()` in _shared.js. */
+.choices-list {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 200px;            /* sits above the dialogue box */
+    z-index: 60;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px 18px;
+    pointer-events: none;     /* container ignores clicks; buttons re-enable */
+}
+.choice-button {
+    pointer-events: auto;     /* re-enable click for actual buttons */
+    background: rgba(8, 8, 16, 0.96);
+    border: 2px solid #d4a045;
+    color: #f4d878;
+    font-family: 'NouveauIBM', 'PC98Serif', monospace;
+    font-size: 18px;
+    line-height: 1.4;
+    letter-spacing: 0.05em;
+    text-align: left;
+    text-shadow: 1px 1px 0 #000;
+    padding: 12px 18px;
+    cursor: pointer;
+    -webkit-font-smoothing: none;
+    -moz-osx-font-smooth: grayscale;
+    text-rendering: optimizeSpeed;
+    box-shadow: 0 0 12px rgba(212, 160, 69, 0.18);
+    transition: background 80ms linear, border-color 80ms linear;
+}
+.choice-button:hover {
+    background: rgba(212, 160, 69, 0.18);
+    border-color: #f4c878;
+    color: #fff8d0;
+}
+.choice-button:active {
+    transform: translateY(1px);
+    background: rgba(212, 160, 69, 0.32);
+}
+@media (min-width: 769px) {
+    .choices-list {
+        bottom: 220px;          /* leave more room for the larger dialogue */
+        padding: 16px 26px;
+        gap: 14px;
+    }
+    .choice-button {
+        font-size: 22px;
+        padding: 14px 24px;
+    }
+}
+
 @keyframes blink {
     0%, 50% { opacity: 1; }
     51%, 100% { opacity: 0; }

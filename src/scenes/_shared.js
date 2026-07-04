@@ -190,13 +190,18 @@ class BaseStoryScene extends Phaser.Scene {
 
     _startDialogue(sceneConfig) {
         fetch(sceneConfig.ink).then(r => r.text()).then(inkText => {
-            this.dialogueRunner = new window.DialogueRunner(
+            const runner = new window.DialogueRunner(
                 inkText,
                 (line, tags, typed, full) => this._renderLine(line, tags, typed, full),
                 (choices) => this._renderChoices(choices),
                 (cmd, args) => this._handleCommand(cmd, args),
                 () => this._onDialogueComplete()
             );
+            // The runner needs to know which scene it's bound to so the
+            // scene-agnostic EXTERNAL transition_next() can resolve the
+            // right destination from window.STORY.next.
+            runner._sceneId = this.scene.key;
+            this.dialogueRunner = runner;
         });
     }
 
@@ -253,10 +258,50 @@ class BaseStoryScene extends Phaser.Scene {
     }
 
     _renderChoices(choices) {
-        // For v1, choices are Ink `*` lines that the DialogueRunner
-        // treats as inline branches. By the time we hit this method,
-        // the story has advanced past them via the click handler.
-        // (For richer UI, render buttons here.)
+        // Render DOM buttons stacked above the dialogue box. The player
+        // picks one with a click (or keyboard), which calls
+        // dialogueRunner.choose(index). The runner then re-runs `step()`
+        // and advances into the chosen branch.
+        if (!choices || choices.length === 0) return;
+
+        // Build the wrapper on first call so it survives across choice sets.
+        if (!this.choicesEl) {
+            this.choicesEl = document.createElement('div');
+            this.choicesEl.className = 'choices-list';
+            document.body.appendChild(this.choicesEl);
+        }
+        // Clear any previous buttons (in case multiple choice sets render).
+        this.choicesEl.innerHTML = '';
+
+        // Hide the continue indicator while choices are active.
+        if (this.continueEl) this.continueEl.style.display = 'none';
+
+        for (let i = 0; i < choices.length; i++) {
+            const btn = document.createElement('button');
+            btn.className = 'choice-button';
+            // Index prefix makes the option order scannable on PC-98 era
+            // keyboard workflows and helps debugging (debug-mode via
+            // F1 / DevTools shows which index was picked).
+            btn.textContent = `${i + 1}. ${choices[i].text}`;
+            btn.addEventListener('pointerdown', (e) => {
+                e.stopPropagation();
+                if (!this.dialogueRunner) return;
+                this._clearChoices();
+                this.dialogueRunner.choose(i);
+            });
+            this.choicesEl.appendChild(btn);
+        }
+    }
+
+    _clearChoices() {
+        if (this.choicesEl) {
+            this.choicesEl.innerHTML = '';
+        }
+        if (this.continueEl) {
+            // Restore continue indicator if there's text already on screen
+            // (rare ordering — usually choices consume the line fully).
+            this.continueEl.style.display = 'block';
+        }
     }
 
     _handleCommand(cmd, args) {
@@ -264,10 +309,17 @@ class BaseStoryScene extends Phaser.Scene {
             case 'portrait': /* TODO: show portrait */ break;
             case 'give':     window.Inventory.add(args[0]); break;
             case 'take':     window.Inventory.remove(args[0]); break;
-            case 'goto':     this._transitionToScene(args[0]); break;
+            case 'goto':
+                // Tell the runner to swallow its next auto-step — we're
+                // tearing down the scene and any continuation would just
+                // hit Ink with an empty story ("ran out of content").
+                if (this.dialogueRunner) this.dialogueRunner._cancelNextStep();
+                this._transitionToScene(args[0]);
+                break;
             case 'music':    this._playMusic(args[0]); break;
             case 'background': /* TODO: swap background */ break;
             case 'return_to_alley':
+                if (this.dialogueRunner) this.dialogueRunner._cancelNextStep();
                 this._transitionToScene('alley');
                 break;
             default:
@@ -403,6 +455,10 @@ class BaseStoryScene extends Phaser.Scene {
         // reference so this scene doesn't try to interact with the
         // sound during teardown.
         this._currentMusic = null;
+        // Drop the runner reference too — otherwise the runner's step()
+        // callback could fire onComplete on a torn-down scene and try to
+        // re-transition. GC reclaims the runner+story together.
+        this.dialogueRunner = null;
         if (this.dialogueEl) {
             this.dialogueEl.remove();
             this.dialogueEl = null;
@@ -410,6 +466,10 @@ class BaseStoryScene extends Phaser.Scene {
         if (this.continueEl) {
             this.continueEl.remove();
             this.continueEl = null;
+        }
+        if (this.choicesEl) {
+            this.choicesEl.remove();
+            this.choicesEl = null;
         }
         if (this.hitboxes) {
             this.hitboxes.destroy();

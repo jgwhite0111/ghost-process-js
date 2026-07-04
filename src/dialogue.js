@@ -34,6 +34,19 @@ class DialogueRunner {
             return;
         }
 
+        // Per-scene "transition_next()" external — the .ink files end on
+        // `~ transition_next()` which the runner translates into the scene
+        // declared in story.json as the next destination. The binding here
+        // just forwards up to the scene via onCommand so each .ink stays
+        // ignorant of the actual next scene id (avoids a Cascade of ink
+        // edits when we re-order scenes).
+        this.story.BindExternalFunction('transition_next', () => {
+            const next = window.STORY.next && window.STORY.next[this._sceneId];
+            this.onCommand && this.onCommand('goto', next ? [next] : ['alley']);
+        });
+        // Keep `this._sceneId` in sync for transition_next to read.
+        this._sceneId = '?';
+
         // Register external functions called from Ink via EXTERNAL.
         this.story.BindExternalFunction('return_to_alley', () => {
             this.onCommand && this.onCommand('return_to_alley', []);
@@ -89,8 +102,21 @@ class DialogueRunner {
 
     choose(index) {
         if (!this.story) return;
+        this._suppressStep = false;
         this.story.ChooseChoiceIndex(index);
+        if (this._suppressStep) {
+            this._suppressStep = false;
+            return;
+        }
         this.step();
+    }
+
+    // Internal hook so onCommand handlers can suppress the auto-step that
+    // would otherwise run AFTER a destructive command like `goto` (which
+    // already tore down the scene). Without this, the runner eats a
+    // "ran out of content" error before it returns.
+    _cancelNextStep() {
+        this._suppressStep = true;
     }
 
     showLine(line, tags) {

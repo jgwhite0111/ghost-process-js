@@ -44,6 +44,10 @@
         game.scene.add('Boot', window.BootScene);
         game.scene.add('Intro', window.IntroScene);
         game.scene.add('Alley', window.AlleyScene);
+        game.scene.add('Chase', window.ChaseScene);
+        game.scene.add('Corridor', window.CorridorScene);
+        game.scene.add('Jailbreak', window.JailbreakScene);
+        game.scene.add('EidolonReturn', window.EidolonReturnScene);
 
         game.scene.start('Boot');
     }
