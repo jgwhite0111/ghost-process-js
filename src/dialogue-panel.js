@@ -82,6 +82,21 @@ class DialoguePanel {
         this.setChoices(null);
     }
 
+    // Reset the panel to a clean state. Called when transitioning
+    // between scenes so the previous scene's text/speaker/choices
+    // don't linger until the new runner's first callback fires.
+    // Without this, "Continue" buttons from one scene stay clickable
+    // (and now-dead) in the next scene, and clicking the dialogue
+    // box silently no-ops because the choices-list offsetParent
+    // guard fires before advance().
+    clear() {
+        this.setChoices(null);
+        this.setText('');
+        this.setSpeaker('');
+        this.setHasMore(false);
+        this._currentRunner = null;
+    }
+
     setSpeaker(name) {
         this.speakerEl.textContent = name || '';
         this.speakerEl.style.display = name ? 'inline-block' : 'none';

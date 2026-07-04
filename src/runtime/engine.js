@@ -63,6 +63,9 @@ async function goTo(sceneId) {
         ENGINE_STATE.current = null;
     }
     if (!sceneId) return;
+    // Reset the dialogue panel between scenes so the previous scene's
+    // text/speaker/choice buttons don't linger on screen.
+    if (window.DialoguePanel) window.DialoguePanel.clear();
     STATE.visited = STATE.visited || [];
     if (STATE.visited[STATE.visited.length - 1] !== sceneId) {
         STATE.visited.push(sceneId);

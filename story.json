@@ -132,7 +132,7 @@
                 {
                     "id": "thug",
                     "speaker": "THUG",
-                    "position": "right",
+                    "position": "bottomright",
                     "scenes": {
                         "jailbreak": {
                             "frames": "assets/sprites/thug/jailbreak/idle_*.png",

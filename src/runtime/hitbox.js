@@ -66,14 +66,30 @@ class HitboxLayer {
         el.className = 'hitbox';
         el.style.cssText = [
             'position:absolute',
+            'cursor:' + window.EYE_CURSOR,
             'left:' + (hb.x * 100) + '%',
             'top:' + (hb.y * 100) + '%',
             'width:' + (hb.w * 100) + '%',
             'height:' + (hb.h * 100) + '%'
         ].join(';');
-        el.addEventListener('pointerdown', (e) => this._handleDomDown(e, hb, idx));
+        const self = this;
+        el.addEventListener('pointerdown', function (e) { self._handleDomDown(e, hb, idx); });
+        el.addEventListener('pointerenter', function () { self._setHovered(idx, hb); });
+        el.addEventListener('pointerleave', function () { self._setHovered(null, null); });
         this.overlay.appendChild(el);
         return el;
+    }
+
+    _setHovered(idx, hb) {
+        if (idx === this._hoveredIdx) return;
+        this._hoveredIdx = idx;
+        if (idx === null) {
+            this.canvas.style.cursor = '';
+            for (const i in this._labels) this._labels[i].style.opacity = '0';
+        } else {
+            this.canvas.style.cursor = window.EYE_CURSOR;
+            for (const i in this._labels) this._labels[i].style.opacity = (i == idx) ? '1' : '0';
+        }
     }
 
     _syncOverlay() {

@@ -253,8 +253,14 @@ class Scene {
 
     _handleSpeaker(speaker) {
         // Switch sprites on/off based on speaker. NONE / empty =
-        // no animation (frame 0 frozen).
-        for (const c of this.characters) c.setSpeaking(c.character.speaker === speaker);
+        // no animation (frame 0 frozen). Speaker names flow as the
+        // Ink tag value (case varies in story.json — 'ANDROID' vs
+        // 'android' in alley.ink), so we lowercase both sides.
+        const sp = (speaker || '').toLowerCase();
+        for (const c of this.characters) {
+            const charSp = (c.character.speaker || '').toLowerCase();
+            c.setSpeaking(charSp === sp);
+        }
     }
 
     _handleAction(action) { /* no-op in v1 */ }
