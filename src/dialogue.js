@@ -2,62 +2,79 @@
 //
 // Loads the Ink file referenced by the current scene, walks the story,
 // handles tags (# speaker:NAME, # portrait:NAME, # give:ITEM, etc.),
-// and renders text with typewriter effect + speaker portrait.
+// and renders text with typewriter effect.
+//
+// In v2 (no Phaser) the runner is purely JS — DOM dialogue box, no
+// scene plugin involved. The runner fires events for scene listeners:
+//   - onLine(text, tags, typed-so-far, total) — typewriter ticks
+//   - onChoices(choices) — choice buttons appeared
+//   - onCommand(key, args) — Ink-level commands (tags + EXTERNAL calls)
+//   - onComplete() — story ended
+//
+// EXTERNAL functions called from Ink are bound here:
+//   transition_next() — looks up STORY.next[sceneId] and asks Engine
+//                       to navigate; uses _suppressStep so the post-
+//                       transition step() doesn't trigger Ink's
+//                       "ran out of content" warning.
 
 class DialogueRunner {
-    constructor(inkText, onLine, onChoices, onCommand, onComplete) {
+    constructor(inkText, callbacks = {}) {
         this.story = null;
         this.currentLine = '';
+        this.currentTags = [];
         this.typewriterTimer = null;
         this.typing = false;
-        this.onLine = onLine;
-        this.onChoices = onChoices;
-        this.onCommand = onCommand;
-        this.onComplete = onComplete;
+        this.onLine = callbacks.onLine || (() => {});
+        this.onChoices = callbacks.onChoices || (() => {});
+        this.onCommand = callbacks.onCommand || (() => {});
+        this.onComplete = callbacks.onComplete || (() => {});
 
-        // Compile Ink source. InkJS 2.x exposes a global `inkjs` namespace
-        // with both `Compiler` and `Story`. Compiler.Compile() returns a
-        // Story directly (no intermediate JSON needed).
         try {
             const compiler = new inkjs.Compiler(inkText);
             this.story = compiler.Compile();
             if (compiler.errors && compiler.errors.length > 0) {
-                console.error('Ink compilation errors for: ' + inkText.slice(0, 60) + '...');
-                for (const e of compiler.errors) console.error('  ' + e);
-                // Show in dialogue box so the developer can see what's wrong.
-                if (this.onLine) this.onLine('[Ink error] ' + compiler.errors[0], [], 0, 0);
+                console.error('Ink compilation errors:', compiler.errors);
+                this.onLine('[Ink error] ' + (compiler.errors[0]?.message || 'unknown'));
                 return;
             }
         } catch (err) {
             console.error('Ink compilation failed:', err);
-            if (this.onLine) this.onLine('[Ink fatal] ' + err.message, [], 0, 0);
+            this.onLine('[Ink fatal] ' + err.message);
             return;
         }
 
-        // Per-scene "transition_next()" external — the .ink files end on
-        // `~ transition_next()` which the runner translates into the scene
-        // declared in story.json as the next destination. The binding here
-        // just forwards up to the scene via onCommand so each .ink stays
-        // ignorant of the actual next scene id (avoids a Cascade of ink
-        // edits when we re-order scenes).
-        this.story.BindExternalFunction('transition_next', () => {
-            const next = window.STORY.next && window.STORY.next[this._sceneId];
-            this.onCommand && this.onCommand('goto', next ? [next] : ['alley']);
-        });
-        // Keep `this._sceneId` in sync for transition_next to read.
+        // EXTERNAL transition_next(): defers to the engine via a tag-like
+        // command. Scene sets this._sceneId before step() is called.
         this._sceneId = '?';
-
-        // Register external functions called from Ink via EXTERNAL.
+        this.story.BindExternalFunction('transition_next', () => {
+            const nextId = (window.STORY.next || {})[this._sceneId];
+            this._suppressStep = true;
+            this.onCommand('transition_next', [nextId || null]);
+        });
         this.story.BindExternalFunction('return_to_alley', () => {
-            this.onCommand && this.onCommand('return_to_alley', []);
+            this.onCommand('return_to_alley', []);
         });
-
-        // Tags are read after each Continue() call.
         this.story.BindExternalFunction('has', (itemId) => {
-            return window.STATE.inventory.indexOf(itemId) !== -1;
+            return (window.STATE?.inventory || []).indexOf(itemId) !== -1;
         });
 
-        this.start();
+        // Don't auto-start here — the caller may need to wire runner.onLine/
+        // onChoices/onCommand BEFORE the first step() pulls a line. Use
+        // runner.start() explicitly after wiring.
+    }
+
+    bindExternal(name, fn) {
+        // If the binding already exists for this name, replace it. InkJS
+        // throws on double-bind; we sidestep that by skipping the rebind
+        // if the existing function was already set (the constructor
+        // binds all the known externals up front, so scene-base shouldn't
+        // need to call this at all).
+        if (!this.story) return;
+        try {
+            this.story.BindExternalFunction(name, fn);
+        } catch (e) {
+            console.warn('[dialogue] bindExternal failed for', name, e.message);
+        }
     }
 
     start() {
@@ -65,56 +82,39 @@ class DialogueRunner {
     }
 
     step() {
+        if (this._suppressStep) {
+            this._suppressStep = false;
+            return;
+        }
         if (!this.story) return;
-
-        // Walk through lines until we hit a choice or end.
-        while (this.story.canContinue) {
+        const maxLinesPerStep = 100;
+        let walked = 0;
+        while (this.story.canContinue && walked < maxLinesPerStep) {
+            walked++;
             const line = this.story.Continue();
             const tags = this.story.currentTags || [];
-
-            if (line.trim() === '') continue;  // skip blank lines
-
-            // Tags drive game state. Recognized tags:
-            //   # speaker:NAME        — animate mouth on sprite NAME
-            //   # portrait:NAME       — show portrait (or 'none' to hide)
-            //   # give:ITEM_ID        — add item to inventory
-            //   # take:ITEM_ID        — remove item
-            //   # goto:SCENE_ID       — transition to scene
-            //   # music:MP3_FILE      — swap music
-            //   # background:PLATE_ID — swap background
+            if (line.trim() === '') continue;
             for (const tag of tags) {
                 const [key, value] = tag.split(':').map(s => s.trim());
                 if (!key) continue;
-                this.onCommand && this.onCommand(key, value ? [value] : []);
+                this.onCommand(key, value ? [value] : []);
             }
-
             this.showLine(line, tags);
-            return;  // wait for click before next line
+            return;
         }
-
-        // No more lines to continue: either choices or end.
         if (this.story.currentChoices && this.story.currentChoices.length > 0) {
-            this.onChoices && this.onChoices(this.story.currentChoices);
+            this.onChoices(this.story.currentChoices);
         } else {
-            this.onComplete && this.onComplete();
+            this.onComplete();
         }
     }
 
     choose(index) {
         if (!this.story) return;
-        this._suppressStep = false;
         this.story.ChooseChoiceIndex(index);
-        if (this._suppressStep) {
-            this._suppressStep = false;
-            return;
-        }
         this.step();
     }
 
-    // Internal hook so onCommand handlers can suppress the auto-step that
-    // would otherwise run AFTER a destructive command like `goto` (which
-    // already tore down the scene). Without this, the runner eats a
-    // "ran out of content" error before it returns.
     _cancelNextStep() {
         this._suppressStep = true;
     }
@@ -123,16 +123,15 @@ class DialogueRunner {
         this.typing = true;
         this.currentLine = line;
         this.currentTags = tags;
-        this.onLine && this.onLine(line, tags, /* typed-so-far */ 0, /* full */ line.length);
+        this.onLine(line, tags, 0, line.length);
 
-        // Typewriter effect. 30ms per char.
         let i = 0;
         const target = line;
         const self = this;
         if (this.typewriterTimer) clearInterval(this.typewriterTimer);
         this.typewriterTimer = setInterval(() => {
             i++;
-            self.onLine && self.onLine(target, tags, i, target.length);
+            self.onLine(target, tags, i, target.length);
             if (i >= target.length) {
                 clearInterval(self.typewriterTimer);
                 self.typewriterTimer = null;
@@ -141,29 +140,24 @@ class DialogueRunner {
         }, 30);
     }
 
-    // User clicked: finish typewriter instantly (snap to full text), or
-    // advance to next line if already fully revealed.
     advance() {
         if (!this.story) return;
         if (this.typing) {
-            // Skip typewriter: stop the timer AND immediately render the
-            // full line. Without this, the partial text would freeze on
-            // screen and a second click would jump past the line entirely.
             if (this.typewriterTimer) {
                 clearInterval(this.typewriterTimer);
                 this.typewriterTimer = null;
             }
             this.typing = false;
-            // Re-fire the presenter's onLine with the FULL text by
-            // re-emitting the line we already have cached in currentLine.
-            this.onLine && this.onLine(
-                this.currentLine,
-                this.currentTags || [],
-                this.currentLine.length,
-                this.currentLine.length
-            );
+            this.onLine(this.currentLine, this.currentTags, this.currentLine.length, this.currentLine.length);
         } else {
             this.step();
+        }
+    }
+
+    stop() {
+        if (this.typewriterTimer) {
+            clearInterval(this.typewriterTimer);
+            this.typewriterTimer = null;
         }
     }
 }

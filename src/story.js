@@ -1,11 +1,16 @@
-// src/story.js — fetch + cache story.json, expose as window.STORY
+// src/story.js — fetch + cache story.json, then start the asset
+// preload, then fire `story-ready` so the Engine can boot.
 //
-// Single source of truth for content. Loaded at boot before Phaser starts.
-// Hitboxes, sprites, dialogue all read from this object.
+// story-ready fires only after EVERY asset referenced by story.json
+// has been preloaded. This is what replaces Phaser's preload() phase.
+// Each scene's bg image, audio, and 16-frame sprite sheets is added
+// to the preload batch up-front. Total preload is bounded by the
+// number of scenes x assets; with ~7 scenes it's a few seconds.
 
 (async () => {
     'use strict';
 
+    // 1. Load story.json.
     let story = null;
     try {
         const res = await fetch('story.json', { cache: 'no-cache' });
@@ -33,13 +38,46 @@
         visited: [story.start]
     };
 
-    // Notify any listener that story is ready (Phaser boot waits on this).
-    window.dispatchEvent(new CustomEvent('story-ready'));
+    // 2. Preload every asset referenced by story.json. We do this
+    //    BEFORE announcing story-ready so the first scene's start()
+    //    doesn't have to wait — but we still keep this behind a
+    //    promise so the Engine can boot the moment preloading
+    //    finishes.
+    const preloadPromises = [];
+    for (const [sceneId, scene] of Object.entries(story.scenes)) {
+        if (scene.bg) {
+            preloadPromises.push(
+                window.Runtime.loadImage(`assets/backgrounds/${scene.bg}.png`)
+                    .catch((e) => console.warn(`bg preload failed: ${scene.bg}`, e))
+            );
+        }
+        if (scene.music) {
+            preloadPromises.push(
+                window.Runtime.loadAudio(`assets/audio/${scene.music}`)
+                    .catch((e) => console.warn(`audio preload failed: ${scene.music}`, e))
+            );
+        }
+        for (const char of scene.characters || []) {
+            const sprites = (char.scenes || {})[sceneId] || {};
+            if (sprites.frames) {
+                const m = sprites.frames.match(/^(.+\/)([^/]+)_\*\.png$/);
+                if (m) {
+                    const dir = m[1], prefix = m[2];
+                    for (let i = 1; i <= 16; i++) {
+                        const num = String(i).padStart(2, '0');
+                        preloadPromises.push(
+                            window.Runtime.loadImage(`${dir}${prefix}_${num}.png`)
+                                .catch(() => null)
+                        );
+                    }
+                }
+            }
+        }
+    }
+    window.STORY_BG_PROMISE = Promise.all(preloadPromises);
 
-    // The inventory button is unlocked for gameplay from the intro
-    // scene's create() — NOT here — so it doesn't appear during the
-    // Boot scene's preload phase on mobile (where it would visually
-    // collide with the "Loading…" Phaser text).
+    // 3. Fire story-ready.
+    window.dispatchEvent(new CustomEvent('story-ready'));
 
     function showFatal(msg) {
         document.body.innerHTML = `

@@ -1,54 +1,58 @@
-# SPEC — GHOST//PROCESS (v3, JavaScript rebuild)
+# SPEC — GHOST//PROCESS (v0.2, vanilla-JS rebuild)
 
-Status: scaffold v0.1
+Status: v0.2 in progress — Phaser removed, vanilla-JS engine ships.
 Owner: jwhite
-Created: 2026-07-03
+Created: 2026-07-04
 Replaces: `~/ghost-process-98/` (pre-Godot JS prototype) + `~/ghost-process/` (abandoned Godot 4.7 refactor)
 
 ---
 
 ## 1. Why this exists
 
-The project went through two false starts:
+The project went through three false starts:
 
-1. **`~/ghost-process-98/`** — A data-driven JS visual novel using `story.json`, a browser editor, point-and-click hitboxes, and inventory. It shipped as 34 scenes but never got a real renderer — the engine was hand-rolled DOM manipulation, no Phaser/Pixi, no real sprite compositing, and the assets used a different art style than what we now want.
+1. **`~/ghost-process-98/`** — pre-Godot JS prototype. `story.json`-driven, point-and-click hitboxes, DOM-only renderer, 34 scenes but no real sprite compositing and an inconsistent art style.
 
-2. **`~/ghost-process/`** — A Godot 4.7 Mono project with C# + Ink + FluidSynth MIDI. Strong asset pipeline (palettes, PC-98 shader, character sprite sheets, AI-driven image generation via `tools/gen_asset.py`), mature Android sprite + idle animation, and `AGENTS.md` rules that codify "mature PC-98 cyberpunk, no moe, no figures baked into backgrounds." The Godot project got bogged down in:
-   - Mono + Web export doesn't work (no stable Godot build has C# WASM)
-   - Inkgd (the Ink → Godot bridge) is unmaintained (last commit 3 years ago)
-   - FluidSynth is a native binary that can't run in a browser sandbox
-   - The C# + Ink stack fought us at every turn
+2. **`~/ghost-process/`** — Godot 4.7 Mono project with C# + Ink + FluidSynth MIDI. Strong asset pipeline (palettes, PC-98 shader, character sprite sheets), mature Android sprite + idle animation, and `AGENTS.md` rules that codify "mature PC-98 cyberpunk, no moe, no figures baked into backgrounds." Bogged down in Mono WASM, Inkgd unmaintained, FluidSynth unbrowserable.
 
-**The rebuild takes the best of both:**
+3. **`~/ghost-process-js/` v0.1 (Phaser 3 era)** — initially built on Phaser 3 + InkJS + plain JS. Phaser's scene lifecycle, mid-transition bugs, "ran out of content" errors on the Ink runner mid-transition, and scene-stacking quirks were costing more time than the renderer itself saved. **v0.2 dropped Phaser**; everything UI/sprite/dialogue is now plain JavaScript.
 
-| From `-98` (data-driven JS prototype) | From Godot project (asset pipeline + rules) |
+What we kept:
+
+| Carried over | From |
 |---|---|
-| `story.json` as single source of truth | `AGENTS.md` rules for visual style + asset generation |
-| Browser-based authoring editor | PC-98 palette system (16-color quantization shader) |
-| Express static server with `PUT /api/story` | Character sprite pipeline (base + blink + mouth + talking) |
-| Point-and-click hitboxes + inventory + 2-slot combine | Scene background plates without baked-in characters |
-| Per-scene character sprite variants | Android sprite with idle animation, portrait, base |
-| Typewriter line presentation + backlog | Madou Futo Maru pixel font for PC-98 typography |
-| | 3 MP3 audio tracks (intro_theme, alley_confrontation, clinic_tension) |
+| `story.json` as single source of truth | v0.1 |
+| InkJS for branching dialogue | v0.1 |
+| PC-98 palette + dither look (CSS overlay + pixelated canvas) | Godot `AGENTS.md` |
+| 16-frame idle sprites per character | Godot sprite pipeline |
+| 7 scenes: intro → cold_open → alley → chase → corridor → jailbreak → eidolon_return | v0.98 + v0.1 |
+| 3 MP3 audio tracks (pre-rendered via FluidSynth from the Godot project) | Godot |
+| Madou Futo Maru + Nouveau IBM typography | Godot |
+| Data-driven scene config (bg, music, characters, hitboxes) | v0.98 |
 
-**What's discarded:** the C# scripts, FluidSynth MIDI runtime, Ink stories, Mono build, Godot scene files, the old intro_v2 experiments, and the `-98` Blade Runner-cinematic style backgrounds (those had figures baked in — we want clean plates).
+What we discarded:
+
+- Phaser 3 (scene lifecycle, scene-stacking, post-fx pipeline) — replaced by a vanilla-JS engine in `src/runtime/`
+- Godot scene files, Mono, .NET, FluidSynth
+- The hand-rolled DOM renderer from v0.98 (we now use a single `<canvas>`)
+- The Blade Runner-cinematic style backgrounds from v0.98 (figures baked in)
 
 ---
 
 ## 2. Stack
 
-- **Runtime**: Plain JavaScript (ES2022), no TypeScript, no bundler initially
-- **Renderer**: **Phaser 3.80+** (web-native 2D game framework, ~1MB minified, actively maintained)
-- **Dialogue**: **InkJS** (`yantra/inkjs` npm package) — Ink runtime in pure JS, official Ink language export target, ~50KB
-- **Server**: **Express** (already proven in `-98`)
-- **Build tool**: None for v1 — Phaser + InkJS loaded as ES modules from local `vendor/` folder. Add Vite later only if module count grows.
-- **Deployment**: Static files + `node server.js`. `package.json` `start` script → `node server.js` on port 8765.
+- **Renderer**: Plain JavaScript, `<canvas>` 2D context. No game engine.
+- **Dialogue**: InkJS 2.x with the full bundle (Compiler + Story).
+- **Audio**: HTMLAudioElement + manual volume ramps (crossfade via `requestAnimationFrame`).
+- **Server**: Express (carried over from v0.1).
+- **Build tool**: None. ES2022 script tags, no bundler.
+- **Deployment**: Static files + `node server.js` on port 8765.
 
-**Why this stack:**
-- Phaser is the de-facto standard for HTML5 2D point-and-click games (used by half the Itch.io adventure-game scene)
-- InkJS is the official Ink runtime — Ink's other targets are C# (Unity) and InkJS (web), and we want web
-- Both have years of stable releases, MIT licenses, no native binary dependencies
-- No build pipeline = `npm install && npm start` → game runs
+Why this stack:
+
+- No engine means no scene lifecycle to fight. The bugs we hit ("ran out of content", scene stacking, mid-transition orphans) were all Phaser plumbing.
+- The "game" is mostly text + ~30 sprites + 7 scenes. The rendering challenge is "show a sprite, animate it while speaking, draw a background". That's ~300 lines of `<canvas>`.
+- InkJS is sufficient for the dialogue. CSS is sufficient for the retro typography. The PC-98 look is a CSS overlay + pixel-rendering on the canvas — no shader needed.
 
 ---
 
@@ -58,90 +62,93 @@ The project went through two false starts:
 ghost-process-js/
 ├── SPEC.md                       # this file
 ├── AGENTS.md                     # agent rules (style, asset pipeline, prohibitions)
-├── package.json                  # phaser, inkjs, express, multer
-├── server.js                     # express static + story/locations API
-├── index.html                    # game (Phaser bootstrap)
-├── editor.html                   # authoring UI shell
-├── editor.js                     # authoring logic
-├── editor.css                    # editor styles
-├── styles.css                    # game styles
-├── game.js                       # Phaser scenes + engine wiring
+├── README.md                     # quick-start + rollback
+├── package.json                  # inkjs + express + multer (no phaser)
+├── server.js                     # express static + /api/story + /api/ink + /api/assets
+├── index.html                    # game (loads vendored ink + runtime modules)
+├── boot.js                       # engine entry point
 ├── story.json                    # all content (data-driven)
-├── ink/                          # Ink source files (one .ink per "chapter")
+├── ink/                          # Ink source files (one .ink per scene with dialogue)
 │   ├── cold_open.ink
 │   ├── alley.ink
-│   └── ...
-├── vendor/                       # phaser.min.js, ink.js — vendored, no CDN
-│   ├── phaser.min.js
-│   └── ink.js
+│   ├── chase.ink
+│   ├── corridor.ink
+│   ├── jailbreak.ink
+│   └── eidolon_return.ink
+├── vendor/
+│   └── ink-full.js               # vendored InkJS 2.2 (no CDN)
+├── src/
+│   ├── runtime/                  # the engine (~700 LOC, vanilla JS)
+│   │   ├── canvas.js             # canvas DOM creation, asset loader, page→canvas coords
+│   │   ├── music.js              # crossfading bgm
+│   │   ├── sprites.js            # character sprite with manual frame animation
+│   │   ├── hitbox.js             # clickable regions + cursor + label hover
+│   │   ├── scene-base.js         # Scene class: bg + characters + dialogue + transitions
+│   │   └── engine.js             # boot + goTo (replaces Phaser scene-stack)
+│   ├── scenes/
+│   │   └── _registry.js          # scene-id → Scene subclass map (most are empty)
+│   ├── dialogue.js               # InkJS walker + typewriter presenter
+│   ├── dialogue-panel.js         # DOM dialogue box + choice buttons
+│   ├── inventory.js              # popup inventory UI
+│   ├── toast.js                  # transient status messages
+│   └── story.js                  # fetch story.json + preload assets + fire story-ready
+├── tools/
+│   └── vendor-deps.js            # fetch ink-full.js (no CDN)
 └── assets/                       # scene plates, sprites, audio, fonts
-    ├── scene_*.jpg|png           # 4:3 background plates, no figures
-    ├── sprites/<character>/<scene>/
-    │   ├── base.png
-    │   ├── blink.png
-    │   ├── mouth.png
-    │   └── talking.webp
-    ├── portraits/<character>.png
+    ├── backgrounds/scene_*.png
+    ├── sprites/<character>/<scene>/idle_NN.png
     ├── audio/*.mp3
-    └── fonts/<font>.ttf          # PC-98 pixel font (Madou Futo Maru or similar)
+    ├── items/*.png
+    └── fonts/{nouveau_ibm.ttf, madou-futo-maru.ttf}
 ```
 
-**No `node_modules/` in the deliverable** — vendored deps live in `vendor/`. `node_modules/` only needed during install.
+`node_modules/` is not shipped. Only `vendor/` is needed at runtime.
 
 ---
 
 ## 4. Data model — `story.json`
 
-A single JSON file drives the entire game. Format inspired by `-98`'s design with one critical addition: **`ink` field per scene** so dialogue is in Ink, not in the JSON `lines[]` array.
+`story.json` is the single source of truth for content. Each scene's `bg`, `music`, `characters`, `hitboxes` reference assets; `ink` (optional) references a `.ink` file in `ink/`.
 
 ```jsonc
 {
-  "version": 2,
+  "version": 3,
   "title": "GHOST//PROCESS",
   "start": "intro",
+  "next": {
+    "intro": "cold_open",
+    "cold_open": "alley",
+    "alley": "chase",
+    "chase": "corridor",
+    "corridor": "jailbreak",
+    "jailbreak": "eidolon_return",
+    "eidolon_return": "alley"
+  },
   "scenes": {
-    "intro": {
-      "id": "intro",
-      "kind": "ink",                // 'ink' | 'choice' | 'end' — replaces -98's 'lines|choice|end'
-      "bg": "scene_intro",
-      "music": "intro_theme.mp3",
-      "ink": "ink/cold_open.ink",    // file path; Phaser + InkJS loads this scene's dialogue
-      "start_node": "Start",
-      "characters": [
-        {
-          "id": "android",
-          "scenes": {
-            "intro": { "base": "assets/sprites/android/intro/base.png", "blink": "...", "mouth": "...", "talking": "..." }
-          }
-        }
-      ],
-      "hitboxes": [
-        { "x": 0.42, "y": 0.71, "w": 0.05, "h": 0.05, "target": "alley", "label": "Door" }
-      ]
-    },
-    "alley": {
-      "id": "alley",
-      "kind": "ink",
-      "bg": "scene_alley",
-      "music": "alley_confrontation.mp3",
-      "ink": "ink/alley.ink",
-      "start_node": "Start",
-      "characters": [
-        {
-          "id": "android",
-          "speaker": "ANDROID",
-          "position": "right",
-          "scenes": { "alley": { "base": "assets/sprites/android/alley/base.png", "talking": "..." } }
-        }
-      ],
-      "hitboxes": [
-        { "x": 0.15, "y": 0.45, "w": 0.08, "h": 0.20, "item": "rusty_key", "label": "Search the bins" }
-      ]
-    }
+    "intro":        { "id": "intro", "kind": "title",  "bg": "scene_intro",
+                      "music": "intro_theme.mp3",
+                      "hitboxes": [{ "x":0.35, "y":0.55, "w":0.30, "h":0.08,
+                                     "target":"alley", "label":"PRESS START" }] },
+    "cold_open":    { "id": "cold_open", "kind": "ink", "bg": "scene_intro",
+                      "music": "intro_theme.mp3", "ink": "ink/cold_open.ink",
+                      "start_node": "Start" },
+    "alley":        { "id": "alley", "kind": "ink", "bg": "scene_alley",
+                      "music": "alley_confrontation.mp3", "ink": "ink/alley.ink",
+                      "start_node": "Start",
+                      "characters": [
+                        { "id":"android", "speaker":"ANDROID", "position":"right",
+                          "scenes": { "alley": {
+                            "frames": "assets/sprites/android/alley/idle_*.png",
+                            "fps": 4, "loop": true } } }
+                      ],
+                      "hitboxes": [{ "x":0.15, "y":0.55, "w":0.10, "h":0.15,
+                                     "item":"rusty_key", "label":"Search the bins" }] }
   },
   "items": {
-    "rusty_key": { "id": "rusty_key", "name": "Rusty Key", "icon": "assets/items/rusty_key.png", "key": true },
-    "scrap_metal": { "id": "scrap_metal", "name": "Scrap", "icon": "assets/items/scrap.png", "key": false }
+    "rusty_key": { "id":"rusty_key", "name":"Rusty Key",
+                   "description":"An old iron key, stained with verdigris...",
+                   "icon": "assets/items/rusty_key.png",
+                   "key": true, "pickup_message":"You found a rusty key." }
   },
   "recipes": [
     { "input": ["rusty_key", "scrap_metal"], "output": "tinkered_key" }
@@ -151,236 +158,169 @@ A single JSON file drives the entire game. Format inspired by `-98`'s design wit
 
 ### 4.1 Scene kinds
 
-- **`ink`**: Dialogue is in Ink. Game calls `story.ChoosePathString(start_node)`, walks Ink tags (`# speaker:NAME` triggers sprite mouth animation, `# portrait:NAME` shows/hides portrait, `# action:pickup item=rusty_key` adds to inventory).
-- **`choice`**: Simple text choice menu (rare; most choices live inside Ink via `* choice`).
-- **`end`**: Terminal scene (endings, credits).
+- **`title`**: title screen. Music may auto-play, but the click handler is just for the hitbox.
+- **`ink`**: Ink-driven dialogue scene. `ink` field specifies the `.ink` file; `start_node` is the starting knot (default `Start`). The dialogue runner is invoked as soon as the scene loads.
 
 ### 4.2 Hitboxes
 
-Hitboxes are normalized coordinates (0..1) over the background plate. Click → trigger (goto next scene, pick up item, run Ink jump, etc.). Carry over the `-98` engine untouched.
+Normalized coordinates `(x, y, w, h ∈ [0,1])` over the scene canvas. Three action types:
+
+- `"target": "scene_id"` — transition to that scene on click.
+- `"item": "item_id"` — pick up item (added to inventory, hitbox becomes inactive).
+- A hitbox with both item and target: the player must click it twice (first to pick up, then to use) — but v1 doesn't use this case.
+
+Each hitbox is single-use by default. Single-use state lives in `STATE.spentHitboxes`. Once `key` in `STATE.inventory` (or `STATE.consumed`), the hitbox is dead and no cursor/label is shown on hover.
 
 ### 4.3 Items + recipes
 
-Identical to `-98`. Drag one item onto another to combine, drag onto hitbox to use, `key:true` persists, `key:false` consumed.
+Items are looked up in `STORY.items`. `key:true` items persist; `key:false` items are consumed on use. Recipes (item combine) are stored as `{ input: [id, id], output: id }` rows. **v1 doesn't ship UI for combining** — recipes are data-only, awaiting an inventory swap panel.
 
 ---
 
 ## 5. Ink integration
 
-**Ink scripts live in `ink/<scene>.ink`, one file per scene.** They compile to `story.json`-embedded Ink or are loaded at runtime by InkJS.
+### 5.1 Why Ink
 
-### 5.1 Why Ink over JSON-line-array
+`story.json` JSON-line-arrays would force every line through a JSON edit. Ink gives us variables, conditionals, multi-choice branches, and tags natively. InkJS is ~50KB.
 
-- `-98` had `lines: [{ speaker, text }]` arrays in `story.json`. Worked, but every line needed a JSON edit, and there was no way to express conditionals, branches, or variable state without polluting the JSON.
-- Ink gives us variables (`~ has_key = true`), conditionals, multi-choice branches, tags, all native.
-- InkJS is ~50KB and exposes a clean API for game engines (this is exactly how inkjs is used by other Phaser games).
+### 5.2 The runner (no Phaser)
 
-### 5.2 Phaser ↔ InkJS bridge
+`src/dialogue.js` — `DialogueRunner` class. Walks the compiled story once per "step", fires events:
 
-Phaser scene lifecycle + Ink story walker:
-
-```
-Phaser scene "alley" loads
-  → fetch('ink/alley.ink').text() → compile via new ink.Compiler(storyText)
-  → story = new ink.Story(jsonCompiledStory)
-  → story.ChoosePathString(start_node)        // jump to "Start"
-  → register external functions (give_item, has_item, goto_scene)
-  → loop:
-       while story.canContinue:
-         line = story.Continue()              // returns next line of dialogue
-         tags = story.currentTags              // e.g. ["speaker:android", "portrait:android"]
-         showLine(line, tags)                  // typewriter + speaker portrait
-       if story.currentChoices.length:
-         showChoices(story.currentChoices)     // clickable buttons
-         onChoice(idx): story.ChooseChoiceIndex(idx)
-       else:
-         onDialogueComplete()                  // typically: scene transition
-```
+- `onLine(text, tags, typed, total)` — fired on each typewriter tick (and once at start). `typed/total` lets the UI render the partial text.
+- `onChoices([{text}, ...])` — fired when the story pauses on `* [Choose something]`. Engine renders buttons; clicking one calls `runner.choose(i)`.
+- `onCommand(key, args)` — fired for every Ink tag (`# speaker:NAME`, `# portrait:NAME`, `# give:ITEM_ID`, ...) and for `EXTERNAL` calls. Engine decides whether the command is a scene transition, an inventory mutation, an audio swap, or just data the runner ignores.
+- `onComplete()` — story ended, no more lines or choices.
 
 ### 5.3 Tag semantics
 
-These tags are honored by the Phaser engine — keep this list small and stable:
+These Ink tags drive game state. The list is small and stable:
 
 | Tag | Effect |
 |---|---|
-| `# speaker:NAME` | Triggers the named character's mouth/talking animation |
-| `# portrait:NAME` | Shows the portrait; `# portrait:none` hides |
-| `# action:NAME` | One-shot animation trigger (e.g. `action:attack`) |
-| `# give:ITEM_ID` | Adds item to inventory |
-| `# take:ITEM_ID` | Removes item |
-| `# goto:SCENE_ID` | Hard scene transition |
-| `# background:PLATE_ID` | Swap background mid-scene |
-| `# music:MP3_FILE` | Swap music mid-scene |
+| `# speaker:NAME` | Speaker label; sprite with `speaker === NAME` starts animating |
+| `# speaker:none` | Speaker hidden; all sprites freeze on frame 0 |
+| `# portrait:NAME` | Sets which character's sprite is visible; `none` hides all |
+| `# give:ITEM_ID` | Adds item to inventory + shows pickup toast |
+| `# take:ITEM_ID` | Removes item from inventory |
 
-Anything else is passed through to `console.log` for debugging.
+Unrecognized tags are passed through to `console.log` for debugging. v1 doesn't use `# goto`, `# background`, or `# music`; transition happens via the `EXTERNAL transition_next()` binding at end-of-scene, which looks up `STORY.next[currentSceneId]` and routes through `Engine.goTo`.
 
 ### 5.4 External functions
 
-Ink can call back into the game via `EXTERNAL`:
+Ink can call back into the game via EXTERNAL:
 
 ```
+EXTERNAL transition_next()
+EXTERNAL return_to_alley()
 EXTERNAL has(item_id)
-EXTERNAL goto(scene_id)
 ```
 
-These are registered on the InkJS story at boot and return booleans/void.
+- `transition_next()` — looks up `STORY.next[currentSceneId]` and fires the engine transition. Sets `_suppressStep = true` so the post-transition `step()` doesn't trigger Ink "ran out of content" warnings.
+- `return_to_alley()` — short-circuit to the alley scene. Used by cold_open and any future scene that wants a hard reset.
+- `has(item_id)` — boolean, used by Ink conditionals like `{ has("rusty_key"): ... }`.
+
+### 5.5 Choices as buttons
+
+`* [Some choice]` in Ink → `currentChoices.length > 0` after `Continue()` walks past all preceding lines. The runner fires `onChoices`, the engine renders the buttons, on click the engine calls `runner.choose(index)`. The Ink file does NOT need to know which scene choice X leads to — the scene graph is in `story.json`, and `transition_next()` from the choice's path looks up the destination scene.
 
 ---
 
 ## 6. Rendering pipeline
 
-### 6.1 Phaser scene graph
+### 6.1 The runtime
 
-```
-Phaser.Scene "GameScene"
-├── this.add.image(0, 0, 'bg.scene_alley')   // 4:3 plate, scaled to fit
-├── this.add.container(0, 0, [android_sprite]) // characters sit on top
-├── this.add.dom(0, 0, 'div', dialogueHTML)   // dialogue box (HTML/CSS for font)
-└── this.add.dom(0, 0, 'div', inventoryHTML)  // inventory bar (HTML/CSS)
-```
+`src/runtime/scene-base.js` — `Scene` class. Each scene:
 
-HTML/CSS for dialogue + inventory, not Phaser text. Reason: pixel-perfect PC-98 font rendering with a custom `.ttf` is easier in CSS (`font-smoothing: none`, `image-rendering: pixelated`) than in Phaser BitmapText.
+1. Loads its background image (cover-fit on the 640×480 internal canvas, scaled via CSS `object-fit: contain`).
+2. Loads its music and crossfades via `MusicHandler`.
+3. Creates character sprites, each holding a set of preloaded Image elements keyed by frame number.
+4. Builds the hitbox layer — a DOM overlay anchored to the canvas's bounding rect for hit-testing and labels.
+5. Spins up `DialogueRunner` and attaches to `DialoguePanel` (the DOM dialogue box).
+6. Starts `requestAnimationFrame` loop: clear backbuffer → draw background → draw each sprite (sprites update their own frame timers).
 
 ### 6.2 PC-98 shader (Bayer dither + palette quantize)
 
-In Phaser, apply as a post-fx `WebGLPipeline` (custom fragment shader) that:
-1. Reads framebuffer
-2. Bayer-dithers to nearest of 16 palette colors per scene
-3. Outputs
+**v0.2 ships without a custom GLSL pipeline.** The PC-98 look is achieved with:
 
-Palette per scene defined in `assets/palettes/<scene>.json` (not Godot `.tres` — keep it portable):
+1. CSS overlay `.scanlines` on the body — a 1px-on/1px-off repeating gradient with `mix-blend-mode: multiply`. This is the signature interlace look. `body.no-scanlines .scanlines { display: none; }` toggles it.
+2. `<canvas image-rendering: pixelated>` — nearest-neighbor scaling so 640×480 stays crisp at any viewport size.
+3. Background plates are pre-quantized to the 16-color palette at generation time (this happens in the Godot `gen_asset.py` pipeline; in v0.2 we run it offline and ship the PNGs as-is).
 
-```json
-{
-  "scene_alley": ["#0a0a14", "#1a1a2e", "#3a2e4a", "#7a3e5a", "#c44e6a", "#ff6e8a", "#ffae7a", "#ffd29a",
-                  "#0e3a5e", "#1e5e8e", "#3e8ebe", "#7ebeee", "#aeceee", "#eeeeee", "#5a3a2a", "#8a5a3a"]
-}
-```
-
-This replaces the Godot `shaders/pc98_viewport.gdshader` — same visual, JS-side implementation. The Godot shader source lives at `shaders/pc98_viewport.gdshader` in the old project; we port its Bayer + quantize logic verbatim.
+Adding a GPU shader for live Bayer dither is a v0.3+ optimization. The visual fidelity is identical at the source-asset level; what changes is what happens when the player resizes the window or zooms.
 
 ### 6.3 Sprite animation
 
-Phaser animation system replaces the Godot AnimatedSprite2D + chroma-keyed frames:
-- One Phaser scene per "character stance" (idle, talking, blink)
-- Frame-by-frame switching: when `mouth` should flap, alternate `mouth_open` ↔ `mouth_closed` every 80ms
-- Talking animation: render `talking.webp` (4-frame loop from I2V) as a sprite, play forward, freeze on last frame for static pose
-- Blink: 200ms `blink.png` every 3-5s (randomized)
+A `CharacterSprite` is a thin state class: 16 preloaded `HTMLImageElement`s, a target FPS, and a flag `isSpeaking`. The scene's `requestAnimationFrame` loop calls `sprite.update(deltaMs)` which advances the frame index when the elapsed time crosses `1000/fps`. Drawing is delegated to `sprite.draw(ctx)` which calls `ctx.drawImage` with the current frame, centered on the canvas-relative anchor.
+
+Idle animations in v0.2 loop the 16-frame sheet at 4-6 fps while the speaker is active. When the speaker changes or becomes `none`, the sprite freezes on frame 0.
 
 ### 6.4 Audio
 
-Phaser's WebAudio:
-- `this.load.audio('intro_theme', 'assets/audio/intro_theme.mp3')`
-- `this.sound.play('intro_theme', { loop: true, volume: 0.7 })`
-- One music track per scene, swap on `goto:SCENE_ID` or `music:MP3` Ink tag
-- **No FluidSynth.** MP3s only. MIDI source files (`.mid`) are archived but not loaded by the runtime.
+`src/runtime/music.js` — `MusicHandler`. Single Audio instance per filename, preloaded once via `Runtime.loadAudio`. On `play(filename, baseVolume, fadeMs)` the handler ramps the new track from 0 → baseVolume; if a previous track was playing, it ramps the previous one to 0 in parallel (crossfade), then pauses it. The same singleton persists across scene transitions so crossfades can span boundaries.
+
+MP3s are pre-rendered at build time (see `tools/render-midi.sh` from the Godot project). MIDIs are source of truth; `.mp3` is what the browser plays.
 
 ---
 
-## 7. Editor (browser-based, ported from `-98`)
+## 7. Editor
 
-`editor.html` + `editor.js` — same Express `PUT /api/story` + `POST /api/assets` endpoints. **Reuse the existing server.js verbatim** — copy from `-98`.
-
-### 7.1 What's new vs `-98`
-
-- **Ink source view/edit panel**: editor lets you edit `.ink` files directly with syntax highlighting (CodeMirror or similar). Save → `PUT /api/ink/<file>.ink`. Game hot-reloads on save.
-- **Palette editor**: pick 16 colors per scene, preview on the background plate (browser-side Bayer shader).
-- **Hitbox visualizer**: drag rectangles on the background plate, see normalized x/y/w/h live.
-
-### 7.2 What stays
-
-- Scene CRUD (add/remove scenes, set bg, music, kind)
-- Item CRUD (add icons, mark as key, set recipes)
-- Save / load `story.json` atomically (write-temp + rename)
-- Asset upload via multipart (max 8MB per file)
+Out of scope for v0.2. v1 had `editor.html` + `editor.js` for browser-based scene CRUD + Ink source editing. Removing Phaser does not change the editor's server endpoints (it used `PUT /api/story` and `PUT /api/ink/<file>` only); a v0.3 step would re-port the editor with no engine dependency.
 
 ---
 
 ## 8. Asset strategy
 
-### 8.1 Existing assets — what to port
+### 8.1 What already exists (carried over)
 
-**From `-98` (can port):**
-- `story.json` SCENE STRUCTURE only (the 34 scene graph, dialogue text, character ids) — NOT the backgrounds or sprites
-- `server.js` — copy verbatim
-- `locations.json` — port
-- `game.hitbox.js`, `game.inventory.js` — port as Phaser plugins (rewrite for Phaser event model)
-- `SPRITE_PIPELINE.md` — port as `AGENTS.md` section
-- The android character design (single pose) — re-render in new style
+- 7 scene background PNGs in `assets/backgrounds/` (pre-rendered during the v0.1 era).
+- 64 sprite frames under `assets/sprites/<characterId>/<sceneId>/idle_NN.png` (16 frames × 4 character/scene combinations).
+- 3 MP3 tracks: `intro_theme.mp3`, `alley_confrontation.mp3`, `clinic_tension.mp3`.
+- 2 fonts: `nouveau_ibm.ttf` (UI/dialogue), `madou-futo-maru.ttf` (titles, "PRESS START").
+- 7 item icons in `assets/items/`.
 
-**From `~/ghost-process/` (can port):**
-- `AGENTS.md` rules for visual style (mature PC-98 cyberpunk, no moe, etc.) — port verbatim
-- The 16-color palette system (`tools/palettes.py` becomes `tools/palettes.py` in the new project, JS-serializable output)
-- The PC-98 shader logic (`shaders/pc98_viewport.gdshader` → `src/pc98-shader.glsl`)
-- The Madou Futo Maru font (or Nouveau_IBM.ttf)
-- `tools/gen_asset.py` — port the style bible (negative prompts, per-preset style overrides) into the new repo
-- The 3 MP3 audio tracks (`intro_theme.mp3`, `alley_confrontation.mp3`, `clinic_tension.mp3`)
-- Android portrait (`assets/characters/android/portrait.png` from Godot project)
-- The sprite-pipeline concept (per-scene base/blink/mouth/talking variants)
+### 8.2 Style bible (carried over from Godot `AGENTS.md`)
 
-**What to regenerate fresh:**
-- All scene background plates (`scene_alley`, `scene_intro`, `scene_terminal`, etc.) — the existing ones either have figures baked in (from `-98`) or don't match the new simpler 2-scene MVP scope
-- All character sprites (android, any others) — at least one pose per character, plus talking frame
-- Item icons
+> **Mature proportions.** No moe. No anime cuteness. No big dough eyes, no tiny chins, no oversized heads on small bodies, no "kawaii" expressions. Characters must look like adults under stress. Reference: Snatcher, Policenauts, Brandish, Rune Soldier.
 
-### 8.2 v1 minimum scene list
+> **Oppressive cyberpunk horror atmosphere.** Cold blue / cyan / deep red. Rain, neon bleed, harsh shadows. No bright primaries.
 
-The prototype will ship with **2 scenes + 1 sprite + 1-2 items** to prove the pipeline end-to-end:
+> **PC-98 retro look.** Source PNGs are detailed smooth illustrations, not pixel art. The chunky-pixel / 16-color palette look is applied at display time (CSS scanlines + pixelated rendering + pre-quantized plates).
 
-1. `intro` — title screen, "Press Start", music: `intro_theme.mp3`
-2. `alley` — one background, one Android sprite, one hitbox, one Ink dialogue node, one item pickup
+> **NO characters baked into background scenes.** The camera is across the street, looking at architecture not at any character focal point.
 
-Add more scenes once the 2-scene pipeline is proven working.
-
-### 8.3 Style bible (carry over from Godot project's AGENTS.md)
-
-> **Mature proportions.** No moe. No anime cuteness. No big dough eyes, no tiny chins, no oversized heads on small bodies, no "kawaii" expressions. Characters must look like adults under stress. Faces have structure (jaw, cheekbones, brow ridges). Eyes are proportional to the head, not ballooned. Reference: Snatcher, Policenauts, Brandish, Rune Soldier character art.
->
-> **Oppressive cyberpunk horror atmosphere.** Cold blue / cyan / deep red. Rain, neon bleed, harsh shadows. No bright primaries, no cheerful palettes. Lighting is hard and directional, not soft and diffuse.
->
-> **PC-98 retro pixel art aesthetic.** Source PNGs are detailed smooth illustrations, NOT pixel art — the chunky-pixel / 16-color palette look is applied at display time by the post-fx shader (Bayer dither + palette quantization). Asking the model for "pixel art" produces blocky low-detail characters with deformed proportions, which is NOT the Snatcher look.
->
-> **NO characters baked into background scenes.** Camera is across the street / overhead, looking at ARCHITECTURE not at any character focal point. Use phrases like "wide establishing shot, no people, no figures, no silhouettes, no statues, no mannequins — only buildings and weather".
->
-> **Typography: PC-98 fan-translation pixel serif.** All UI text uses a variable-width pixel serif .ttf in the style of MS Serif or classic Mac OS "New York" bitmap fonts. Anti-aliasing is DISABLED, hinting is OFF, subpixel positioning is OFF, filtering is nearest-neighbor. 1-pixel hard drop shadow on dialogue text.
+> **Typography: PC-98 fan-translation pixel serif.** All UI text uses a variable-width pixel serif `.ttf` in the style of MS Serif / classic Mac OS "New York" bitmap fonts. Anti-aliasing OFF, hinting OFF, subpixel positioning OFF, 1px hard drop shadow on dialogue text.
 
 ---
 
-## 9. What ships in v1 (this repo, this scaffold)
+## 9. What ships in v0.2
 
-A working 2-scene prototype proves the pipeline end-to-end. Specifically:
+| Criterion | Status | Notes |
+|---|---|---|
+| `npm install` succeeds | ✓ | express + multer + inkjs only |
+| `npm start` boots Express on `:8765` | ✓ | |
+| `index.html` boots, loads `story.json`, renders `intro` | ✓ | vanilla-JS engine |
+| Click-to-start → cold_open Ink scene → alley | ✓ | scene graph in `story.json` |
+| Ink dialogue with typewriter + speaker label | ✓ | `src/dialogue.js` + `dialogue-panel.js` |
+| Choices render as actual buttons that branch Ink | ✓ | `_renderChoices` in `dialogue-panel.js` |
+| One hitbox on the alley plate picking up `rusty_key` | ✓ | hitbox layer |
+| Inventory popup (INV button top-right) | ✓ | `src/inventory.js` |
+| Crossfade music on scene transitions | ✓ | `src/runtime/music.js` |
+| No game engine, no `phaser.min.js` | ✓ | vanilla JS |
+| Total bundle <2MB | ✓ | ink-full.js (~600KB) + JS (~30KB) + assets |
 
-1. `npm install` succeeds, `npm start` boots Express on `:8765`
-2. `index.html` boots Phaser, loads `story.json`, renders `intro` scene with title background + music
-3. Click-to-start → loads `alley` scene, shows Android sprite, plays `alley_confrontation.mp3`
-4. Ink dialogue runs: typewriter text, sprite mouth flapping, line-by-line advance on click
-5. One hitbox on the alley plate, clicking picks up `rusty_key` item
-6. Item appears in inventory bar; clicking it shows its name
-7. Browser editor at `/editor.html` lets you add a new scene and save
-8. `tree-shake: nothing` — total bundle <2MB including Phaser + InkJS + assets
-
-**Out of scope for v1:**
-- Save/load game state (use a single session, restart to test)
-- Mobile touch input (mouse-only — Phaser's mobile support can come later)
-- Localisation (single English)
-- Multiple endings / complex Ink branching (single happy-path through 2 scenes)
-- Audio mixing / crossfade (hard cuts on scene change)
+Out of scope for v0.2 (carry from v1): save/load, mobile touch, localisation, multi-ending, item combine UI, editor.
 
 ---
 
-## 10. Phased rollout
+## 10. Phased rollout (v0.2 → v0.3 → v1)
 
 | Phase | Deliverable | Acceptance |
 |---|---|---|
-| 0 | This SPEC + empty scaffold + `package.json` | `npm install` succeeds |
-| 1 | Phaser boots, loads `story.json`, renders intro plate + plays intro music | Open `localhost:8765`, see title screen |
-| 2 | Click-to-start → alley scene + Android sprite + alley music | See background, sprite, hear music |
-| 3 | InkJS wired: one Ink file, one node, dialogue typewriter, mouth flap | See text appear letter-by-letter |
-| 4 | Hitbox system ported from `-98` (one hitbox, one item pickup) | Click hitbox, item appears in inventory bar |
-| 5 | PC-98 shader post-fx applied | Background has Bayer dither, 16-color palette visible |
-| 6 | Editor at `/editor.html` — scene CRUD + story save | Add a scene in browser, refresh game, scene appears |
-| 7 | Polish: ink syntax highlight in editor, hitbox visualizer, palette picker | Open editor, see new features |
-| 8 | Documentation: `AGENTS.md`, `README.md`, asset pipeline notes | New agent can read these and continue |
+| v0.2 | Phaser removal, vanilla-JS engine, all 7 scenes play through | Open `localhost:8765`, intro→eidolon_return→alley loop, choices visible |
+| v0.3 | Editor (`editor.html`) re-ported to be engine-free | Add a scene in browser, refresh game, scene appears |
+| v0.4 | Bayer-dither pixel shader (live palette quant on canvas) | Resize window, dither is consistent |
+| v1.0 | Save/load, mobile touch, item combine UI, multiple endings | Full game loop playable |
 
 Each phase is a `git commit` so rollback is one command.
 
@@ -389,59 +329,53 @@ Each phase is a `git commit` so rollback is one command.
 ## 11. Migration path from old projects
 
 ### From `~/ghost-process-98/`
-- Copy `server.js` → `ghost-process-js/server.js` (verbatim)
-- Copy `game.hitbox.js`, `game.inventory.js` → `ghost-process-js/src/` (rewrite for Phaser)
-- Port `story.json` scene graph (background paths updated to point at new plates)
-- Port `SPRITE_PIPELINE.md` content → `AGENTS.md` section
 
-### From `~/ghost-process/`
-- Port `AGENTS.md` (style bible) verbatim
-- Port `tools/palettes.py` + per-scene palettes
-- Port `shaders/pc98_viewport.gdshader` logic → `src/pc98-shader.glsl`
-- Port the android portrait
-- Port the 3 MP3 audio files
-- Port `tools/gen_asset.py` style bible + negative prompts into the new repo
+- `server.js` — already ported, kept verbatim.
+- `game.hitbox.js`, `game.inventory.js` — ported as `src/runtime/hitbox.js` and `src/inventory.js` (no engine deps).
+- `story.json` SCENE STRUCTURE ported; backgrounds and sprite art regenerated.
+
+### From `~/ghost-process/` (Godot)
+
+- `AGENTS.md` rules ported to this repo's `AGENTS.md`.
+- 3 MP3 audio tracks pre-rendered via `tools/render-midi.sh` (FluidSynth → MP3).
+- 7 background plates regenerated via `gen_asset.py` (one per scene).
+- Android + Thug character sprites: base image regenerated, talking animation extracted as 16-frame PNG sequences (`idle_01.png` ... `idle_16.png`).
 
 ### Old projects
-- **Keep them** as historical reference. Don't delete until the new repo has a working v1.
-- Both are git-tracked. Rollback path: `cd ~/ghost-process-98 && git status` shows last working state.
+
+- **Keep them.** Rollback path: `cd ~/ghost-process-98 && cd ~/ghost-process && git status`.
 
 ---
 
 ## 12. Open questions
 
-1. **Font**: which pixel-serif TTF do we use? Candidates: `Nouveau_IBM.ttf` (current Godot project, PC-9801 ANK ROM extract), `Madou Futo Maru Gothic` (free Japanese gothic). Decide before phase 5.
-2. **Mobile / responsive**: do we want the game to work on mobile browsers (Phaser supports it natively), or desktop-only? Decision affects hitbox sizing logic.
-3. **Save state**: localStorage autosave every scene transition? Skip for v1.
-4. **Editor auth**: anyone with the LAN URL can edit `story.json`. Acceptable for solo project, but if we ever share the server publicly we need basic auth.
-5. **Phaser 3 vs Phaser 4**: Phaser 4 is in alpha. Stick with 3.80+ stable for v1.
+1. **Live Bayer dither shader**: implement in v0.4 or skip entirely? The DOM scanline overlay + pre-quantized plates look right; a real-time shader would let source PNGs ship in true color.
+2. **Ink macro / diverging choices**: the chase.ink currently has 3 branches (Run/Stay/Raise hand) that all converge on `transition_next()` (corridor). v1.5 could route them to different scenes. The cleanest is `EXTERNAL transition_next(target_id)` taking an arg.
+3. **Item combine UI**: drag-and-drop on the inventory popup, or button-based ("Combine rusty_key + scrap_metal → tinkered_key" via a small modal)? v1 will use the latter.
+4. **Mobile**: 4:3 internal resolution looks small on a phone. Should the canvas upscale via `image-rendering: pixelated` (preserving pixel-grid feel) or stretch fluidly (using CSS `width: 100vw`)?
 
 ---
 
 ## 13. Reading list for the next agent
 
-If you're picking up this project:
-
-1. Read this `SPEC.md` end-to-end.
-2. Read `AGENTS.md` for the style bible and asset generation rules.
-3. Read `~/ghost-process-98/SPEC.md` and `~/ghost-process-98/AGENTS.md` — they explain the data-driven engine and the asset pipeline this project inherits.
-4. Read `~/ghost-process/AGENTS.md` — the source of the PC-98 style bible.
-5. Look at `~/ghost-process/AI-HANDOFF.md` (cautiously) for context on prior iteration history. It's verbose, ignore the parts about Godot/C#/Mono — those don't apply anymore.
-6. Read `ink/cold_open.ink` and `ink/alley.ink` for the dialogue style.
-
-DO NOT:
-- Add TypeScript. Stay in plain JS.
-- Add a bundler (Vite, webpack, rollup) until bundle size forces it.
-- Use Phaser 4 alpha. Stick with 3.80+.
-- Use a CDN for Phaser/InkJS — vendor them locally for offline play and Tailscale-only hosting.
-- Add new dependencies without thinking about whether the game needs it.
-
----
+1. `AGENTS.md` (style bible, asset rules) — **read first**.
+2. `src/runtime/scene-base.js` — the Scene class. This is the cleanest API surface; everything else slots into it.
+3. `src/dialogue.js` + `src/dialogue-panel.js` — the Ink↔DOM bridge.
+4. `src/runtime/engine.js` — boot + goTo. Where scene transitions actually happen.
+5. `story.json` + `ink/*.ink` — the actual content.
+6. `~/ghost-process/AGENTS.md` — original visual-style rules with rationale.
 
 ## 14. Rollback
 
-Both prior projects remain intact:
-- `~/ghost-process-98/` — last commit unknown, was working as of 2026-07-03
-- `~/ghost-process/` — at git tag `pre-gdscript-refactor` (commit `8eed992`), state before this rebuild
+```bash
+# Look at the v0.1 / Phaser-era commits:
+cd ~/ghost-process-js && git log --oneline
 
-If the JS rebuild goes wrong, the user can `cd` into either of those and have a working game prototype.
+# Diff working tree against the last Phaser-era commit:
+git diff <commit-sha> -- src/
+
+# Full revert to a known-good Phaser version:
+git reset --hard <commit-sha>
+```
+
+Or to compare any two implementations: `git checkout <commit-sha> -- src/`.

@@ -101,6 +101,54 @@ html, body {
     image-rendering: pixelated;
     image-rendering: -moz-crisp-edges;
     image-rendering: crisp-edges;
+    position: relative;
+    z-index: 1;        /* below all overlays */
+}
+
+/* The hitbox layer is a DOM overlay that sits over the canvas. Each
+   hitbox is a transparent <div> with absolute coords matching its
+   normalized rect on the canvas. Clicks pass through to whichever
+   hitbox was clicked; pointer-events:none on the parent layer
+   means clicks that miss a hitbox pass through to the canvas
+   (Phaser used this trick — the canvas is below, the hitbox layer
+   is above, and only the hitbox children re-enable pointer-events). */
+.hitbox-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    pointer-events: none;
+    z-index: 10;       /* above canvas (1), below dialogue (auto, in flow) */
+}
+
+/* A single hitbox — reusable rule covering all hitbox types. */
+.hitbox {
+    position: absolute;
+    pointer-events: auto;     /* container is non-reactive; each hitbox is */
+    cursor: pointer;
+    border: 0;
+    background: transparent;
+}
+
+.hitbox-label {
+    position: absolute;
+    pointer-events: none;     /* labels only render, clicks pass through */
+    color: #f4d878;
+    font-family: 'MadouFutoMaru', monospace;
+    font-weight: bold;
+    letter-spacing: 0.12em;
+    text-shadow: 2px 2px 0 #000;
+    text-align: center;
+    transform: translate(-50%, -50%);
+    /* user-select off — labels are visual, not text content */
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+/* When the engine has a "floating" cursor (PC-98 eye glyph) hovering
+   over a hitbox, the cursor changes. We dispatch this via .hitbox:hover
+   so hover-only rendering doesn't even need JS. */
+.hitbox:hover {
+    border: 1px dashed rgba(212, 160, 69, 0.4);
 }
 
 /* Toast layer — transient status messages above the dialogue box.
@@ -145,12 +193,13 @@ html, body {
     box-shadow: 0 0 8px rgba(58, 122, 74, 0.3);
 }
 
-/* Dialogue box (DOM overlay, not Phaser text) */
+/* Dialogue box (DOM overlay on top of the canvas) */
 .dialogue-box {
     position: absolute;
     bottom: 0;
     left: 0;
     right: 0;
+    z-index: 20;
     background: rgba(10, 10, 20, 0.92);
     border-top: 2px solid #3a7a4a;
     padding: 16px 24px;

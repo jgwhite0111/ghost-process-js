@@ -1,13 +1,14 @@
-// tools/vendor-deps.js — fetch Phaser + InkJS into vendor/ (no CDN)
+// tools/vendor-deps.js — fetch InkJS into vendor/ (no CDN)
 //
 // Usage: node tools/vendor-deps.js
 //
 // Downloads:
-//   vendor/phaser.min.js  (Phaser 3.80.x)
-//   vendor/ink-full.js    (InkJS 2.x — full bundle with Compiler for client-side compile)
+//   vendor/ink-full.js  (InkJS 2.x — full bundle with Compiler for
+//                        client-side compile)
 //
 // Why vendored: Tailscale-local server can't reach a CDN reliably,
-// and we want offline-first development.
+// and we want offline-first development. Phaser was removed in v0.2;
+// the renderer is now vanilla JavaScript.
 
 const https = require('https');
 const fs = require('fs');
@@ -16,13 +17,10 @@ const path = require('path');
 const VENDOR_DIR = path.join(__dirname, '..', 'vendor');
 fs.mkdirSync(VENDOR_DIR, { recursive: true });
 
-// jsdelivr serves npm packages at /npm/<name>@<version>/<file>.
-const PHASER_URL = 'https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js';
-const INKJS_URL  = 'https://cdn.jsdelivr.net/npm/inkjs@2.2.0/dist/ink-full.js';
+const INKJS_URL = 'https://cdn.jsdelivr.net/npm/inkjs@2.2.0/dist/ink-full.js';
 
 const downloads = [
-    { url: PHASER_URL, dest: path.join(VENDOR_DIR, 'phaser.min.js'), name: 'Phaser 3.80.1' },
-    { url: INKJS_URL,  dest: path.join(VENDOR_DIR, 'ink-full.js'),   name: 'InkJS 2.2.0 (full + Compiler)' }
+    { url: INKJS_URL, dest: path.join(VENDOR_DIR, 'ink-full.js'), name: 'InkJS 2.2.0 (full + Compiler)' }
 ];
 
 function fetch(url) {

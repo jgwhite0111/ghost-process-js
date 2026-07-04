@@ -112,10 +112,11 @@ app.get('/api/list', (req, res) => {
 app.use(express.static(ROOT, {
     extensions: ['html'],
     setHeaders: (res, p) => {
-        // Game JS + story + ink + assets get no-cache so a fresh edit lands without hard refresh.
-        if (p.endsWith('game.js') || p.endsWith('editor.js') ||
-            p.endsWith('story.json') || p.includes('/ink/') ||
-            p.includes('/assets/')) {
+        // Source JS + story + ink + assets get no-cache so a fresh edit lands without hard refresh.
+        const rel = p.replace(/^.*\/+/, '');
+        if (rel === 'story.json' || p.includes('/ink/') ||
+            p.includes('/src/') || p.includes('/runtime/') ||
+            p.includes('/assets/') || rel === 'boot.js') {
             res.setHeader('Cache-Control', 'no-cache');
         }
     }

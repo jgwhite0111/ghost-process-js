@@ -14,25 +14,24 @@
     <div class="scanlines" aria-hidden="true"></div>
 
     <!-- Vendored deps (no CDN; offline-first). See tools/vendor-deps.js to fetch. -->
-    <script src="vendor/phaser.min.js"></script>
     <script src="vendor/ink-full.js"></script>
 
-    <!-- Game entry point. Plain JS, no bundler. -->
-    <script src="src/story.js"></script>
-    <script src="src/pc98-shader.js"></script>
-    <script src="src/sprites.js"></script>
+    <!-- Runtime (no Phaser). The whole 16-color dither / sprite / dialogue
+         pipeline is plain JS, ~700 LOC. See src/runtime/engine.js. -->
+    <script src="src/runtime/canvas.js"></script>
+    <script src="src/runtime/music.js"></script>
+    <script src="src/runtime/sprites.js"></script>
+    <script src="src/runtime/hitbox.js"></script>
+    <script src="src/runtime/scene-base.js"></script>
+    <script src="src/runtime/engine.js"></script>
+    <script src="src/scenes/_registry.js"></script>
     <script src="src/dialogue.js"></script>
+    <script src="src/dialogue-panel.js"></script>
     <script src="src/inventory.js"></script>
     <script src="src/toast.js"></script>
-    <script src="src/hitbox.js"></script>
-    <script src="src/scenes/_shared.js"></script>
-    <script src="src/scenes/boot.js"></script>
-    <script src="src/scenes/intro.js"></script>
-    <script src="src/scenes/alley.js"></script>
-    <script src="src/scenes/chase.js"></script>
-    <script src="src/scenes/corridor.js"></script>
-    <script src="src/scenes/jailbreak.js"></script>
-    <script src="src/scenes/eidolon_return.js"></script>
-    <script src="game.js"></script>
+    <script src="src/story.js"></script>
+
+    <!-- Entry point — fires Engine.boot() once STORY is loaded. -->
+    <script src="boot.js"></script>
 </body>
 </html>
