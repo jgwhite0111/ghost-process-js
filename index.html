@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>GHOST//PROCESS</title>
+    <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+    <div id="game"></div>
+    <!-- PC-98 interlace scanline overlay. DOM-based, pointer-events:none
+         so clicks pass through to the canvas. Toggled by .no-scanlines
+         on <body> for screenshot/clean captures. -->
+    <div class="scanlines" aria-hidden="true"></div>
+
+    <!-- Vendored deps (no CDN; offline-first). See tools/vendor-deps.js to fetch. -->
+    <script src="vendor/phaser.min.js"></script>
+    <script src="vendor/ink-full.js"></script>
+
+    <!-- Game entry point. Plain JS, no bundler. -->
+    <script src="src/story.js"></script>
+    <script src="src/pc98-shader.js"></script>
+    <script src="src/sprites.js"></script>
+    <script src="src/dialogue.js"></script>
+    <script src="src/inventory.js"></script>
+    <script src="src/toast.js"></script>
+    <script src="src/hitbox.js"></script>
+    <script src="src/scenes/_shared.js"></script>
+    <script src="src/scenes/boot.js"></script>
+    <script src="src/scenes/intro.js"></script>
+    <script src="src/scenes/alley.js"></script>
+    <script src="game.js"></script>
+</body>
+</html>

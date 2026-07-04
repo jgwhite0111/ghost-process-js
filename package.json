@@ -1,0 +1,17 @@
+{
+  "name": "ghost-process-js",
+  "version": "0.1.0",
+  "description": "GHOST//PROCESS — PC-98 cyberpunk horror visual novel. Phaser 3 + InkJS + plain JavaScript.",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "vendor": "node tools/vendor-deps.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "multer": "^1.4.5-lts.1",
+    "phaser": "^3.80.1",
+    "inkjs": "^2.2.0"
+  }
+}

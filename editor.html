@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>GHOST//PROCESS — Editor</title>
+    <link rel="stylesheet" href="editor.css" />
+</head>
+<body>
+    <header>
+        <h1>GHOST//PROCESS — Authoring</h1>
+        <div class="actions">
+            <button id="save-btn">Save story.json</button>
+            <button id="reload-btn">Reload from disk</button>
+            <span id="status"></span>
+        </div>
+    </header>
+
+    <main>
+        <aside id="sidebar">
+            <h2>Scenes</h2>
+            <ul id="scene-list"></ul>
+            <button id="new-scene-btn">+ New scene</button>
+
+            <h2>Items</h2>
+            <ul id="item-list"></ul>
+            <button id="new-item-btn">+ New item</button>
+
+            <h2>Recipes</h2>
+            <ul id="recipe-list"></ul>
+            <button id="new-recipe-btn">+ New recipe</button>
+        </aside>
+
+        <section id="main-panel">
+            <div id="scene-editor" hidden>
+                <h2>Scene: <span id="scene-editor-id"></span></h2>
+                <label>ID <input id="scene-id"></label>
+                <label>Kind
+                    <select id="scene-kind">
+                        <option value="ink">ink</option>
+                        <option value="choice">choice</option>
+                        <option value="end">end</option>
+                    </select>
+                </label>
+                <label>Background <input id="scene-bg" placeholder="scene_alley"></label>
+                <label>Music <input id="scene-music" placeholder="alley_confrontation.mp3"></label>
+                <label>Ink file <input id="scene-ink" placeholder="ink/alley.ink"></label>
+                <label>Start node <input id="scene-start-node" placeholder="Start"></label>
+                <label>Hitboxes (JSON)
+                    <textarea id="scene-hitboxes" rows="6" placeholder='[{ "x": 0.5, "y": 0.5, "w": 0.1, "h": 0.1, "target": "alley" }]'></textarea>
+                </label>
+            </div>
+
+            <div id="item-editor" hidden>
+                <h2>Item: <span id="item-editor-id"></span></h2>
+                <label>ID <input id="item-id"></label>
+                <label>Name <input id="item-name"></label>
+                <label>Icon path <input id="item-icon"></label>
+                <label><input type="checkbox" id="item-key" /> Key (persistent)</label>
+            </div>
+
+            <div id="ink-editor" hidden>
+                <h2>Ink file: <span id="ink-editor-path"></span></h2>
+                <textarea id="ink-text" rows="30" placeholder="// Loading…"></textarea>
+                <button id="save-ink-btn">Save .ink</button>
+            </div>
+
+            <div id="welcome">
+                <h2>Welcome</h2>
+                <p>Pick a scene, item, or recipe from the sidebar to edit. Or upload new assets below.</p>
+                <h3>Upload asset</h3>
+                <input type="file" id="upload-file" />
+                <input type="text" id="upload-name" placeholder="optional: rename on save" />
+                <button id="upload-btn">Upload</button>
+                <pre id="upload-result"></pre>
+            </div>
+        </section>
+    </main>
+
+    <script src="editor.js"></script>
+</body>
+</html>

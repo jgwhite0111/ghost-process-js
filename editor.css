@@ -1,0 +1,104 @@
+/* Editor styles — minimal. Focus on the data. */
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, monospace; }
+body {
+    display: flex;
+    flex-direction: column;
+    background: #1a1a1a;
+    color: #e0e0e0;
+}
+
+header {
+    background: #2a2a2a;
+    padding: 0.5em 1em;
+    border-bottom: 1px solid #444;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+header h1 { font-size: 1.2em; color: #d4a045; }
+
+.actions button {
+    margin-left: 0.5em;
+    background: #3a7a4a;
+    color: white;
+    border: none;
+    padding: 0.4em 0.8em;
+    cursor: pointer;
+}
+.actions button:hover { background: #4a8a5a; }
+#status { color: #d4a045; margin-left: 1em; font-size: 0.9em; }
+
+main {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+}
+
+#sidebar {
+    width: 240px;
+    background: #222;
+    border-right: 1px solid #444;
+    padding: 1em;
+    overflow-y: auto;
+}
+
+#sidebar h2 {
+    color: #d4a045;
+    font-size: 0.9em;
+    margin: 1em 0 0.5em;
+    letter-spacing: 0.1em;
+}
+
+#sidebar ul { list-style: none; padding-left: 0.5em; }
+#sidebar li {
+    padding: 0.2em 0.4em;
+    cursor: pointer;
+    border-radius: 2px;
+}
+#sidebar li:hover { background: #333; }
+#sidebar li.selected { background: #3a7a4a; color: white; }
+
+#sidebar button {
+    margin-top: 0.5em;
+    background: #444;
+    color: white;
+    border: none;
+    padding: 0.3em 0.6em;
+    cursor: pointer;
+    font-size: 0.85em;
+}
+
+#main-panel {
+    flex: 1;
+    padding: 1em 2em;
+    overflow-y: auto;
+}
+
+#main-panel label {
+    display: block;
+    margin: 0.5em 0;
+}
+
+#main-panel input,
+#main-panel textarea,
+#main-panel select {
+    background: #2a2a2a;
+    color: white;
+    border: 1px solid #555;
+    padding: 0.3em;
+    font-family: monospace;
+    width: 100%;
+    max-width: 600px;
+}
+
+#main-panel textarea {
+    font-family: 'Menlo', 'Monaco', monospace;
+    line-height: 1.4;
+}
+
+#welcome {
+    max-width: 600px;
+}

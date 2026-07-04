@@ -1,0 +1,9 @@
+node_modules/
+# vendor/ IS tracked — phaser.min.js and ink-full.js are part of the
+# offline-first deliverable per SPEC.md §89. `npm run vendor` regenerates
+# them if a fresh checkout needs updates.
+.DS_Store
+*.log
+.tmp.*
+# Local dev artifacts — never committed.
+*.local
