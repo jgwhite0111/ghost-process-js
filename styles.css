@@ -159,6 +159,7 @@ html, body {
     line-height: 1.4;
     color: #e0e8e0;
     text-shadow: 1px 1px 0 #000;
+    cursor: pointer;        /* always clickable: snap typewriter OR advance */
 }
 
 .dialogue-box .speaker {
@@ -357,6 +358,7 @@ html, body {
     font-family: 'NouveauIBM', 'PC98Serif', monospace;
     font-size: 18px;
     animation: blink 0.8s steps(1) infinite;
+    cursor: pointer;        /* explicit click target — advances dialogue */
 }
 
 @keyframes blink {
