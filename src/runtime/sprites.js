@@ -123,16 +123,28 @@ class CharacterSprite {
     }
 
     // Logical placement on the canvas. position: left/right/center/closeup.
-    // Feet anchor 60px BELOW the canvas bottom so the sprite feels
-    // closer to camera — the boots crop off the bottom of the screen,
-    // which is the PC-98 visual-novel "medium close shot" trick (see
-    // Snatcher / Policenauts character sprites in late-game frames).
-    // The previous canvasH - 30 anchored feet visibly above the
-    // dialogue border; combined with the 0.85 scale the captain's
-    // upper body sat high in the frame with empty space above, which
-    // read as "character standing too far back".
+    // Feet anchor on the alley's cobblestone ground line — empirically
+    // about 50% down the canvas (the wet cobblestones visible at top-
+    // left of scene_alley.png transition to dark void around y=0.50;
+    // below that is brick wall and doorframe, not floor). Anchoring
+    // boots to this line keeps the captain visibly standing IN the
+    // alley, not floating in the void below the floor.
+    //
+    // Earlier versions:
+    //   - canvasH - 30 (165a370 baseline): boots hovered above the
+    //     ground line — no podium, but captain sat too high.
+    //   - canvasH + 60 (closer-to-camera attempt): boots 350px BELOW
+    //     the ground line → "podium" effect with floor visible below
+    //     feet.
+    //   - canvasH * 0.65: still too low — boots in void.
+    //   - canvasH * 0.50 (current): boots on the wet cobblestones.
+    //
+    // The draw() scale targets this anchor as the body height so the
+    // head lands at canvas-top, head-to-feet spans the upper half of
+    // the frame, and the lower half is the alley's foreground
+    // (cobblestones, wall base, doorway).
     placementY(canvasH) {
-        return canvasH + 60;
+        return canvasH * 0.50;
     }
 
     placementX(canvasW, position, spriteW) {
@@ -215,14 +227,15 @@ class CharacterSprite {
         if (this.frames.length === 0) return;
         if (this.opacity <= 0) return;
         const img = this.frames[this.currentFrame];
-        // Scale target: 1.05× of canvas height — so the sprite's head
-        // crops off the top of the canvas when feet are anchored below
-        // (canvasH + 60). Combined effect: the character fills the
-        // frame top-to-bottom with both head and boots clipped, the
-        // PC-98 visual-novel "actor is right here in your face"
-        // shot composition.
+        // Scale target: targetH equals placementY so the sprite's head
+        // lands at canvas-top and its feet anchor at the ground line.
+        // The previous 1.29x H produced a 692px-tall captain whose
+        // head was 143px above the canvas top — visually wrong even
+        // though boots landed at canvasH*0.65. Letting targetH match
+        // the y-anchor removes the magic-number coupling between the
+        // two values.
         const W = ctx.canvas.width, H = ctx.canvas.height;
-        const targetH = H * 1.05;
+        const targetH = this.placementY(H);
         let scale = targetH / img.height;
         // Width overflow guard: if the rendered sprite is wider than
         // the canvas, scale down so it fits (rare — sources are usually
