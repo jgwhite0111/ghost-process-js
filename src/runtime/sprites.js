@@ -123,21 +123,16 @@ class CharacterSprite {
     }
 
     // Logical placement on the canvas. position: left/right/center/closeup.
-    // Feet anchor 30px above the canvas bottom so the sprite sits on
-    // the implied ground line. The gap is enough room for the dialogue
-    // box shadow / first row of pixels without the sprite bleeding
-    // into the dialogue border. The 165a370 baseline used this same
-    // value (canvasH - 30); the previous carve-out layout reduced it
-    // to canvasH - 6 which landed the sprite feet INSIDE the dialogue
-    // overlap zone, so the sprite looked disembodied.
-    //
-    // No 'foreground' position anymore — that hack anchored feet BELOW
-    // the canvas (canvasH + 30) so the lower legs were cropped. With
-    // the canvas now filling the viewport and the dialogue box overlaying
-    // the bottom, that trick is no longer needed; sprites use the
-    // simple 'left/right/center/closeup' slots like the baseline.
+    // Feet anchor 60px BELOW the canvas bottom so the sprite feels
+    // closer to camera — the boots crop off the bottom of the screen,
+    // which is the PC-98 visual-novel "medium close shot" trick (see
+    // Snatcher / Policenauts character sprites in late-game frames).
+    // The previous canvasH - 30 anchored feet visibly above the
+    // dialogue border; combined with the 0.85 scale the captain's
+    // upper body sat high in the frame with empty space above, which
+    // read as "character standing too far back".
     placementY(canvasH) {
-        return canvasH - 30;
+        return canvasH + 60;
     }
 
     placementX(canvasW, position, spriteW) {
@@ -220,17 +215,19 @@ class CharacterSprite {
         if (this.frames.length === 0) return;
         if (this.opacity <= 0) return;
         const img = this.frames[this.currentFrame];
-        // Scale target: 85% of canvas height — matches the 165a370
-        // baseline (canvas was 480px tall, source sprites were ~400px
-        // so a 0.85 scale made them feel like full-grown characters).
-        // No more 'foreground' shrink hack — sprites get a uniform
-        // scale so the captain doesn't look smaller than the others.
+        // Scale target: 1.05× of canvas height — so the sprite's head
+        // crops off the top of the canvas when feet are anchored below
+        // (canvasH + 60). Combined effect: the character fills the
+        // frame top-to-bottom with both head and boots clipped, the
+        // PC-98 visual-novel "actor is right here in your face"
+        // shot composition.
         const W = ctx.canvas.width, H = ctx.canvas.height;
-        const targetH = H * 0.85;
+        const targetH = H * 1.05;
         let scale = targetH / img.height;
         // Width overflow guard: if the rendered sprite is wider than
-        // 95% of the canvas, scale down so it fits with a small margin.
-        const maxW = W * 0.95;
+        // the canvas, scale down so it fits (rare — sources are usually
+        // narrower than tall).
+        const maxW = W * 1.0;
         if (img.width * scale > maxW) scale = maxW / img.width;
         const w = img.width * scale;
         const h = img.height * scale;
