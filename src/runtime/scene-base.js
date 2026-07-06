@@ -439,18 +439,14 @@ class Scene {
         const letterbox = palette && palette[0]
             ? `rgb(${palette[0][0]},${palette[0][1]},${palette[0][2]})`
             : '#000';
-        // Title screens: cover-fit (zoom to fill canvas, no letterbox)
-        // with the image anchored LEFT — the GHOST PROCESS logo lives
-        // in the bottom-left of the source so we anchor to the left to
-        // keep it on-screen even on portrait phones.
-        // Gameplay scenes: cover-fit, anchored center so characters in
-        // the middle of the frame stay visible at any aspect.
-        const isTitle = this.sceneConfig && this.sceneConfig.kind === 'title';
-        const anchor = isTitle ? 'left' : 'center';
+        // Title screens and gameplay: cover-fit (zoom to fill canvas,
+        // no letterbox) anchored CENTER. The GHOST PROCESS logo is
+        // drawn as canvas overlay text by _drawTitleOverlay() AFTER
+        // the source, so it's never cropped by cover-fit.
         const rect = window.Runtime.coverRect(
             this.bgImage.width, this.bgImage.height,
             this.canvas.width, this.canvas.height,
-            anchor);
+            'center');
         if (this._ditheredBg) {
             this.ctx.fillStyle = letterbox;
             this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
@@ -461,6 +457,49 @@ class Scene {
         this.ctx.fillStyle = letterbox;
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
         this.ctx.drawImage(this.bgImage, rect.x, rect.y, rect.w, rect.h);
+    }
+
+    // Draw the GHOST PROCESS logo as canvas overlay text in
+    // MadouFutoMaru pixel font with a 1px hard drop shadow. Rendered
+    // AFTER the background so it floats over the artwork and is never
+    // cropped by cover-fit (regardless of source aspect vs viewport
+    // aspect). Only fires for `kind: 'title'` scenes.
+    //
+    // Override via sceneConfig.titleText / titleFont / titleColor /
+    // titleShadow.
+    _drawTitleOverlay() {
+        if (!this.sceneConfig || this.sceneConfig.kind !== 'title') return;
+        const text = this.sceneConfig.titleText || 'GHOST PROCESS';
+        const fontFamily = this.sceneConfig.titleFont || '"MadouFutoMaru", monospace';
+        const color = this.sceneConfig.titleColor || '#ff2030';
+        const shadow = this.sceneConfig.titleShadow !== undefined
+            ? this.sceneConfig.titleShadow
+            : '#000000';
+        const fontSizePct = this.sceneConfig.titleSizePct ?? 0.10;
+        const ctx = this.ctx;
+        const W = this.canvas.width;
+        const H = this.canvas.height;
+        // Font sized off the smaller axis so the title stays proportional
+        // on both landscape and portrait viewports.
+        const fontSize = Math.round(Math.min(W, H) * fontSizePct);
+        ctx.save();
+        ctx.font = `bold ${fontSize}px ${fontFamily}`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'alphabetic';
+        ctx.imageSmoothingEnabled = false;
+        const x = W / 2;
+        // Sit the baseline 8% above the bottom edge so the title floats
+        // above the PRESS START hitbox (which lives at y=0.55 of the
+        // canvas per the intro scene config).
+        const y = H - Math.round(H * 0.08);
+        // 1px hard drop shadow, drawn first.
+        if (shadow) {
+            ctx.fillStyle = shadow;
+            ctx.fillText(text, x + 1, y + 1);
+        }
+        ctx.fillStyle = color;
+        ctx.fillText(text, x, y);
+        ctx.restore();
     }
 
     // Snap the loaded bgImage into a 16-colour PC-98 dither on an
@@ -499,6 +538,8 @@ class Scene {
         this.ctx.fillStyle = '#000';
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
         this._drawBackground();
+        // GHOST PROCESS logo (canvas overlay — never cropped by cover-fit).
+        this._drawTitleOverlay();
         const deltaSec = delta / 1000;
         for (const c of this.characters) {
             c.update(delta);

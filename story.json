@@ -18,9 +18,14 @@
         "intro": {
             "id": "intro",
             "kind": "title",
-            "bg": "scene_intro_v6",
+            "bg": "scene_intro_v11",
             "bgPalette": "alley",
             "music": "intro_theme.mp3",
+            "titleText": "GHOST PROCESS",
+            "titleFont": "\"MadouFutoMaru\", monospace",
+            "titleColor": "#ff2030",
+            "titleShadow": "#000000",
+            "titleSizePct": 0.10,
             "characters": [],
             "hitboxes": [
                 {
@@ -40,7 +45,7 @@
         "cold_open": {
             "id": "cold_open",
             "kind": "ink",
-            "bg": "scene_intro_v6",
+            "bg": "scene_intro_v11",
             "bgPalette": "alley",
             "music": "intro_theme.mp3",
             "ink": "ink/cold_open.ink",

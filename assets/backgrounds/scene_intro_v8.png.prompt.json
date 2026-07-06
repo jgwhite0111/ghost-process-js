@@ -1,0 +1,9 @@
+{
+  "preset": "intro_v8",
+  "asset": "assets/backgrounds/scene_intro_v8.png",
+  "timestamp_utc": "2026-07-06T02:59:52Z",
+  "prompt": "Clean line-art, sharp ink, brush-painted flat coloring with hard shadows. SMOOTH painterly source \u2014 NO pixel art, NO 8-bit, NO dither (applied later).\n\nPC-98 title screen, 16:9 widescreen. STORY: teenage runaway hunted through backstreet at night.\n\nPROTAGONIST (CENTER): mid-sprint, 3/4 FROM BEHIND. YOUNG \u2014 late teens to early twenties, lean and hungry. Messy unwashed hair. Cheap thrift-store windbreaker two sizes too big, frayed cuffs caught in wind. Cheap sneakers pounding wet cobblestone, splash erupting. Hands pumping.\n\nCHASE: alley, slick wet cobblestones. Smoke pouring from a drain. Puddles reflecting his silhouette. Walls closing in \u2014 TRAP. Sky upper-right with moonlit clouds.\n\nTHREAT (RIGHT SIDE): TWO patrolling androids in ceremonial navy coats and red sashes, half a block back. Red eye-glow. Chasing.\n\nONLY text 'GHOST PROCESS' in dripping red horror font, CENTERED HORIZONTALLY at bottom-center, occupying middle 40% of horizontal width and bottom 25% of vertical height. 5% padding from BOTTOM edge.\n\nStyle: Snatcher late-80s PC-98 mature cyberpunk, no anime no moe. Sharp ink, hard shadows. Palette: deep blue, cyan, blood red, gold.\n\nAvoid: cartoon, kawaii, chibi, child, 3D render, photorealistic, CGI, smooth gradient, watermark, signature, frame border, pixel art, 8-bit, mosaic dither, scanlines, floating, hovering, hover-platform. NOT an old operative. NOT a rooftop birdwatcher. Title NOT in corner, NOT at very bottom edge, NOT spanning full width.",
+  "aspect_ratio": "16:9",
+  "model": "image-01",
+  "framing_notes": "v8 16:9 widescreen. Protagonist center, androids right. Title CENTERED at bottom, middle 40% of width \u2014 survives portrait crops because the title's center stays visible no matter which slice we show."
+}
