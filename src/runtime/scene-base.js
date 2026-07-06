@@ -268,28 +268,33 @@ class Scene {
     // dialogue box overlapping the scene, so the background can
     // reach the screen edge. Mobile portrait, landscape desktop,
     // and orientation changes all funnel through here.
+    // Layout: the canvas fills the WHOLE viewport. The dialogue box
+    // is a DOM overlay sitting on top of the canvas bottom (semi-
+    // transparent so the scene shows through behind the text). The
+    // user explicitly chose this over the "carve-out" approach where
+    // the canvas is height-clipped to leave a clean strip for the
+    // dialog box — the carve-out left a black bar wherever the box
+    // was taller than the carve-out, and sprites placed at the
+    // canvas bottom looked disembodied because their feet sat inside
+    // the overlap zone.
     _configureCanvasLayout() {
         if (!this.canvas) return;
         const parent = this.canvas.parentElement;
         if (!parent) return;
-        const DIALOGUE_RESERVE = 140;
-        const isTitle = this.sceneConfig && this.sceneConfig.kind === 'title';
         const w = parent.clientWidth || 640;
-        const h = isTitle
-            ? (parent.clientHeight || 480)
-            : Math.max(parent.clientHeight - DIALOGUE_RESERVE, 240);
+        const h = parent.clientHeight || 480;
         if (this.canvas.width !== w) this.canvas.width = w;
         if (this.canvas.height !== h) this.canvas.height = h;
-        this.canvas.style.height = isTitle ? '100%' : ('calc(100% - ' + DIALOGUE_RESERVE + 'px)');
+        // CSS stretches the canvas to the full viewport so the scene
+        // image renders behind the dialogue box. Hitbox layer is
+        // already absolute-positioned with the same parent coords.
+        this.canvas.style.width = '100%';
+        this.canvas.style.height = '100%';
         // Notify any listeners (e.g. hitboxes, sprites) that depend
         // on the canvas pixel size.
         window.dispatchEvent(new CustomEvent('game:canvas-resized', {
             detail: { width: w, height: h }
         }));
-        // The dithered offscreen is sized at the SOURCE image's
-        // resolution, not the canvas — so canvas resizes don't
-        // invalidate it. _drawBackground applies the contain/cover
-        // rect at draw time. No re-dither needed here.
     }
 
     _externals(runner) {

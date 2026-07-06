@@ -92,9 +92,7 @@ html, body {
 #game {
     width: 100vw;
     height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    display: block;
 }
 
 #game canvas {
@@ -142,6 +140,19 @@ html, body {
     /* user-select off — labels are visual, not text content */
     -webkit-user-select: none;
     user-select: none;
+}
+
+/* PRESS START (and any other title-screen label) gets a soft pulse so
+   the player can tell it's interactive even before they mouse over it.
+   We override opacity:0 default on labels — title labels are
+   always-on. */
+.hitbox-label[title-screen] {
+    animation: title-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes title-pulse {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.55; }
 }
 
 /* When the engine has a "floating" cursor (PC-98 eye glyph) hovering
@@ -193,14 +204,24 @@ html, body {
     box-shadow: 0 0 8px rgba(58, 122, 74, 0.3);
 }
 
-/* Dialogue box (DOM overlay on top of the canvas) */
+/* Dialogue box (DOM overlay on top of the canvas). The scene image
+   fills the WHOLE viewport (see #game canvas CSS), so this box sits
+   on top of the bottom strip of the scene. Background is mostly
+   opaque (0.92) but lets the cobblestones / neon leak through very
+   faintly — enough to ground the box in the scene rather than feel
+   like a stuck-on rectangle. The gold border on top is what
+   actually delineates the box visually. */
 .dialogue-box {
     position: absolute;
     bottom: 0;
     left: 0;
     right: 0;
     z-index: 20;
-    background: rgba(10, 10, 20, 0.92);
+    background: linear-gradient(
+        to bottom,
+        rgba(8, 8, 16, 0.78) 0%,
+        rgba(10, 10, 20, 0.94) 100%
+    );
     border-top: 2px solid #d4a045;
     padding: 16px 24px;
     font-family: 'NouveauIBM', 'PC98Serif', monospace;
