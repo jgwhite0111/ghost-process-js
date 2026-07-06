@@ -19,6 +19,14 @@ with sync_playwright() as p:
     page.wait_for_function("window.STATE.sceneId === 'alley'", timeout=8000)
     print('OK intro -> alley')
 
+    # The new alley flow: android is invisible until the player picks
+    # up the rusty key (bins hitbox). Click the bins hitbox first,
+    # wait for the fly animation + Ink redirect to FoundKey, then
+    # advance through any remaining dialogue until choices appear.
+    page.wait_for_selector('.hitbox', timeout=4000)
+    page.click('.hitbox', timeout=3000)
+    page.wait_for_timeout(1200)  # 700ms fly + 500ms buffer
+
     # wait for first dialogue line + advance to choice
     page.wait_for_function("document.querySelector('.dialogue-box .text')?.textContent", timeout=5000)
 

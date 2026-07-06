@@ -37,6 +37,33 @@ class Scene {
         this._lastFrameTime = 0;
         this._onPointerDown = (e) => this._handlePointerDown(e);
         this._active = false;
+
+        // Scenes where the character is supposed to already be in
+        // place when the scene opens — fade-in is skipped and the
+        // matching portrait tag snaps opacity to 1 instantly.
+        this._skipFadeInScenes = new Set([
+            'jailbreak',  // thug is already in the cell
+        ]);
+
+        // Scenes where the character's ambient animation should
+        // keep ticking across narration lines (i.e. `# speaker:none`
+        // does NOT freeze the sprite). Used for corridor's energy
+        // ball effect — the user wants the glow to stay visible
+        // continuously, not stop and restart with each line.
+        this._ambientAnimateScenes = new Set([
+            'corridor',
+        ]);
+
+        // Scenes where the talking animation should keep running
+        // even after the dialogue hands control back to the player
+        // (i.e. when choice buttons appear). Default behaviour is
+        // to freeze the speaker so their mouth isn't moving under a
+        // static text box. Alley opts OUT of this — the user wants
+        // the android to keep talking in the background until the
+        // player picks an option and the scene transitions.
+        this._keepAnimatingAtChoices = new Set([
+            'alley',
+        ]);
     }
 
     async start({ canvas, sceneId }) {
@@ -44,11 +71,26 @@ class Scene {
         this.sceneConfig = window.STORY.scenes[this.sceneId];
         this.canvas = canvas;
         this.ctx = canvas.getContext('2d');
+        // Resize the canvas to match the current viewport BEFORE we
+        // draw anything, so background coverRect and sprite placement
+        // use the right dimensions. Title screens get the full
+        // viewport; gameplay scenes reserve a strip at the bottom for
+        // the dialogue box.
+        this._configureCanvasLayout();
         // Background.
         const bgKey = this.sceneConfig.bg;
         if (bgKey) {
             try {
                 this.bgImage = await window.Runtime.loadImage(`assets/backgrounds/${bgKey}.png`);
+                // PC-98 dither post-process: snap the clean source to
+                // a 16-colour scene palette with Bayer 8x8 dithering, so
+                // every scene renders the retro look at draw time rather
+                // than baking dither into the source PNG. Cached as an
+                // offscreen canvas so per-frame blit is just one
+                // drawImage call.
+                if (this.sceneConfig.bgDither !== false && this.bgImage) {
+                    this._ditherBg();
+                }
             } catch (e) {
                 console.warn(`Scene ${this.sceneId}: bg load failed:`, e);
             }
@@ -96,6 +138,8 @@ class Scene {
         // Kick off the render loop.
         this._active = true;
         this._lastFrameTime = performance.now();
+        // Expose for debug probing from Playwright / devtools.
+        window.__activeScene = this;
         this._rafId = requestAnimationFrame((t) => this._tick(t));
         // Scene-specific hook.
         if (typeof this.onReady === 'function') this.onReady();
@@ -149,7 +193,14 @@ class Scene {
             if (key === 'speaker') {
                 const sp = (args[0] || '').toLowerCase();
                 if (window.DialoguePanel) {
-                    window.DialoguePanel.setSpeaker(sp === 'none' ? '' : (args[0] || ''));
+                    // Capitalize the first letter so the yellow speaker
+                    // label reads "Android" / "Thug", not "android" / "thug".
+                    // Narrator (speaker:none) shows no label.
+                    const raw = args[0] || '';
+                    const display = sp === 'none'
+                        ? ''
+                        : raw.charAt(0).toUpperCase() + raw.slice(1);
+                    window.DialoguePanel.setSpeaker(display);
                 }
                 this._handleSpeaker(sp);
                 return;
@@ -191,8 +242,54 @@ class Scene {
     }
 
     _handleChoices(choices) {
-        // Default scene behaviour: choices are handled by the panel. This
-        // hook lets a scene override or extend (e.g. analytics).
+        // When choices appear on screen, the speaker has finished their
+        // line and is now waiting for the player to pick. Default scene
+        // behaviour: freeze all character animations so a still-mouth
+        // character isn't still flapping his jaw under a static text
+        // box. The corridor scene overrides this via
+        // _ambientAnimateScenes because its energy-ball glow should
+        // keep going through narrator-only lines. Alley overrides via
+        // _keepAnimatingAtChoices because the user wants the android
+        // to keep talking until they pick a choice and the scene
+        // transitions.
+        if (this._keepAnimatingAtChoices.has(this.sceneId)) return;
+        const ambientAnimate = this._ambientAnimateScenes &&
+            this._ambientAnimateScenes.has(this.sceneId);
+        if (!ambientAnimate) {
+            for (const c of this.characters) {
+                c.setSpeaking(false);
+            }
+        }
+    }
+
+    // Resize the canvas to match the current viewport, reserving
+    // space at the bottom for the dialogue box on gameplay scenes.
+    // Title screens (intro) fill the full viewport — there's no
+    // dialogue box overlapping the scene, so the background can
+    // reach the screen edge. Mobile portrait, landscape desktop,
+    // and orientation changes all funnel through here.
+    _configureCanvasLayout() {
+        if (!this.canvas) return;
+        const parent = this.canvas.parentElement;
+        if (!parent) return;
+        const DIALOGUE_RESERVE = 140;
+        const isTitle = this.sceneConfig && this.sceneConfig.kind === 'title';
+        const w = parent.clientWidth || 640;
+        const h = isTitle
+            ? (parent.clientHeight || 480)
+            : Math.max(parent.clientHeight - DIALOGUE_RESERVE, 240);
+        if (this.canvas.width !== w) this.canvas.width = w;
+        if (this.canvas.height !== h) this.canvas.height = h;
+        this.canvas.style.height = isTitle ? '100%' : ('calc(100% - ' + DIALOGUE_RESERVE + 'px)');
+        // Notify any listeners (e.g. hitboxes, sprites) that depend
+        // on the canvas pixel size.
+        window.dispatchEvent(new CustomEvent('game:canvas-resized', {
+            detail: { width: w, height: h }
+        }));
+        // The dithered offscreen is sized at the SOURCE image's
+        // resolution, not the canvas — so canvas resizes don't
+        // invalidate it. _drawBackground applies the contain/cover
+        // rect at draw time. No re-dither needed here.
     }
 
     _externals(runner) {
@@ -204,13 +301,24 @@ class Scene {
         // inside InkJS.
     }
 
-    _triggerHitbox(hb) {
-        // The scene's own logic can override _handleHitbox to dispatch
-        // non-transition hitboxes (item pickups, inventory checks).
+    _triggerHitbox(hb, pageX, pageY) {
         if (hb.item) {
-            window.Inventory.add(hb.item);
+            const label = hb.item.replace(/_/g, ' ');
+            window.Inventory.addWithFly(hb.item, pageX, pageY, label, () => {
+                // Once the fly finishes (and add() has been called),
+                // refresh the hitbox layer so the now-consumed item's
+                // label disappears.
+                if (this.hitboxLayer && this.hitboxLayer.refresh) this.hitboxLayer.refresh();
+            });
             const item = window.STORY.items[hb.item];
-            if (item && item.pickup_message) window.Toast.show(item.pickup_message);
+            if (item && item.pickup_message) {
+                // Slightly delayed so the toast doesn't fight the fly.
+                setTimeout(() => window.Toast.show(item.pickup_message), 350);
+            }
+            // Scenes can hook into pickup-time to advance the story
+            // (e.g. the alley uses this to redirect Ink to the
+            // android fade-in beat after the key is committed).
+            if (this._onItemPicked) this._onItemPicked(hb.item);
             return;
         }
         if (hb.target) {
@@ -257,8 +365,29 @@ class Scene {
         // Ink tag value (case varies in story.json — 'ANDROID' vs
         // 'android' in alley.ink), so we lowercase both sides.
         const sp = (speaker || '').toLowerCase();
+        // For scenes that want a continuous ambient animation (e.g.
+        // corridor's glowing energy ball), `# speaker:none` lines
+        // don't freeze the sprite — the animation keeps ticking
+        // through narration. Only a tag naming a DIFFERENT speaker
+        // than the sprite would stop it.
+        const ambientAnimate = this._ambientAnimateScenes.has(this.sceneId);
         for (const c of this.characters) {
             const charSp = (c.character.speaker || '').toLowerCase();
+            // alley: keep the android talking through the entire scene
+            // including the Run narration beat that fires right before
+            // the scene transition. Without this, `# speaker:none`
+            // freezes the mouth anim for the half-second before
+            // transition_next() tears the scene down, which reads as
+            // a visible freeze-frame on the user's last action.
+            if (this._keepAnimatingAtChoices.has(this.sceneId) && sp === 'none') {
+                if (!c.isSpeaking) c.setSpeaking(true);
+                continue;
+            }
+            if (ambientAnimate && sp === 'none') {
+                // Keep animating.
+                if (!c.isSpeaking) c.setSpeaking(true);
+                continue;
+            }
             c.setSpeaking(charSp === sp);
         }
     }
@@ -266,10 +395,23 @@ class Scene {
     _handleAction(action) { /* no-op in v1 */ }
     _handleGive(itemId) { window.Inventory.add(itemId); }
     _handlePortrait(portrait) {
-        // Find the character whose portrait name matches, set visible.
-        // v1 implementation: toggle sprite opacity.
+        // Find the character whose portrait name matches; fade that
+        // one in, fade everyone else out. v1 implementation:
+        // opacity fade-in/out per Ink # portrait:NAME / # portrait:none.
+        //
+        // Skip-fade scenes: where the narrative expects the character
+        // to already be present when the scene opens (e.g. the
+        // jailbreak cell with the thug waiting). For those we snap to
+        // opacity=1 instantly on the matching character.
+        const skipFade = this._skipFadeInScenes.has(this.sceneId);
+        const want = (portrait || '').toLowerCase();
         for (const c of this.characters) {
-            c._visible = (portrait === c.character.id);
+            const id = (c.character.id || '').toLowerCase();
+            if (id === want) {
+                c.setVisible(skipFade);
+            } else {
+                c.setHidden(false);
+            }
         }
     }
     _handleTags(tags) { /* no-op in v1 */ }
@@ -290,10 +432,64 @@ class Scene {
 
     _drawBackground() {
         if (!this.bgImage) return;
+        // Letterbox fill colour — match the palette's BG_deep slot so
+        // any pillarbox bars on the title screen blend with the
+        // dithered plate rather than showing as solid black.
+        const palette = window.Runtime.resolvePalette(this.sceneConfig.bgPalette);
+        const letterbox = palette && palette[0]
+            ? `rgb(${palette[0][0]},${palette[0][1]},${palette[0][2]})`
+            : '#000';
+        // Title screens: cover-fit (zoom to fill canvas, no letterbox)
+        // with the image anchored LEFT — the GHOST PROCESS logo lives
+        // in the bottom-left of the source so we anchor to the left to
+        // keep it on-screen even on portrait phones.
+        // Gameplay scenes: cover-fit, anchored center so characters in
+        // the middle of the frame stay visible at any aspect.
+        const isTitle = this.sceneConfig && this.sceneConfig.kind === 'title';
+        const anchor = isTitle ? 'left' : 'center';
         const rect = window.Runtime.coverRect(
             this.bgImage.width, this.bgImage.height,
-            this.canvas.width, this.canvas.height);
+            this.canvas.width, this.canvas.height,
+            anchor);
+        if (this._ditheredBg) {
+            this.ctx.fillStyle = letterbox;
+            this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+            this.ctx.drawImage(this._ditheredBg, rect.x, rect.y, rect.w, rect.h);
+            return;
+        }
+        // Fallback: raw image.
+        this.ctx.fillStyle = letterbox;
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
         this.ctx.drawImage(this.bgImage, rect.x, rect.y, rect.w, rect.h);
+    }
+
+    // Snap the loaded bgImage into a 16-colour PC-98 dither on an
+    // offscreen canvas. Stored as this._ditheredBg and blitted by
+    // _drawBackground every frame. Paid once per scene load.
+    //
+    // The offscreen is sized at the SOURCE image's resolution (not the
+    // canvas). The canvas-side aspect fit (cover for gameplay, contain
+    // for title) happens in _drawBackground at draw time. This means
+    // we don't re-dither on every canvas resize — only on first load.
+    _ditherBg() {
+        const palette = window.Runtime.resolvePalette(this.sceneConfig.bgPalette);
+        const off = document.createElement('canvas');
+        off.width = this.bgImage.width;
+        off.height = this.bgImage.height;
+        try {
+            window.Runtime.ditherImageToCanvas(this.bgImage, off, palette, {
+                // Letterbox fill comes from the palette's BG_deep slot so
+                // any pillarbox bars match the dithered plate rather than
+                // showing as solid black.
+                bgColor: palette[0] || [0, 0, 0],
+                ditherStrength: this.sceneConfig.bgDitherStrength ?? 1.0,
+            });
+            this._ditheredBg = off;
+        } catch (e) {
+            console.warn(`Scene ${this.sceneId}: bg dither failed:`, e);
+            // Fall back to the raw image — _drawBackground will pick it up.
+            this._ditheredBg = null;
+        }
     }
 
     _tick(now) {
@@ -303,9 +499,11 @@ class Scene {
         this.ctx.fillStyle = '#000';
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
         this._drawBackground();
+        const deltaSec = delta / 1000;
         for (const c of this.characters) {
             c.update(delta);
-            if (c._visible !== false) c.draw(this.ctx);
+            c._tickOpacity(deltaSec);
+            if (c.opacity > 0) c.draw(this.ctx);
         }
         this._rafId = requestAnimationFrame((t) => this._tick(t));
     }

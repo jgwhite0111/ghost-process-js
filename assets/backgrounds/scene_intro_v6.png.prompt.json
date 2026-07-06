@@ -1,0 +1,9 @@
+{
+  "preset": "intro_v2 (override)",
+  "asset": "assets/backgrounds/scene_intro_v6.png",
+  "timestamp_utc": "2026-07-06T02:24:55Z",
+  "prompt": "Clean line-art, sharp ink, brush-painted flat coloring with hard shadows. SMOOTH painterly source \u2014 NO pixel art, NO 8-bit, NO dither (applied later).\n\nPC-98 title screen, 4:3. WIDE COMPOSITION (landscape) \u2014 title sits at BOTTOM so the image is wider than tall. STORY: teenage runaway hunted through backstreet at night.\n\nPROTAGONIST (CENTER, upper-mid frame): mid-sprint, 3/4 FROM BEHIND, leaning into run. YOUNG \u2014 late teens to early twenties, lean and hungry, NOT grizzled. Messy unwashed hair. Cheap thrift-store windbreaker two sizes too big, frayed cuffs caught in wind. Cheap sneakers pounding wet cobblestone, one kicking up splash. Hands pumping.\n\nCHASE: alley, cobblestones slick with rain. Smoke/vapor pouring from a drain. Puddles reflecting his silhouette. Walls closing in \u2014 TRAP. WIDE framing, sky visible at top.\n\nTHREAT (BACKGROUND, soft focus): TWO patrolling androids in ceremonial navy coats and red sashes, half a block back. Red eye-glow. Chasing.\n\nONLY text 'GHOST PROCESS' in dripping red horror font at BOTTOM-CENTER, large, occupying bottom 25% of frame.\n\nStyle: Snatcher late-80s PC-98 mature cyberpunk, no anime no moe. Sharp ink, hard shadows. Palette: deep blue, cyan, blood red, gold.\n\nAvoid: cartoon, kawaii, chibi, child, 3D render, photorealistic, CGI, smooth gradient, watermark, signature, frame border, pixel art, 8-bit, mosaic dither, scanlines, floating, hovering, hover-platform. NOT an old operative. NOT a rooftop birdwatcher. Title NOT in corner.",
+  "aspect_ratio": "4:3",
+  "model": "image-01",
+  "framing_notes": "Solid concrete rooftop, no hover-platform. Clean painterly source (no baked dither) \u2014 runtime post-process applies the PC-98 dither."
+}

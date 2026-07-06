@@ -6,16 +6,20 @@
         "intro": "cold_open",
         "cold_open": "alley",
         "alley": "chase",
-        "chase": "corridor",
+        "chase": "kabukicho",
+        "kabukicho": "corp_office",
+        "corp_office": "corridor",
         "corridor": "jailbreak",
-        "jailbreak": "eidolon_return",
-        "eidolon_return": "alley"
+        "jailbreak": "terminal_lab",
+        "terminal_lab": "ship_engine",
+        "ship_engine": "alley"
     },
     "scenes": {
         "intro": {
             "id": "intro",
             "kind": "title",
-            "bg": "scene_intro",
+            "bg": "scene_intro_v6",
+            "bgPalette": "alley",
             "music": "intro_theme.mp3",
             "characters": [],
             "hitboxes": [
@@ -36,7 +40,8 @@
         "cold_open": {
             "id": "cold_open",
             "kind": "ink",
-            "bg": "scene_intro",
+            "bg": "scene_intro_v6",
+            "bgPalette": "alley",
             "music": "intro_theme.mp3",
             "ink": "ink/cold_open.ink",
             "start_node": "Start",
@@ -47,6 +52,7 @@
             "id": "alley",
             "kind": "ink",
             "bg": "scene_alley",
+            "bgPalette": "alley",
             "music": "alley_confrontation.mp3",
             "ink": "ink/alley.ink",
             "start_node": "Start",
@@ -54,7 +60,7 @@
                 {
                     "id": "android",
                     "speaker": "ANDROID",
-                    "position": "right",
+                    "position": "foreground",
                     "scenes": {
                         "alley": {
                             "frames": "assets/sprites/android/alley/idle_*.png",
@@ -79,6 +85,7 @@
             "id": "chase",
             "kind": "ink",
             "bg": "scene_chase",
+            "bgPalette": "alley",
             "music": "alley_confrontation.mp3",
             "ink": "ink/chase.ink",
             "start_node": "Start",
@@ -101,7 +108,8 @@
         "corridor": {
             "id": "corridor",
             "kind": "ink",
-            "bg": "scene_corridor",
+            "bg": "scene_eidolon_return",
+            "bgPalette": "lab_clinic",
             "music": "clinic_tension.mp3",
             "ink": "ink/corridor.ink",
             "start_node": "Start",
@@ -125,6 +133,7 @@
             "id": "jailbreak",
             "kind": "ink",
             "bg": "scene_jailbreak",
+            "bgPalette": "industrial",
             "music": "clinic_tension.mp3",
             "ink": "ink/jailbreak.ink",
             "start_node": "Start",
@@ -144,12 +153,70 @@
             ],
             "hitboxes": []
         },
-        "eidolon_return": {
-            "id": "eidolon_return",
+        "kabukicho": {
+            "id": "kabukicho",
             "kind": "ink",
-            "bg": "scene_eidolon_return",
+            "bg": "scene_kabukicho",
+            "bgPalette": "alley",
             "music": "alley_confrontation.mp3",
-            "ink": "ink/eidolon_return.ink",
+            "ink": "ink/kabukicho.ink",
+            "start_node": "Start",
+            "characters": [
+                {
+                    "id": "android",
+                    "speaker": "ANDROID",
+                    "position": "right",
+                    "scenes": {
+                        "kabukicho": {
+                            "frames": "assets/sprites/android/chase/idle_*.png",
+                            "fps": 6,
+                            "loop": true
+                        }
+                    }
+                }
+            ],
+            "hitboxes": [
+                {
+                    "x": 0.55,
+                    "y": 0.55,
+                    "w": 0.10,
+                    "h": 0.20,
+                    "item": "datacard",
+                    "label": "Approach the vendor"
+                }
+            ]
+        },
+        "corp_office": {
+            "id": "corp_office",
+            "kind": "ink",
+            "bg": "scene_corp_office",
+            "bgPalette": "lab_clinic",
+            "music": "clinic_tension.mp3",
+            "ink": "ink/corp_office.ink",
+            "start_node": "Start",
+            "characters": [
+                {
+                    "id": "android",
+                    "speaker": "ANDROID",
+                    "position": "right",
+                    "scenes": {
+                        "corp_office": {
+                            "frames": "assets/sprites/android/corridor/idle_*.png",
+                            "fps": 4,
+                            "loop": true
+                        }
+                    }
+                }
+            ],
+            "hitboxes": []
+        },
+        "terminal_lab": {
+            "id": "terminal_lab",
+            "kind": "ink",
+            "bg": "scene_terminal_lab",
+            "bgPalette": "terminal_lab",
+            "music": "clinic_tension.mp3",
+            "ink": "ink/terminal_lab.ink",
             "start_node": "Start",
             "characters": [
                 {
@@ -157,9 +224,45 @@
                     "speaker": "ANDROID",
                     "position": "left",
                     "scenes": {
-                        "eidolon_return": {
-                            "frames": "assets/sprites/android/eidolon_return/idle_*.png",
+                        "terminal_lab": {
+                            "frames": "assets/sprites/android/corridor/idle_*.png",
                             "fps": 6,
+                            "loop": true
+                        }
+                    }
+                }
+            ],
+            "hitboxes": []
+        },
+        "ship_engine": {
+            "id": "ship_engine",
+            "kind": "ink",
+            "bg": "scene_ship_engine",
+            "bgPalette": "industrial",
+            "music": "alley_confrontation.mp3",
+            "ink": "ink/ship_engine.ink",
+            "start_node": "Start",
+            "characters": [
+                {
+                    "id": "thug",
+                    "speaker": "THUG",
+                    "position": "bottomright",
+                    "scenes": {
+                        "ship_engine": {
+                            "frames": "assets/sprites/thug/jailbreak/idle_*.png",
+                            "fps": 6,
+                            "loop": true
+                        }
+                    }
+                },
+                {
+                    "id": "android",
+                    "speaker": "ANDROID",
+                    "position": "left",
+                    "scenes": {
+                        "ship_engine": {
+                            "frames": "assets/sprites/android/corridor/idle_*.png",
+                            "fps": 4,
                             "loop": true
                         }
                     }
