@@ -3,304 +3,237 @@
   Ghost//Process — scene editor.
   Open at http://localhost:8765/editor.html
 
+  Responsive layout:
+    - wide screens (>= 1024px) → 3-column: scenes | canvas | inspector
+    - narrow screens           → stacked, with a tab bar to switch
+                                  between scenes / canvas / inspector
+
   Lets you drag sprites to position them, drag-draw hitboxes, swap
-  backgrounds/music, and edit items. Writes back to story.json via
-  PUT /api/story.
+  backgrounds/music, and edit item metadata. Writes back to
+  story.json via PUT /api/story.
 -->
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=900,initial-scale=1">
-<title>Ghost//Process — Editor</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Ghost//Process — scene editor</title>
 <style>
-  /* ----------- reset / layout ----------- */
-  *,*::before,*::after { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; height: 100%; }
-  body {
-    background: #0a0a0f;
-    color: #d8d4c8;
-    font-family: 'IBM Plex Mono', 'Courier New', monospace;
-    font-size: 12px;
-    display: grid;
-    grid-template-columns: 220px 1fr 280px;
-    grid-template-rows: 32px 1fr 28px;
-    height: 100vh;
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; background: #0d1117; color: #d9dde3;
+    font-family: ui-monospace, "SF Mono", "Menlo", Consolas, monospace; font-size: 13px;
     overflow: hidden;
   }
+  button { font: inherit; color: inherit; background: #1c2129; border: 1px solid #30363d;
+    padding: 6px 10px; border-radius: 4px; cursor: pointer; }
+  button:hover { background: #2a313c; border-color: #4d5663; }
+  button.primary { background: #2ea043; border-color: #2ea043; color: white; }
+  button.primary:hover { background: #3fb950; }
+  button.danger { background: #4d1d1d; border-color: #6e2929; color: #ff9999; }
+  button.active { background: #1f4d80; border-color: #3470bd; color: #cce6ff; }
+  input[type=text], input[type=number], select, textarea {
+    width: 100%; padding: 5px 7px; background: #0d1117; color: #d9dde3;
+    border: 1px solid #30363d; border-radius: 3px; font: inherit;
+  }
+  textarea { min-height: 60px; resize: vertical; }
+  input[type=checkbox] { transform: scale(1.2); }
 
-  /* ----------- top bar ----------- */
-  .topbar {
-    grid-column: 1 / -1;
-    background: #14141c;
-    border-bottom: 1px solid #2a2a36;
-    display: flex; align-items: center; padding: 0 12px; gap: 12px;
-    font-size: 12px;
+  /* ---------- layout ---------- */
+  #app {
+    display: grid; height: 100%;
+    grid-template-rows: auto 1fr auto;
+    grid-template-columns: 240px 1fr 320px;
+    grid-template-areas:
+      "topbar topbar topbar"
+      "left   center right"
+      "bottom bottom bottom";
   }
-  .topbar h1 {
-    margin: 0; font-size: 12px; font-weight: 600; color: #d4a045;
-    letter-spacing: 0.1em;
+  /* narrow screen: collapse to 1-col with a tab bar */
+  @media (max-width: 1023px) {
+    #app {
+      grid-template-columns: 1fr;
+      grid-template-rows: auto 1fr auto;
+      grid-template-areas:
+        "topbar"
+        "center"
+        "bottom";
+    }
+    #left, #right { position: fixed; top: 44px; bottom: 56px; left: 0; right: 0;
+      background: #0d1117; z-index: 50; overflow-y: auto; padding: 8px;
+      display: none; }
+    #left.show, #right.show { display: block; }
+    .tab-toggle { display: flex !important; }
   }
-  .topbar .status {
-    margin-left: auto; color: #6c7280; font-size: 11px;
-  }
-  .topbar .status.dirty { color: #d4a045; }
-  .topbar .status.saved { color: #6cba6c; }
-  .topbar button {
-    background: #1f1f2a; border: 1px solid #3a3a48;
-    color: #d8d4c8; padding: 4px 12px; cursor: pointer;
-    font-family: inherit; font-size: 11px;
-  }
-  .topbar button:hover { background: #2a2a3a; }
-  .topbar button.primary {
-    background: #d4a045; color: #14141c; border-color: #d4a045;
-    font-weight: 600;
-  }
-  .topbar button.primary:hover { background: #e6b155; }
-  .topbar button.danger { color: #d45a45; border-color: #6c3a36; }
+  .tab-toggle { display: none; gap: 4px; padding: 6px; background: #161b22; border-top: 1px solid #30363d; }
+  .tab-toggle button { flex: 1; }
+  .tab-toggle button.active { background: #1f4d80; }
 
-  /* ----------- left panel: scenes + items ----------- */
-  .left {
-    background: #0f0f17;
-    border-right: 1px solid #1f1f2a;
-    overflow-y: auto;
-    display: flex; flex-direction: column;
-  }
-  .left .section {
-    border-bottom: 1px solid #1a1a26;
-    padding: 8px;
-  }
-  .left .section h2 {
-    margin: 0 0 6px 0; font-size: 10px; font-weight: 600;
-    color: #d4a045; letter-spacing: 0.1em; text-transform: uppercase;
-  }
-  .scene-list, .item-list { list-style: none; margin: 0; padding: 0; }
-  .scene-list li, .item-list li {
-    padding: 4px 6px; cursor: pointer; border-radius: 2px;
-    display: flex; align-items: center; gap: 6px;
-  }
-  .scene-list li:hover, .item-list li:hover { background: #1a1a26; }
-  .scene-list li.active, .item-list li.active {
-    background: #2a2418; color: #d4a045;
-  }
-  .scene-list li .swatch {
-    width: 14px; height: 14px; background: #2a2a36; flex: 0 0 14px;
-    border-radius: 2px;
-  }
-  .scene-list li.has-bg .swatch { background: #d4a045; }
-  .scene-list li .count {
-    margin-left: auto; color: #6c7280; font-size: 10px;
-  }
-  .add-btn {
-    margin-top: 6px; background: #1a1a26; border: 1px dashed #3a3a48;
-    color: #8a8c98; padding: 4px 8px; cursor: pointer; width: 100%;
-    font-family: inherit; font-size: 11px;
-  }
-  .add-btn:hover { background: #2a2a3a; color: #d8d4c8; }
+  #topbar { grid-area: topbar; display: flex; align-items: center; gap: 12px;
+    padding: 8px 12px; background: #161b22; border-bottom: 1px solid #30363d; }
+  #topbar h1 { font-size: 14px; margin: 0; flex: 0 0 auto; }
+  #topbar .scene-name { color: #6c7280; flex: 1; }
+  #status.saved { color: #3fb950; }
+  #status.dirty { color: #f0b760; }
+  #status.error { color: #ff7070; }
 
-  /* ----------- center: canvas preview ----------- */
-  .center {
-    background: #050508;
-    overflow: hidden;
-    position: relative;
-    display: flex; align-items: center; justify-content: center;
-  }
-  .canvas-frame {
-    position: relative;
-    /* 390x844 — phone canvas */
-    width: 390px; height: 844px;
-    background: #000;
-    box-shadow: 0 0 24px rgba(0,0,0,0.6), 0 0 0 1px #2a2a36;
-    overflow: hidden;
-  }
-  .canvas-frame canvas {
-    position: absolute; top: 0; left: 0;
-    width: 100%; height: 100%; display: block;
-    image-rendering: pixelated;
-  }
-  .canvas-frame .overlay {
-    position: absolute; top: 0; left: 0;
-    width: 100%; height: 100%;
-    pointer-events: none;
-  }
-  .canvas-frame .overlay > * { pointer-events: auto; }
+  #left   { grid-area: left;   overflow-y: auto; padding: 8px; background: #0d1117; border-right: 1px solid #30363d; }
+  #center { grid-area: center; overflow: hidden; padding: 12px;
+    display: flex; flex-direction: column; align-items: center; gap: 10px; background: #050608; }
+  #right  { grid-area: right;  overflow-y: auto; padding: 8px; background: #0d1117; border-left: 1px solid #30363d; }
 
-  /* sprite handles */
+  /* ---------- left panel ---------- */
+  #left h3, #right h3 { margin: 4px 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #6c7280; }
+  #left .addrow { display: flex; gap: 4px; margin-bottom: 8px; }
+  #left .addrow button { flex: 1; padding: 4px 6px; font-size: 11px; }
+  #scene-list, #item-list { list-style: none; margin: 0; padding: 0; }
+  #scene-list li, #item-list li {
+    display: flex; align-items: center; gap: 6px; padding: 5px 8px;
+    cursor: pointer; border-radius: 3px; margin-bottom: 2px;
+    border: 1px solid transparent;
+  }
+  #scene-list li:hover, #item-list li:hover { background: #1c2129; }
+  #scene-list li.active, #item-list li.active { background: #1f4d80; border-color: #3470bd; }
+  #scene-list li .swatch, #item-list li .swatch {
+    width: 10px; height: 10px; border-radius: 2px; background: #6c7280; flex-shrink: 0;
+  }
+  #scene-list li.has-bg .swatch { background: #3fb950; }
+  #scene-list li .count, #item-list li .count { margin-left: auto; color: #6c7280; font-size: 11px; }
+
+  /* ---------- center / canvas ---------- */
+  #viewport-toolbar { display: flex; gap: 8px; align-items: center; padding: 4px 8px;
+    background: #161b22; border: 1px solid #30363d; border-radius: 4px; }
+  #viewport-toolbar label { color: #6c7280; }
+  #viewport-toolbar select { width: auto; }
+
+  #canvas-frame {
+    position: relative; background: #000; border: 1px solid #30363d;
+    box-shadow: 0 0 0 1px rgba(255,255,255,0.04), 0 8px 32px rgba(0,0,0,0.6);
+    transform-origin: top center;
+  }
+  #bg-canvas { display: block; image-rendering: pixelated; }
+  #overlay { position: absolute; inset: 0; pointer-events: none; }
+  #overlay > * { pointer-events: auto; }
+
   .sprite-handle {
-    position: absolute;
-    border: 1px dashed #d4a045;
-    box-sizing: border-box;
-    cursor: move;
-    user-select: none;
+    position: absolute; box-sizing: border-box; outline: 1px dashed #f0b760;
+    outline-offset: -1px; cursor: grab; touch-action: none;
   }
-  .sprite-handle.selected {
-    border: 2px solid #d4a045;
-    background: rgba(212, 160, 69, 0.08);
-  }
+  .sprite-handle.selected { outline: 1px solid #f0b760; box-shadow: 0 0 0 1px rgba(240,183,96,0.3); }
+  .sprite-handle.dragging { cursor: grabbing; }
   .sprite-handle .label {
-    position: absolute; top: -16px; left: 0;
-    background: #d4a045; color: #14141c; padding: 1px 4px;
-    font-size: 9px; white-space: nowrap;
+    position: absolute; top: -16px; left: 0; font-size: 10px; color: #f0b760;
+    background: #0d1117; padding: 0 4px;
   }
   .sprite-handle .resize {
-    position: absolute; width: 10px; height: 10px;
-    background: #d4a045; border: 1px solid #14141c;
-    right: -5px; bottom: -5px; cursor: nwse-resize;
+    position: absolute; right: -5px; bottom: -5px; width: 10px; height: 10px;
+    background: #f0b760; border: 1px solid #0d1117; cursor: nwse-resize;
   }
 
-  /* hitbox handles */
   .hitbox-handle {
-    position: absolute;
-    border: 1px solid #6cba6c;
-    background: rgba(108, 186, 108, 0.10);
-    box-sizing: border-box;
-    cursor: move;
+    position: absolute; box-sizing: border-box; outline: 1px solid #6cba6c;
+    background: rgba(108,186,108,0.08); cursor: grab; touch-action: none;
   }
-  .hitbox-handle.selected {
-    background: rgba(108, 186, 108, 0.25);
-    border-width: 2px;
-  }
+  .hitbox-handle.selected { background: rgba(108,186,108,0.18); box-shadow: 0 0 0 1px #6cba6c; }
+  .hitbox-handle.dragging { cursor: grabbing; }
   .hitbox-handle .label {
-    position: absolute; top: -14px; left: 0;
-    background: #6cba6c; color: #14141c; padding: 1px 4px;
-    font-size: 9px; white-space: nowrap;
+    position: absolute; top: -16px; left: 0; font-size: 10px; color: #6cba6c;
+    background: #0d1117; padding: 0 4px;
   }
   .hitbox-handle .resize {
-    position: absolute; width: 10px; height: 10px;
-    background: #6cba6c; border: 1px solid #14141c;
-    right: -5px; bottom: -5px; cursor: nwse-resize;
+    position: absolute; right: -5px; bottom: -5px; width: 10px; height: 10px;
+    background: #6cba6c; border: 1px solid #0d1117; cursor: nwse-resize;
   }
 
-  .draw-tool-banner {
-    position: absolute; top: 8px; left: 8px;
-    background: rgba(20,20,28,0.85); border: 1px solid #d4a045;
-    color: #d4a045; padding: 4px 8px; font-size: 11px;
-    pointer-events: none;
-  }
+  #draw-preview { position: absolute; border: 1px dashed #6cba6c;
+    background: rgba(108,186,108,0.1); box-sizing: border-box;
+    pointer-events: none; z-index: 999; }
 
-  /* ----------- right panel: properties ----------- */
-  .right {
-    background: #0f0f17;
-    border-left: 1px solid #1f1f2a;
-    overflow-y: auto;
-    padding: 8px;
-  }
-  .right h2 {
-    margin: 0 0 6px 0; font-size: 10px; font-weight: 600;
-    color: #d4a045; letter-spacing: 0.1em; text-transform: uppercase;
-  }
-  .right .field {
-    margin-bottom: 6px;
-  }
-  .right .field label {
-    display: block; color: #8a8c98; font-size: 10px;
-    margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.05em;
-  }
-  .right .field input,
-  .right .field select,
-  .right .field textarea {
-    width: 100%; padding: 4px 6px;
-    background: #1a1a26; border: 1px solid #2a2a36;
-    color: #d8d4c8; font-family: inherit; font-size: 11px;
-  }
-  .right .field textarea { resize: vertical; min-height: 48px; }
-  .right .field input:focus,
-  .right .field select:focus,
-  .right .field textarea:focus {
-    outline: none; border-color: #d4a045;
-  }
-  .right .row { display: flex; gap: 4px; }
-  .right .row .field { flex: 1; }
-  .right .actions {
-    display: flex; gap: 4px; margin-top: 8px;
-  }
-  .right .actions button {
-    flex: 1; background: #1a1a26; border: 1px solid #2a2a36;
-    color: #d8d4c8; padding: 4px 6px; cursor: pointer;
-    font-family: inherit; font-size: 11px;
-  }
-  .right .actions button:hover { background: #2a2a3a; }
-  .right .actions button.danger { color: #d45a45; border-color: #6c3a36; }
-  .right .empty {
-    color: #6c7280; font-size: 11px; text-align: center;
-    padding: 20px 8px;
-  }
+  /* ---------- bottom toolbar ---------- */
+  #bottombar { grid-area: bottom; display: flex; gap: 8px; padding: 6px 12px;
+    background: #161b22; border-top: 1px solid #30363d; align-items: center; }
+  .tool-group { display: flex; gap: 4px; }
+  #tool-banner { color: #6cba6c; font-size: 12px; margin-left: 12px; }
 
-  /* ----------- bottom bar ----------- */
-  .bottombar {
-    grid-column: 1 / -1;
-    background: #14141c;
-    border-top: 1px solid #2a2a36;
-    display: flex; align-items: center; padding: 0 12px; gap: 12px;
-    font-size: 11px; color: #8a8c98;
-  }
-  .bottombar .tool-group { display: flex; gap: 4px; }
-  .bottombar button {
-    background: #1f1f2a; border: 1px solid #3a3a48;
-    color: #d8d4c8; padding: 2px 10px; cursor: pointer;
-    font-family: inherit; font-size: 11px;
-  }
-  .bottombar button:hover { background: #2a2a3a; }
-  .bottombar button.active {
-    background: #d4a045; color: #14141c; border-color: #d4a045;
-  }
-  .bottombar .hint {
-    margin-left: auto;
-  }
-
-  /* item icon preview */
-  .icon-preview {
-    width: 64px; height: 64px;
-    background: #1a1a26; border: 1px solid #2a2a36;
-    display: flex; align-items: center; justify-content: center;
-    image-rendering: pixelated;
-  }
-  .icon-preview img { max-width: 100%; max-height: 100%; }
+  /* ---------- right / inspector ---------- */
+  .field { margin-bottom: 8px; }
+  .field > label { display: block; color: #6c7280; font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 3px; }
+  .field .ctrl { color: #d9dde3; }
+  .field .row { display: flex; gap: 6px; }
+  .field .row > div { flex: 1; }
+  h2 { font-size: 12px; color: #f0b760; text-transform: uppercase; letter-spacing: 0.5px;
+    margin: 12px 0 6px; padding-bottom: 4px; border-bottom: 1px solid #30363d; }
+  .actions { display: flex; gap: 6px; margin-top: 8px; }
+  .icon-preview { margin-top: 6px; background: #000; border: 1px solid #30363d;
+    padding: 6px; display: flex; align-items: center; justify-content: center;
+    min-height: 64px; }
+  .icon-preview img { max-width: 100%; max-height: 96px; image-rendering: pixelated; }
 </style>
 </head>
 <body>
+<div id="app">
 
-<div class="topbar">
-  <h1>GHOST//PROCESS — EDITOR</h1>
-  <span id="scene-name">— no scene —</span>
-  <span class="status" id="status">ready</span>
-  <button id="reload-btn" title="Reload from story.json">↻ Reload</button>
-  <button id="save-btn" class="primary">Save story.json</button>
-</div>
+  <header id="topbar">
+    <h1>Ghost//Process — editor</h1>
+    <span class="scene-name" id="scene-name">—</span>
+    <span class="status saved" id="status">ready</span>
+    <button id="reload-btn">Reload</button>
+    <button class="primary" id="save-btn">Save story.json</button>
+  </header>
 
-<div class="left">
-  <div class="section">
-    <h2>Scenes</h2>
-    <ul class="scene-list" id="scene-list"></ul>
-    <button class="add-btn" id="add-scene-btn">+ Add scene</button>
+  <aside id="left">
+    <div class="addrow">
+      <button id="add-scene-btn">+ Scene</button>
+      <button id="add-item-btn">+ Item</button>
+    </div>
+    <h3>Scenes</h3>
+    <ul id="scene-list"></ul>
+    <h3 style="margin-top: 16px">Items</h3>
+    <ul id="item-list"></ul>
+  </aside>
+
+  <main id="center">
+    <div id="viewport-toolbar">
+      <label>Viewport:</label>
+      <select id="viewport-size">
+        <option value="390x844">Phone — 390×844 (game default)</option>
+        <option value="390x600">Phone short — 390×600</option>
+        <option value="1280x720">Desktop — 1280×720</option>
+        <option value="1920x1080">Wide — 1920×1080</option>
+        <option value="custom">Custom…</option>
+      </select>
+      <span id="custom-fields" style="display:none; gap:4px; align-items:center;">
+        <input id="vw" type="number" min="100" max="4000" style="width:70px" />
+        ×
+        <input id="vh" type="number" min="100" max="4000" style="width:70px" />
+      </span>
+      <span style="flex:1"></span>
+      <label style="font-size:11px;color:#6c7280">click canvas + drag = draw hitbox (tool)</label>
+    </div>
+    <div id="canvas-frame">
+      <canvas id="bg-canvas" width="390" height="844"></canvas>
+      <div id="overlay"></div>
+    </div>
+  </main>
+
+  <aside id="right"></aside>
+
+  <div class="tab-toggle">
+    <button data-tab="left">Scenes / Items</button>
+    <button data-tab="center">Canvas</button>
+    <button data-tab="right">Inspector</button>
   </div>
-  <div class="section">
-    <h2>Items</h2>
-    <ul class="item-list" id="item-list"></ul>
-    <button class="add-btn" id="add-item-btn">+ Add item</button>
-  </div>
+
+  <footer id="bottombar">
+    <div class="tool-group">
+      <button id="tool-select" class="active">Select</button>
+      <button id="tool-draw-hitbox">Draw hitbox</button>
+      <button id="tool-add-sprite">+ Sprite</button>
+    </div>
+    <span id="tool-banner" style="display:none">Draw hitbox: click + drag inside the canvas</span>
+  </footer>
+
 </div>
 
-<div class="center">
-  <div class="canvas-frame" id="canvas-frame">
-    <canvas id="bg-canvas" width="390" height="844"></canvas>
-    <div class="overlay" id="overlay"></div>
-  </div>
-  <div class="draw-tool-banner" id="tool-banner" style="display:none"></div>
-</div>
-
-<div class="right" id="right">
-  <div class="empty">Select a scene or item from the left panel to edit.</div>
-</div>
-
-<div class="bottombar">
-  <div class="tool-group">
-    <button id="tool-select" class="active">Select</button>
-    <button id="tool-draw-hitbox">Draw hitbox</button>
-    <button id="tool-add-sprite">+ Sprite</button>
-  </div>
-  <span class="hint">Click a sprite to select. Drag to move. Drag the corner to resize. Hitbox is in scene fractions (0..1).</span>
-</div>
-
-<script src="/editor.js"></script>
+<script src="editor.js"></script>
 </body>
 </html>

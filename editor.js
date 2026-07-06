@@ -10,17 +10,23 @@ const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
 // ---------- editor state ----------
 const state = {
-  story: null,                  // server-side story.json
-  sceneId: null,                // currently selected scene id
-  selected: null,               // { kind: 'sprite'|'hitbox'|'item', ref: ... }
-  bgImages: {},                 // filename -> HTMLImageElement (cache)
-  spriteFrames: {},             // charId -> [HTMLImageElement] (first frame)
-  tool: 'select',               // 'select' | 'draw-hitbox'
+  story: null,
+  sceneId: null,
+  selected: null,
+  bgImages: {},
+  spriteFrames: {},
+  tool: 'select',
   dirty: false,
+  // Viewport (canvas size in pixels — independent of on-screen CSS scale)
+  vpW: 390,
+  vpH: 844,
+  // Currently-active drag state. We never re-render the overlay
+  // mid-drag; instead we mutate the handle element directly so pointer
+  // events keep firing on it.
+  drag: null, // { kind: 'move'|'resize', targetKind: 'sprite'|'hitbox', ref, handle, lastX, lastY, startX, startY }
 };
 
 // ---------- canvas ----------
-const CANVAS_W = 390, CANVAS_H = 844;
 const bgCanvas = $('#bg-canvas');
 const bgCtx = bgCanvas.getContext('2d');
 const overlay = $('#overlay');
@@ -69,15 +75,11 @@ async function loadSpriteFrame(charConfig, sceneId) {
   if (state.spriteFrames[key]) return state.spriteFrames[key];
   const sceneCfg = (charConfig.scenes || {})[sceneId];
   if (!sceneCfg) return null;
-  // Frames is a glob like "assets/sprites/<id>/<scene>/idle_*.png".
-  // Strip the "*.png" tail and list the parent dir, then pick the
-  // first matching file.
   const dir = sceneCfg.frames.replace(/[\\/][^\\/]*\*\.[^\\/]*$/, '');
   const list = await listDir(dir);
   if (!list || list.length === 0) return null;
   const baseName = sceneCfg.frames.replace(/^.*[\\/]/, '').replace(/\*\.png$/, '').replace(/\*$/, '');
   let framePath = null;
-  // First try the prefix match
   const prefixMatch = list.find(f => f.startsWith(baseName) && /\.png$/i.test(f));
   if (prefixMatch) framePath = dir + '/' + prefixMatch;
   if (!framePath) {
@@ -99,7 +101,364 @@ function markDirty() {
   setStatus('unsaved changes', 'dirty');
 }
 
-// ---------- left panel: scenes ----------
+// ---------- viewport / scaling ----------
+function setViewport(w, h) {
+  state.vpW = w; state.vpH = h;
+  bgCanvas.width = w;
+  bgCanvas.height = h;
+  bgCanvas.style.width = w + 'px';
+  bgCanvas.style.height = h + 'px';
+  frame.style.width = w + 'px';
+  frame.style.height = h + 'px';
+  scaleFrameToFit();
+}
+function scaleFrameToFit() {
+  // Pick a CSS scale so the frame fits the available center area
+  // without horizontal or vertical scroll on this screen.
+  const center = $('#center');
+  const availW = center.clientWidth - 24;
+  const availH = center.clientHeight - 96; // subtract viewport toolbar + padding
+  const scale = Math.min(1, availW / state.vpW, availH / state.vpH);
+  frame.style.transform = `scale(${scale})`;
+}
+window.addEventListener('resize', scaleFrameToFit);
+
+// ---------- coordinate helpers (use current viewport) ----------
+function vpW() { return state.vpW; }
+function vpH() { return state.vpH; }
+function placementYFor(charConfig) {
+  if (typeof charConfig.placementY === 'number') {
+    const v = charConfig.placementY;
+    return (v >= 0 && v <= 1) ? vpH() * v : v;
+  }
+  return vpH() - 30;
+}
+function targetHFor(charConfig) {
+  if (typeof charConfig.targetH === 'number') {
+    const v = charConfig.targetH;
+    return (v >= 0 && v <= 2) ? vpH() * v : v;
+  }
+  return vpH() * 0.85;
+}
+function placementXFor(charConfig, spriteW) {
+  const pos = charConfig.position || 'center';
+  if (pos === 'bottomright' && spriteW) return vpW() - 20 - spriteW / 2;
+  switch (pos) {
+    case 'left':       return vpW() * 0.25;
+    case 'right':      return vpW() * 0.75;
+    case 'bottomright': return vpW() - 20;
+    case 'closeup':    return vpW() * 0.50;
+    case 'center':
+    default:           return vpW() * 0.50;
+  }
+}
+function computeSpriteRect(charConfig) {
+  const img = state.spriteFrames[charConfig.id + '/' + state.sceneId];
+  if (!img) return null;
+  let scale = targetHFor(charConfig) / img.height;
+  const maxW = vpW() * 0.95;
+  if (img.width * scale > maxW) scale = maxW / img.width;
+  const w = img.width * scale;
+  const h = img.height * scale;
+  const cx = placementXFor(charConfig, w);
+  const cy = placementYFor(charConfig);
+  return { x: cx - w / 2, y: cy - h, w, h };
+}
+function hitboxRectPx(hb) {
+  return { x: hb.x * vpW(), y: hb.y * vpH(), w: hb.w * vpW(), h: hb.h * vpH() };
+}
+
+// ---------- preview render ----------
+function getScene() { return state.story.scenes[state.sceneId]; }
+
+async function renderPreview() {
+  bgCtx.fillStyle = '#000';
+  bgCtx.fillRect(0, 0, vpW(), vpH());
+  const sc = getScene();
+  if (!sc) return;
+  if (sc.bg) {
+    try {
+      const img = await loadImage(`assets/backgrounds/${sc.bg}.png`);
+      const sa = vpW() / vpH(), sb = img.width / img.height;
+      let dw, dh, dx, dy;
+      if (sb > sa) { dh = vpH(); dw = dh * sb; dx = (vpW() - dw) / 2; dy = 0; }
+      else         { dw = vpW(); dh = dw / sb; dx = 0; dy = (vpH() - dh) / 2; }
+      bgCtx.drawImage(img, dx, dy, dw, dh);
+    } catch (e) { /* skip */ }
+  }
+  for (const c of (sc.characters || [])) {
+    const img = state.spriteFrames[c.id + '/' + state.sceneId];
+    if (!img) continue;
+    const r = computeSpriteRect(c);
+    if (r) bgCtx.drawImage(img, r.x, r.y, r.w, r.h);
+  }
+  renderOverlay();
+}
+
+function renderOverlay() {
+  // Build a fresh DOM tree, but PRESERVE the handle currently being
+  // dragged so pointer events keep firing on it during a drag.
+  const draggingKey = state.drag ? dragKey(state.drag) : null;
+  const oldNodes = new Map();
+  for (const node of overlay.querySelectorAll('.sprite-handle, .hitbox-handle')) {
+    oldNodes.set(node.dataset.key, node);
+  }
+  overlay.innerHTML = '';
+  const sc = getScene();
+  if (!sc) return;
+
+  for (const c of (sc.characters || [])) {
+    const r = computeSpriteRect(c);
+    if (!r) continue;
+    let div = draggingKey === dragKey({ kind: 'move', targetKind: 'sprite', ref: c }) ? oldNodes.get('sprite:' + c.id) : null;
+    if (!div) {
+      div = document.createElement('div');
+      div.className = 'sprite-handle';
+      div.dataset.key = 'sprite:' + c.id;
+      const lbl = document.createElement('span'); lbl.className = 'label'; lbl.textContent = c.id;
+      div.appendChild(lbl);
+      const grip = document.createElement('span'); grip.className = 'resize'; grip.title = 'drag to resize';
+      div.appendChild(grip);
+      attachSpriteDrag(div, c);
+    }
+    div.style.left = r.x + 'px';
+    div.style.top = r.y + 'px';
+    div.style.width = r.w + 'px';
+    div.style.height = r.h + 'px';
+    if (state.selected?.kind === 'sprite' && state.selected.ref === c) div.classList.add('selected');
+    if (state.drag?.ref === c) div.classList.add('dragging');
+    overlay.appendChild(div);
+  }
+
+  for (let i = 0; i < (sc.hitboxes || []).length; i++) {
+    const hb = sc.hitboxes[i];
+    const r = hitboxRectPx(hb);
+    let div = draggingKey === dragKey({ kind: 'move', targetKind: 'hitbox', ref: hb }) ? oldNodes.get('hitbox:' + i) : null;
+    if (!div) {
+      div = document.createElement('div');
+      div.className = 'hitbox-handle';
+      div.dataset.key = 'hitbox:' + i;
+      const lbl = document.createElement('span'); lbl.className = 'label'; lbl.textContent = hb.item || ('hb[' + i + ']');
+      div.appendChild(lbl);
+      const grip = document.createElement('span'); grip.className = 'resize'; grip.title = 'drag to resize';
+      div.appendChild(grip);
+      attachHitboxDrag(div, hb, i);
+    }
+    div.style.left = r.x + 'px';
+    div.style.top = r.y + 'px';
+    div.style.width = r.w + 'px';
+    div.style.height = r.h + 'px';
+    if (state.selected?.kind === 'hitbox' && state.selected.ref === hb) div.classList.add('selected');
+    if (state.drag?.ref === hb) div.classList.add('dragging');
+    overlay.appendChild(div);
+  }
+}
+
+function dragKey(d) {
+  return d.targetKind + ':' + (d.targetKind === 'sprite' ? d.ref.id : state.story.scenes[state.sceneId].hitboxes.indexOf(d.ref));
+}
+
+// ---------- sprite drag (incremental deltas) ----------
+function attachSpriteDrag(div, charConfig) {
+  div.addEventListener('pointerdown', (e) => {
+    e.preventDefault(); e.stopPropagation();
+    div.setPointerCapture(e.pointerId);
+    // Selection update + drag start must NOT trigger a re-render of
+    // the overlay — that would orphan `div` while we still need
+    // pointer events on it. Update in-place instead.
+    state.selected = { kind: 'sprite', ref: charConfig };
+    // Mark this handle as selected (in-place) so the user sees it.
+    div.classList.add('selected');
+    document.querySelectorAll('.sprite-handle.selected, .hitbox-handle.selected').forEach(n => {
+      if (n !== div) n.classList.remove('selected');
+    });
+    // Lazy-update the right panel by toggling its data attribute and
+    // letting the next renderRight() call pick it up; calling
+    // renderRight() here is fine because it doesn't touch the overlay.
+    renderRight();
+
+    const isResize = e.target.classList.contains('resize');
+    state.drag = {
+      kind: isResize ? 'resize' : 'move',
+      targetKind: 'sprite',
+      ref: charConfig,
+      handle: div,
+      startX: e.clientX, startY: e.clientY,
+      lastX: e.clientX, lastY: e.clientY,
+      startPlacementY: typeof charConfig.placementY === 'number' ? charConfig.placementY : 0.97,
+      startTargetH: typeof charConfig.targetH === 'number' ? charConfig.targetH : 0.85,
+    };
+    div.classList.add('dragging');
+    div.addEventListener('pointermove', onSpriteDragMove);
+    div.addEventListener('pointerup', onSpriteDragEnd);
+    div.addEventListener('pointercancel', onSpriteDragEnd);
+  });
+}
+
+function onSpriteDragMove(e) {
+  if (!state.drag) return;
+  const dx = e.clientX - state.drag.lastX;
+  const dy = e.clientY - state.drag.lastY;
+  state.drag.lastX = e.clientX;
+  state.drag.lastY = e.clientY;
+  const charConfig = state.drag.ref;
+  if (state.drag.kind === 'move') {
+    const newPY = state.drag.startPlacementY + (e.clientY - state.drag.startY) / vpH();
+    charConfig.placementY = Math.max(0, Math.min(1, newPY));
+    // Also let user drag horizontally to pick a position slot.
+    const absDx = e.clientX - state.drag.startX;
+    if (Math.abs(absDx) > 40) {
+      if (absDx > 0) charConfig.position = 'right';
+      else charConfig.position = 'left';
+      state.drag.startPlacementY = charConfig.placementY; // rebaseline
+      state.drag.startX = e.clientX;
+    }
+  } else {
+    // resize: vertical delta from the START of the drag (the notch
+    // bottom), not the (post-rebuild) rect of the handle. startTargetH
+    // is the height fraction at mousedown; we add dy/H to it.
+    const newTH = state.drag.startTargetH + (e.clientY - state.drag.startY) / vpH();
+    charConfig.targetH = Math.max(0.05, Math.min(1.5, newTH));
+  }
+  // Mutate the handle position in place — do NOT re-render the
+  // overlay during drag, or pointer capture on the original node
+  // would be lost.
+  const r = computeSpriteRect(charConfig);
+  if (r) {
+    state.drag.handle.style.left = r.x + 'px';
+    state.drag.handle.style.top = r.y + 'px';
+    state.drag.handle.style.width = r.w + 'px';
+    state.drag.handle.style.height = r.h + 'px';
+  }
+  // Redraw the canvas (cheap) but not the overlay.
+  redrawCanvasOnly();
+  // Live-update the right-panel number fields so the user can see
+  // the exact fraction.
+  syncRightFromSelection();
+}
+
+function onSpriteDragEnd(e) {
+  const handle = state.drag.handle;
+  handle.removeEventListener('pointermove', onSpriteDragMove);
+  handle.removeEventListener('pointerup', onSpriteDragEnd);
+  handle.removeEventListener('pointercancel', onSpriteDragEnd);
+  handle.classList.remove('dragging');
+  state.drag = null;
+  markDirty();
+  // Re-render overlay once at the end so selection handles are correct.
+  renderOverlay();
+}
+
+// ---------- hitbox drag (incremental deltas) ----------
+function attachHitboxDrag(div, hb, idx) {
+  div.addEventListener('pointerdown', (e) => {
+    e.preventDefault(); e.stopPropagation();
+    div.setPointerCapture(e.pointerId);
+    state.selected = { kind: 'hitbox', ref: hb, idx };
+    div.classList.add('selected');
+    document.querySelectorAll('.sprite-handle.selected, .hitbox-handle.selected').forEach(n => {
+      if (n !== div) n.classList.remove('selected');
+    });
+    renderRight();
+    const isResize = e.target.classList.contains('resize');
+    state.drag = {
+      kind: isResize ? 'resize' : 'move',
+      targetKind: 'hitbox',
+      ref: hb,
+      handle: div,
+      startX: e.clientX, startY: e.clientY,
+      lastX: e.clientX, lastY: e.clientY,
+      startXFrac: hb.x, startYFrac: hb.y,
+      startWFrac: hb.w, startHFrac: hb.h,
+    };
+    div.classList.add('dragging');
+    div.addEventListener('pointermove', onHitboxDragMove);
+    div.addEventListener('pointerup', onHitboxDragEnd);
+    div.addEventListener('pointercancel', onHitboxDragEnd);
+  });
+}
+
+function onHitboxDragMove(e) {
+  if (!state.drag) return;
+  const hb = state.drag.ref;
+  const dx = e.clientX - state.drag.startX;
+  const dy = e.clientY - state.drag.startY;
+  if (state.drag.kind === 'move') {
+    hb.x = Math.max(0, Math.min(1 - hb.w, state.drag.startXFrac + dx / vpW()));
+    hb.y = Math.max(0, Math.min(1 - hb.h, state.drag.startYFrac + dy / vpH()));
+  } else {
+    hb.w = Math.max(0.02, Math.min(1 - hb.x, state.drag.startWFrac + dx / vpW()));
+    hb.h = Math.max(0.02, Math.min(1 - hb.y, state.drag.startHFrac + dy / vpH()));
+  }
+  const r = hitboxRectPx(hb);
+  state.drag.handle.style.left = r.x + 'px';
+  state.drag.handle.style.top = r.y + 'px';
+  state.drag.handle.style.width = r.w + 'px';
+  state.drag.handle.style.height = r.h + 'px';
+  redrawCanvasOnly();
+  syncRightFromSelection();
+}
+
+function onHitboxDragEnd() {
+  const handle = state.drag.handle;
+  handle.removeEventListener('pointermove', onHitboxDragMove);
+  handle.removeEventListener('pointerup', onHitboxDragEnd);
+  handle.removeEventListener('pointercancel', onHitboxDragEnd);
+  handle.classList.remove('dragging');
+  state.drag = null;
+  markDirty();
+  renderOverlay();
+}
+
+// ---------- redraw canvas-only (no DOM rebuild) ----------
+async function redrawCanvasOnly() {
+  bgCtx.fillStyle = '#000';
+  bgCtx.fillRect(0, 0, vpW(), vpH());
+  const sc = getScene();
+  if (!sc) return;
+  if (sc.bg) {
+    try {
+      const img = await loadImage(`assets/backgrounds/${sc.bg}.png`);
+      const sa = vpW() / vpH(), sb = img.width / img.height;
+      let dw, dh, dx, dy;
+      if (sb > sa) { dh = vpH(); dw = dh * sb; dx = (vpW() - dw) / 2; dy = 0; }
+      else         { dw = vpW(); dh = dw / sb; dx = 0; dy = (vpH() - dh) / 2; }
+      bgCtx.drawImage(img, dx, dy, dw, dh);
+    } catch (e) {}
+  }
+  for (const c of (sc.characters || [])) {
+    const img = state.spriteFrames[c.id + '/' + state.sceneId];
+    if (!img) continue;
+    const r = computeSpriteRect(c);
+    if (r) bgCtx.drawImage(img, r.x, r.y, r.w, r.h);
+  }
+}
+
+// ---------- live right-panel sync ----------
+function syncRightFromSelection() {
+  if (!state.selected) return;
+  const right = $('#right');
+  if (state.selected.kind === 'sprite') {
+    const c = state.selected.ref;
+    const py = right.querySelector('input[data-sync="placementY"]');
+    const th = right.querySelector('input[data-sync="targetH"]');
+    if (py) py.value = (typeof c.placementY === 'number') ? c.placementY.toFixed(3) : '';
+    if (th) th.value = (typeof c.targetH === 'number') ? c.targetH.toFixed(3) : '';
+  }
+  if (state.selected.kind === 'hitbox') {
+    const hb = state.selected.ref;
+    const x = right.querySelector('input[data-sync="hb.x"]');
+    const y = right.querySelector('input[data-sync="hb.y"]');
+    const w = right.querySelector('input[data-sync="hb.w"]');
+    const h = right.querySelector('input[data-sync="hb.h"]');
+    if (x) x.value = hb.x.toFixed(3);
+    if (y) y.value = hb.y.toFixed(3);
+    if (w) w.value = hb.w.toFixed(3);
+    if (h) h.value = hb.h.toFixed(3);
+  }
+}
+
+// ---------- left panel ----------
 function renderSceneList() {
   const ul = $('#scene-list');
   ul.innerHTML = '';
@@ -134,250 +493,6 @@ function renderItemList() {
   }
 }
 
-// ---------- preview canvas ----------
-function getScene() { return state.story.scenes[state.sceneId]; }
-
-function placementYFor(charConfig) {
-  if (typeof charConfig.placementY === 'number') {
-    const v = charConfig.placementY;
-    return (v >= 0 && v <= 1) ? CANVAS_H * v : v;
-  }
-  return CANVAS_H - 30;
-}
-
-function targetHFor(charConfig) {
-  if (typeof charConfig.targetH === 'number') {
-    const v = charConfig.targetH;
-    return (v >= 0 && v <= 2) ? CANVAS_H * v : v;
-  }
-  return CANVAS_H * 0.85;
-}
-
-function placementXFor(charConfig, spriteW) {
-  const pos = charConfig.position || 'center';
-  if (pos === 'bottomright' && spriteW) return CANVAS_W - 20 - spriteW / 2;
-  switch (pos) {
-    case 'left':       return CANVAS_W * 0.25;
-    case 'right':      return CANVAS_W * 0.75;
-    case 'bottomright': return CANVAS_W - 20;
-    case 'closeup':    return CANVAS_W * 0.50;
-    case 'center':
-    default:           return CANVAS_W * 0.50;
-  }
-}
-
-function computeSpriteRect(charConfig) {
-  const img = state.spriteFrames[charConfig.id + '/' + state.sceneId];
-  if (!img) return null;
-  let scale = targetHFor(charConfig) / img.height;
-  const maxW = CANVAS_W * 0.95;
-  if (img.width * scale > maxW) scale = maxW / img.width;
-  const w = img.width * scale;
-  const h = img.height * scale;
-  const cx = placementXFor(charConfig, w);
-  const cy = placementYFor(charConfig);
-  return { x: cx - w / 2, y: cy - h, w, h };
-}
-
-function hitboxRectPx(hb) {
-  return {
-    x: hb.x * CANVAS_W,
-    y: hb.y * CANVAS_H,
-    w: hb.w * CANVAS_W,
-    h: hb.h * CANVAS_H,
-  };
-}
-
-async function renderPreview() {
-  bgCtx.fillStyle = '#000';
-  bgCtx.fillRect(0, 0, CANVAS_W, CANVAS_H);
-
-  const sc = getScene();
-  if (!sc) return;
-  if (sc.bg) {
-    try {
-      const img = await loadImage(`assets/backgrounds/${sc.bg}.png`);
-      // Cover-fit
-      const sa = CANVAS_W / CANVAS_H, sb = img.width / img.height;
-      let dw, dh, dx, dy;
-      if (sb > sa) { dh = CANVAS_H; dw = dh * sb; dx = (CANVAS_W - dw) / 2; dy = 0; }
-      else         { dw = CANVAS_W; dh = dw / sb; dx = 0; dy = (CANVAS_H - dh) / 2; }
-      bgCtx.drawImage(img, dx, dy, dw, dh);
-    } catch (e) { /* skip */ }
-  }
-
-  // Draw sprites into bg canvas (mirror game rendering)
-  for (const c of (sc.characters || [])) {
-    const img = state.spriteFrames[c.id + '/' + state.sceneId];
-    if (!img) continue;
-    const r = computeSpriteRect(c);
-    if (r) bgCtx.drawImage(img, r.x, r.y, r.w, r.h);
-  }
-
-  // Overlay DOM handles
-  renderOverlay();
-}
-
-function renderOverlay() {
-  overlay.innerHTML = '';
-  const sc = getScene();
-  if (!sc) return;
-
-  for (const c of (sc.characters || [])) {
-    const r = computeSpriteRect(c);
-    if (!r) continue;
-    const div = document.createElement('div');
-    div.className = 'sprite-handle';
-    if (state.selected?.kind === 'sprite' && state.selected.ref === c) div.classList.add('selected');
-    div.style.left = r.x + 'px';
-    div.style.top = r.y + 'px';
-    div.style.width = r.w + 'px';
-    div.style.height = r.h + 'px';
-    const lbl = document.createElement('span');
-    lbl.className = 'label';
-    lbl.textContent = c.id;
-    div.appendChild(lbl);
-    const grip = document.createElement('span');
-    grip.className = 'resize';
-    div.appendChild(grip);
-    attachSpriteDrag(div, c, r);
-    overlay.appendChild(div);
-  }
-
-  for (let i = 0; i < (sc.hitboxes || []).length; i++) {
-    const hb = sc.hitboxes[i];
-    const r = hitboxRectPx(hb);
-    const div = document.createElement('div');
-    div.className = 'hitbox-handle';
-    if (state.selected?.kind === 'hitbox' && state.selected.ref === hb) div.classList.add('selected');
-    div.style.left = r.x + 'px';
-    div.style.top = r.y + 'px';
-    div.style.width = r.w + 'px';
-    div.style.height = r.h + 'px';
-    const lbl = document.createElement('span');
-    lbl.className = 'label';
-    lbl.textContent = hb.item || ('hb[' + i + ']');
-    div.appendChild(lbl);
-    const grip = document.createElement('span');
-    grip.className = 'resize';
-    div.appendChild(grip);
-    attachHitboxDrag(div, hb, i, r);
-    overlay.appendChild(div);
-  }
-}
-
-// ---------- sprite drag (sets placementY fraction + position label) ----------
-function attachSpriteDrag(div, charConfig, rect) {
-  div.addEventListener('pointerdown', (e) => {
-    if (e.target.classList.contains('resize')) {
-      e.preventDefault(); e.stopPropagation();
-      state.selected = { kind: 'sprite', ref: charConfig };
-      renderRight(); renderOverlay();
-      startSpriteResize(div, charConfig);
-    } else {
-      e.preventDefault();
-      state.selected = { kind: 'sprite', ref: charConfig };
-      renderRight(); renderOverlay();
-      startSpriteMove(div, charConfig);
-    }
-  });
-}
-
-function startSpriteMove(handle, charConfig) {
-  const startY = handle.getBoundingClientRect().top;
-  const startPY = placementYFor(charConfig);
-  const move = (ev) => {
-    const dy = ev.clientY - startY;
-    // placementY = CANVAS_H - handle.offsetTop - dy - handle.offsetHeight   (new feet-y in px)
-    const newFeetPy = startPY + dy;
-    charConfig.placementY = Math.max(0, Math.min(1, newFeetPy / CANVAS_H));
-    renderPreview();
-    renderRight();
-  };
-  const up = () => {
-    document.removeEventListener('pointermove', move);
-    document.removeEventListener('pointerup', up);
-    markDirty();
-  };
-  document.addEventListener('pointermove', move);
-  document.addEventListener('pointerup', up);
-}
-
-function startSpriteResize(handle, charConfig) {
-  const startH = handle.offsetHeight;
-  const startTH = targetHFor(charConfig);
-  const move = (ev) => {
-    const dy = ev.clientY - handle.getBoundingClientRect().top - startH;
-    const newTH = startTH + dy;
-    charConfig.targetH = Math.max(40, newTH) / CANVAS_H;
-    renderPreview();
-    renderRight();
-  };
-  const up = () => {
-    document.removeEventListener('pointermove', move);
-    document.removeEventListener('pointerup', up);
-    markDirty();
-  };
-  document.addEventListener('pointermove', move);
-  document.addEventListener('pointerup', up);
-}
-
-// ---------- hitbox drag ----------
-function attachHitboxDrag(div, hb, idx, rect) {
-  div.addEventListener('pointerdown', (e) => {
-    if (e.target.classList.contains('resize')) {
-      e.preventDefault(); e.stopPropagation();
-      state.selected = { kind: 'hitbox', ref: hb, idx };
-      renderRight(); renderOverlay();
-      startHitboxResize(div, hb);
-    } else {
-      e.preventDefault();
-      state.selected = { kind: 'hitbox', ref: hb, idx };
-      renderRight(); renderOverlay();
-      startHitboxMove(div, hb);
-    }
-  });
-}
-
-function startHitboxMove(handle, hb) {
-  const startX = handle.getBoundingClientRect().left;
-  const startY = handle.getBoundingClientRect().top;
-  const move = (ev) => {
-    const dx = (ev.clientX - startX) / CANVAS_W;
-    const dy = (ev.clientY - startY) / CANVAS_H;
-    hb.x = Math.max(0, Math.min(1 - hb.w, hb.x + dx));
-    hb.y = Math.max(0, Math.min(1 - hb.h, hb.y + dy));
-    renderPreview();
-    renderRight();
-  };
-  const up = () => {
-    document.removeEventListener('pointermove', move);
-    document.removeEventListener('pointerup', up);
-    markDirty();
-  };
-  document.addEventListener('pointermove', move);
-  document.addEventListener('pointerup', up);
-}
-
-function startHitboxResize(handle, hb) {
-  const move = (ev) => {
-    const r = handle.getBoundingClientRect();
-    const newW = (ev.clientX - r.left) / CANVAS_W;
-    const newH = (ev.clientY - r.top) / CANVAS_H;
-    hb.w = Math.max(0.02, Math.min(1 - hb.x, newW));
-    hb.h = Math.max(0.02, Math.min(1 - hb.y, newH));
-    renderPreview();
-    renderRight();
-  };
-  const up = () => {
-    document.removeEventListener('pointermove', move);
-    document.removeEventListener('pointerup', up);
-    markDirty();
-  };
-  document.addEventListener('pointermove', move);
-  document.addEventListener('pointerup', up);
-}
-
 // ---------- draw hitbox tool ----------
 function setupDrawTool() {
   $('#tool-select').onclick = () => setTool('select');
@@ -393,60 +508,57 @@ function setTool(t) {
   if (t === 'select') $('#tool-select').classList.add('active');
   if (t === 'draw-hitbox') $('#tool-draw-hitbox').classList.add('active');
   const banner = $('#tool-banner');
-  if (t === 'draw-hitbox') {
-    banner.textContent = 'Draw hitbox: click + drag inside the canvas';
-    banner.style.display = 'block';
-  } else {
-    banner.style.display = 'none';
-  }
+  banner.style.display = (t === 'draw-hitbox') ? 'inline' : 'none';
 }
 
-let drawStart = null;
 function onFrameDown(e) {
   if (state.tool !== 'draw-hitbox') return;
   if (e.target.closest('.sprite-handle, .hitbox-handle')) return;
+  e.preventDefault();
+  frame.setPointerCapture(e.pointerId);
   const r = frame.getBoundingClientRect();
-  const x = (e.clientX - r.left) / r.width;
-  const y = (e.clientY - r.top) / r.height;
-  drawStart = { x, y };
-  // preview while dragging
+  // Account for CSS scale of the frame
+  const scale = frame.getBoundingClientRect().width / vpW();
+  const sx = (e.clientX - r.left) / scale;
+  const sy = (e.clientY - r.top) / scale;
+  const start = { x: sx / vpW(), y: sy / vpH() };
+  showDrawPreview(start.x, start.y, 0, 0);
   const move = (ev) => {
-    const cx = Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width));
-    const cy = Math.max(0, Math.min(1, (ev.clientY - r.top) / r.height));
-    showDrawPreview(Math.min(drawStart.x, cx), Math.min(drawStart.y, cy),
-                    Math.abs(cx - drawStart.x), Math.abs(cy - drawStart.y));
+    const cx = (ev.clientX - r.left) / scale / vpW();
+    const cy = (ev.clientY - r.top) / scale / vpH();
+    const x = Math.min(start.x, cx), y = Math.min(start.y, cy);
+    const w = Math.abs(cx - start.x), h = Math.abs(cy - start.y);
+    showDrawPreview(x, y, w, h);
   };
   const up = (ev) => {
-    document.removeEventListener('pointermove', move);
-    document.removeEventListener('pointerup', up);
-    const cx = Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width));
-    const cy = Math.max(0, Math.min(1, (ev.clientY - r.top) / r.height));
-    const x = Math.min(drawStart.x, cx);
-    const y = Math.min(drawStart.y, cy);
-    const w = Math.abs(cx - drawStart.x);
-    const h = Math.abs(cy - drawStart.y);
-    if (w > 0.02 && h > 0.02) {
-      addNewHitbox(x, y, w, h);
-    }
-    drawStart = null;
+    frame.removeEventListener('pointermove', move);
+    frame.removeEventListener('pointerup', up);
+    frame.removeEventListener('pointercancel', up);
+    const cx = (ev.clientX - r.left) / scale / vpW();
+    const cy = (ev.clientY - r.top) / scale / vpH();
+    const x = Math.max(0, Math.min(1 - 0.02, Math.min(start.x, cx)));
+    const y = Math.max(0, Math.min(1 - 0.02, Math.min(start.y, cy)));
+    const w = Math.abs(cx - start.x);
+    const h = Math.abs(cy - start.y);
     hideDrawPreview();
+    if (w > 0.02 && h > 0.02) addNewHitbox(x, y, Math.min(w, 1 - x), Math.min(h, 1 - y));
+    setTool('select');
   };
-  document.addEventListener('pointermove', move);
-  document.addEventListener('pointerup', up);
+  frame.addEventListener('pointermove', move);
+  frame.addEventListener('pointerup', up);
+  frame.addEventListener('pointercancel', up);
 }
 
 function showDrawPreview(x, y, w, h) {
   let pv = $('#draw-preview');
   if (!pv) {
-    pv = document.createElement('div');
-    pv.id = 'draw-preview';
-    pv.style.cssText = 'position:absolute;border:1px dashed #6cba6c;background:rgba(108,186,108,0.1);box-sizing:border-box;pointer-events:none;z-index:999';
+    pv = document.createElement('div'); pv.id = 'draw-preview';
     overlay.appendChild(pv);
   }
-  pv.style.left = (x * CANVAS_W) + 'px';
-  pv.style.top = (y * CANVAS_H) + 'px';
-  pv.style.width = (w * CANVAS_W) + 'px';
-  pv.style.height = (h * CANVAS_H) + 'px';
+  pv.style.left = (x * vpW()) + 'px';
+  pv.style.top = (y * vpH()) + 'px';
+  pv.style.width = (w * vpW()) + 'px';
+  pv.style.height = (h * vpH()) + 'px';
 }
 function hideDrawPreview() {
   const pv = $('#draw-preview'); if (pv) pv.remove();
@@ -460,7 +572,6 @@ function addNewHitbox(x, y, w, h) {
   sc.hitboxes.push(hb);
   state.selected = { kind: 'hitbox', ref: hb, idx: sc.hitboxes.length - 1 };
   markDirty();
-  setTool('select');
   renderAll();
 }
 
@@ -488,12 +599,10 @@ function addNewSprite() {
   renderAll();
 }
 
-// ---------- right panel: properties ----------
+// ---------- inspector (right panel) ----------
 function renderRight() {
   const right = $('#right');
   right.innerHTML = '';
-
-  // Scene header
   const sceneHdr = document.createElement('div');
   sceneHdr.className = 'section';
   sceneHdr.innerHTML = `<h2>Scene — ${state.sceneId || '—'}</h2>`;
@@ -501,15 +610,13 @@ function renderRight() {
 
   const sc = getScene();
   if (sc) {
-    // Background picker — async, inserted into a placeholder div so we
-    // can await it.
-    right.appendChild(makeField('background', 'Background (file in assets/backgrounds/)', makePlaceholder()));
+    right.appendChild(makeField('background', 'Background (assets/backgrounds/*.png)', makePlaceholder()));
     fillAsync($('#right .field[data-key="background"] .ctrl'), makeBgPicker(sc));
     right.appendChild(makeField('bgPalette', 'Palette', makePlaceholder()));
     fillAsync($('#right .field[data-key="bgPalette"] .ctrl'), makePalettePicker(sc));
-    right.appendChild(makeField('music', 'Music (file in assets/audio/)', makePlaceholder()));
+    right.appendChild(makeField('music', 'Music (assets/audio/*)', makePlaceholder()));
     fillAsync($('#right .field[data-key="music"] .ctrl'), makeMusicPicker(sc));
-    right.appendChild(makeField('ink', 'Ink file (ink/*.ink)', makeTextInput(sc.ink || '', v => { sc.ink = v; markDirty(); })));
+    right.appendChild(makeField('ink', 'Ink file', makeTextInput(sc.ink || '', v => { sc.ink = v; markDirty(); })));
   }
 
   if (state.selected?.kind === 'sprite') {
@@ -519,10 +626,10 @@ function renderRight() {
       makeSelect(c.position || 'center',
         [['left','left'], ['center','center'], ['right','right'], ['bottomright','bottomright'], ['closeup','closeup']],
         v => { c.position = v; markDirty(); renderAll(); })));
-    right.appendChild(makeField('placementY', 'placementY (fraction of canvas)',
-      makeNumberInput(typeof c.placementY === 'number' ? c.placementY : 0.97, v => { c.placementY = v; markDirty(); renderAll(); }, 0, 1, 0.01)));
-    right.appendChild(makeField('targetH', 'targetH (fraction of canvas)',
-      makeNumberInput(typeof c.targetH === 'number' ? c.targetH : 0.85, v => { c.targetH = v; markDirty(); renderAll(); }, 0.1, 2, 0.01)));
+    right.appendChild(makeField('placementY', 'placementY (0=top, 1=bottom)',
+      makeNumberInput(typeof c.placementY === 'number' ? c.placementY : 0.97, v => { c.placementY = v; markDirty(); renderAll(); }, 0, 1, 0.01, 'placementY')));
+    right.appendChild(makeField('targetH', 'targetH (fraction of canvas height)',
+      makeNumberInput(typeof c.targetH === 'number' ? c.targetH : 0.85, v => { c.targetH = v; markDirty(); renderAll(); }, 0.05, 1.5, 0.01, 'targetH')));
     right.appendChild(makeField('speaker', 'Speaker label',
       makeTextInput(c.speaker || '', v => { c.speaker = v; markDirty(); })));
     const scfg = (c.scenes || {})[state.sceneId];
@@ -552,12 +659,12 @@ function renderRight() {
     right.appendChild(makeField('label', 'Label',
       makeTextInput(hb.label || '', v => { hb.label = v; markDirty(); renderAll(); })));
     const row = document.createElement('div'); row.className = 'row';
-    row.appendChild(makeField('x', 'x', makeNumberInput(hb.x, v => { hb.x = v; markDirty(); renderAll(); }, 0, 1, 0.01)));
-    row.appendChild(makeField('y', 'y', makeNumberInput(hb.y, v => { hb.y = v; markDirty(); renderAll(); }, 0, 1, 0.01)));
+    row.appendChild(makeField('x', 'x', makeNumberInput(hb.x, v => { hb.x = v; markDirty(); renderAll(); }, 0, 1, 0.01, 'hb.x')));
+    row.appendChild(makeField('y', 'y', makeNumberInput(hb.y, v => { hb.y = v; markDirty(); renderAll(); }, 0, 1, 0.01, 'hb.y')));
     right.appendChild(row);
     const row2 = document.createElement('div'); row2.className = 'row';
-    row2.appendChild(makeField('w', 'w', makeNumberInput(hb.w, v => { hb.w = v; markDirty(); renderAll(); }, 0, 1, 0.01)));
-    row2.appendChild(makeField('h', 'h', makeNumberInput(hb.h, v => { hb.h = v; markDirty(); renderAll(); }, 0, 1, 0.01)));
+    row2.appendChild(makeField('w', 'w', makeNumberInput(hb.w, v => { hb.w = v; markDirty(); renderAll(); }, 0, 1, 0.01, 'hb.w')));
+    row2.appendChild(makeField('h', 'h', makeNumberInput(hb.h, v => { hb.h = v; markDirty(); renderAll(); }, 0, 1, 0.01, 'hb.h')));
     right.appendChild(row2);
     const del = document.createElement('div');
     del.className = 'actions';
@@ -590,7 +697,7 @@ function makeField(key, labelText, controlEl) {
   div.className = 'field';
   div.dataset.key = key;
   if (key === 'header') {
-    const h = document.createElement('h2'); h.textContent = labelText; h.style.marginTop = '12px';
+    const h = document.createElement('h2'); h.textContent = labelText;
     div.appendChild(h);
     return div;
   }
@@ -599,14 +706,12 @@ function makeField(key, labelText, controlEl) {
   div.appendChild(ctrl);
   return div;
 }
-
 function makePlaceholder() {
   const span = document.createElement('span');
   span.textContent = 'loading…';
   span.style.color = '#6c7280';
   return span;
 }
-
 async function fillAsync(container, asyncBuilder) {
   if (!container) return;
   container.innerHTML = '';
@@ -619,22 +724,20 @@ async function fillAsync(container, asyncBuilder) {
     container.textContent = 'error: ' + e.message;
   }
 }
-
 function makeTextInput(value, onChange) {
-  const i = document.createElement('input');
-  i.type = 'text'; i.value = value;
+  const i = document.createElement('input'); i.type = 'text'; i.value = value;
   i.oninput = () => onChange(i.value);
   return i;
 }
 function makeTextArea(value, onChange) {
-  const i = document.createElement('textarea');
-  i.value = value;
+  const i = document.createElement('textarea'); i.value = value;
   i.oninput = () => onChange(i.value);
   return i;
 }
-function makeNumberInput(value, onChange, min, max, step) {
-  const i = document.createElement('input');
-  i.type = 'number'; i.value = value; if (min !== undefined) i.min = min; if (max !== undefined) i.max = max; if (step !== undefined) i.step = step;
+function makeNumberInput(value, onChange, min, max, step, sync) {
+  const i = document.createElement('input'); i.type = 'number';
+  i.value = value; if (min !== undefined) i.min = min; if (max !== undefined) i.max = max; if (step !== undefined) i.step = step;
+  if (sync) i.dataset.sync = sync;
   i.oninput = () => onChange(parseFloat(i.value));
   return i;
 }
@@ -648,8 +751,7 @@ function makeSelect(value, options, onChange) {
   return s;
 }
 function makeCheckbox(value, onChange) {
-  const i = document.createElement('input');
-  i.type = 'checkbox'; i.checked = value;
+  const i = document.createElement('input'); i.type = 'checkbox'; i.checked = value;
   i.onchange = () => onChange(i.checked);
   return i;
 }
@@ -666,10 +768,8 @@ async function makeBgPicker(sc) {
   sel.onchange = () => { sc.bg = sel.value || null; markDirty(); renderSceneList(); renderPreview(); };
   return sel;
 }
-
 async function makePalettePicker(sc) {
   const sel = document.createElement('select');
-  // The palette names are the bgPalette values; read from the palette file listing if available
   const files = await listDir('assets/palettes').catch(() => []);
   const tres = files.filter(f => /\.tres$/.test(f));
   const noBg = document.createElement('option'); noBg.value = ''; noBg.textContent = '— none —'; sel.appendChild(noBg);
@@ -680,7 +780,6 @@ async function makePalettePicker(sc) {
   sel.onchange = () => { sc.bgPalette = sel.value || null; markDirty(); };
   return sel;
 }
-
 async function makeMusicPicker(sc) {
   const sel = document.createElement('select');
   const files = await listDir('assets/audio');
@@ -693,7 +792,6 @@ async function makeMusicPicker(sc) {
   sel.onchange = () => { sc.music = sel.value || null; markDirty(); };
   return sel;
 }
-
 async function makeIconPicker(it) {
   const wrap = document.createElement('div');
   const sel = document.createElement('select');
@@ -740,9 +838,44 @@ $('#reload-btn').onclick = async () => {
   await loadStory(); state.dirty = false;
   renderAll(); setStatus('loaded', '');
 };
-window.addEventListener('beforeunload', (e) => {
-  if (state.dirty) { e.preventDefault(); e.returnValue = ''; }
-});
+window.addEventListener('beforeunload', (e) => { if (state.dirty) { e.preventDefault(); e.returnValue = ''; } });
+
+// ---------- viewport toolbar ----------
+function setupViewportToolbar() {
+  const sel = $('#viewport-size');
+  const custom = $('#custom-fields');
+  sel.onchange = () => {
+    const v = sel.value;
+    if (v === 'custom') {
+      custom.style.display = 'inline-flex';
+      $('#vw').value = state.vpW; $('#vh').value = state.vpH;
+    } else {
+      custom.style.display = 'none';
+      const [w, h] = v.split('x').map(Number);
+      setViewport(w, h);
+      renderPreview();
+    }
+  };
+  const apply = () => { setViewport(parseInt($('#vw').value, 10), parseInt($('#vh').value, 10)); renderPreview(); };
+  $('#vw').onchange = apply; $('#vh').onchange = apply;
+}
+
+// ---------- mobile tab toggle ----------
+function setupMobileTabs() {
+  $$('.tab-toggle button').forEach(b => {
+    b.onclick = () => {
+      const tab = b.dataset.tab;
+      const left = $('#left'), right = $('#right');
+      $$('.tab-toggle button').forEach(x => x.classList.remove('active'));
+      // close everything
+      left.classList.remove('show'); right.classList.remove('show');
+      // mobile layout: only one of left/right or none is visible
+      if (tab === 'left') { left.classList.add('show'); b.classList.add('active'); }
+      else if (tab === 'right') { right.classList.add('show'); b.classList.add('active'); }
+      else { b.classList.add('active'); }
+    };
+  });
+}
 
 // ---------- main render ----------
 async function renderAll() {
@@ -752,25 +885,23 @@ async function renderAll() {
 
   const sc = getScene();
   if (sc) {
-    // Preload sprites for this scene
     for (const c of (sc.characters || [])) {
-      try { await loadSpriteFrame(c, state.sceneId); } catch (e) { /* missing sprite — skip */ }
+      try { await loadSpriteFrame(c, state.sceneId); } catch (e) { /* missing */ }
     }
   }
-
   await renderPreview();
   renderRight();
+  scaleFrameToFit();
 }
 
 async function main() {
   await loadStory();
-  // Default to alley if it exists, else first scene
   const ids = Object.keys(state.story.scenes || {});
   state.sceneId = ids.includes('alley') ? 'alley' : (ids[0] || null);
+  setViewport(state.vpW, state.vpH);
+  setupViewportToolbar();
+  setupMobileTabs();
   setupDrawTool();
   await renderAll();
 }
-main().catch(err => {
-  console.error(err);
-  setStatus('ERROR: ' + err.message, 'dirty');
-});
+main().catch(err => { console.error(err); setStatus('ERROR: ' + err.message, 'error'); });
