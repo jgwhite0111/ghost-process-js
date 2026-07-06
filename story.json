@@ -66,6 +66,8 @@
                     "id": "android",
                     "speaker": "ANDROID",
                     "position": "right",
+                    "placementY": 0.50,
+                    "targetH": 0.50,
                     "scenes": {
                         "alley": {
                             "frames": "assets/sprites/android/alley/idle_*.png",

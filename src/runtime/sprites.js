@@ -123,28 +123,20 @@ class CharacterSprite {
     }
 
     // Logical placement on the canvas. position: left/right/center/closeup.
-    // Feet anchor on the alley's cobblestone ground line — empirically
-    // about 50% down the canvas (the wet cobblestones visible at top-
-    // left of scene_alley.png transition to dark void around y=0.50;
-    // below that is brick wall and doorframe, not floor). Anchoring
-    // boots to this line keeps the captain visibly standing IN the
-    // alley, not floating in the void below the floor.
-    //
-    // Earlier versions:
-    //   - canvasH - 30 (165a370 baseline): boots hovered above the
-    //     ground line — no podium, but captain sat too high.
-    //   - canvasH + 60 (closer-to-camera attempt): boots 350px BELOW
-    //     the ground line → "podium" effect with floor visible below
-    //     feet.
-    //   - canvasH * 0.65: still too low — boots in void.
-    //   - canvasH * 0.50 (current): boots on the wet cobblestones.
-    //
-    // The draw() scale targets this anchor as the body height so the
-    // head lands at canvas-top, head-to-feet spans the upper half of
-    // the frame, and the lower half is the alley's foreground
-    // (cobblestones, wall base, doorway).
+    // Default feet anchor 30px above the canvas bottom — the c7c6244
+    // baseline that worked for every scene (prisoner in jailbreak,
+    // android in chase/corridor, etc.). The alley captain needs a
+    // different anchor (cobblestone ground line, not canvas bottom)
+    // so we let the character's `placementY` field override this
+    // when set in story.json. Default scene-base uses canvasH - 30.
     placementY(canvasH) {
-        return canvasH * 0.50;
+        if (this.character && typeof this.character.placementY === 'number') {
+            const v = this.character.placementY;
+            // placementY is a fraction (0..1) of canvasH.
+            if (v >= 0 && v <= 1) return canvasH * v;
+            return v; // raw pixel value
+        }
+        return canvasH - 30;
     }
 
     placementX(canvasW, position, spriteW) {
@@ -227,20 +219,23 @@ class CharacterSprite {
         if (this.frames.length === 0) return;
         if (this.opacity <= 0) return;
         const img = this.frames[this.currentFrame];
-        // Scale target: targetH equals placementY so the sprite's head
-        // lands at canvas-top and its feet anchor at the ground line.
-        // The previous 1.29x H produced a 692px-tall captain whose
-        // head was 143px above the canvas top — visually wrong even
-        // though boots landed at canvasH*0.65. Letting targetH match
-        // the y-anchor removes the magic-number coupling between the
-        // two values.
+        // Scale target: 85% of canvas height — matches the c7c6244
+        // baseline that worked for every scene. A character config
+        // can override this with `targetH` (fraction 0..1) when it
+        // needs a different body height (e.g. the alley captain
+        // whose feet must land on the cobblestone ground line,
+        // canvasH * 0.50, but whose body should fill the upper half
+        // without cropping the head).
         const W = ctx.canvas.width, H = ctx.canvas.height;
-        const targetH = this.placementY(H);
+        let targetH = H * 0.85;
+        if (this.character && typeof this.character.targetH === 'number') {
+            const v = this.character.targetH;
+            targetH = (v >= 0 && v <= 2) ? H * v : v;
+        }
         let scale = targetH / img.height;
         // Width overflow guard: if the rendered sprite is wider than
-        // the canvas, scale down so it fits (rare — sources are usually
-        // narrower than tall).
-        const maxW = W * 1.0;
+        // 95% of the canvas, scale down so it fits with a small margin.
+        const maxW = W * 0.95;
         if (img.width * scale > maxW) scale = maxW / img.width;
         const w = img.width * scale;
         const h = img.height * scale;
