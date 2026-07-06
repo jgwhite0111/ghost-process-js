@@ -89,6 +89,10 @@ class DialogueRunner {
         if (!this.story) return;
         const maxLinesPerStep = 100;
         let walked = 0;
+        // Walk past blank lines and surface the FIRST non-empty line
+        // so the typewriter / speaker / portrait hooks fire one line
+        // at a time. After surfacing the line, return immediately so
+        // the player gets to read it before the next click.
         while (this.story.canContinue && walked < maxLinesPerStep) {
             walked++;
             const line = this.story.Continue();
@@ -102,6 +106,18 @@ class DialogueRunner {
             this.showLine(line, tags);
             return;
         }
+        // Ink has nothing more to emit (canContinue === false). At
+        // this point either:
+        //   (a) the story has choices waiting — the player just walked
+        //       past the last line of a `*` / `+` choice block and the
+        //       choice list is on the stack. Surface them now so the
+        //       DOM choice buttons appear without an extra "blank"
+        //       click. Without this branch, the player would have to
+        //       click through a no-op step() to see the choice buttons.
+        //   (b) the story ended cleanly (-> END, end-of-file).
+        // Either way the per-line return above already pulled the
+        // final line and called showLine, so we don't risk showing it
+        // twice.
         if (this.story.currentChoices && this.story.currentChoices.length > 0) {
             this.onChoices(this.story.currentChoices);
         } else {
@@ -149,6 +165,16 @@ class DialogueRunner {
             }
             this.typing = false;
             this.onLine(this.currentLine, this.currentTags, this.currentLine.length, this.currentLine.length);
+            // After snap-finishing the typewriter, check whether Ink
+            // is now sitting on a choice point. step()'s walk loop
+            // returns early after showLine, so the choice/complete
+            // branch at the bottom of step() doesn't fire when we
+            // snap a line that turned out to be the LAST line of a
+            // choice beat. Stepping once more lets step() see
+            // canContinue === false and route to onChoices.
+            // step() is a no-op when there are still lines to walk,
+            // so this is safe — the player won't see a "ghost" line.
+            this.step();
         } else {
             this.step();
         }
