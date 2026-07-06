@@ -1,81 +1,306 @@
-<!DOCTYPE html>
+<!doctype html>
+<!--
+  Ghost//Process — scene editor.
+  Open at http://localhost:8765/editor.html
+
+  Lets you drag sprites to position them, drag-draw hitboxes, swap
+  backgrounds/music, and edit items. Writes back to story.json via
+  PUT /api/story.
+-->
 <html lang="en">
 <head>
-    <meta charset="UTF-8" />
-    <title>GHOST//PROCESS — Editor</title>
-    <link rel="stylesheet" href="editor.css" />
+<meta charset="utf-8">
+<meta name="viewport" content="width=900,initial-scale=1">
+<title>Ghost//Process — Editor</title>
+<style>
+  /* ----------- reset / layout ----------- */
+  *,*::before,*::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; }
+  body {
+    background: #0a0a0f;
+    color: #d8d4c8;
+    font-family: 'IBM Plex Mono', 'Courier New', monospace;
+    font-size: 12px;
+    display: grid;
+    grid-template-columns: 220px 1fr 280px;
+    grid-template-rows: 32px 1fr 28px;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* ----------- top bar ----------- */
+  .topbar {
+    grid-column: 1 / -1;
+    background: #14141c;
+    border-bottom: 1px solid #2a2a36;
+    display: flex; align-items: center; padding: 0 12px; gap: 12px;
+    font-size: 12px;
+  }
+  .topbar h1 {
+    margin: 0; font-size: 12px; font-weight: 600; color: #d4a045;
+    letter-spacing: 0.1em;
+  }
+  .topbar .status {
+    margin-left: auto; color: #6c7280; font-size: 11px;
+  }
+  .topbar .status.dirty { color: #d4a045; }
+  .topbar .status.saved { color: #6cba6c; }
+  .topbar button {
+    background: #1f1f2a; border: 1px solid #3a3a48;
+    color: #d8d4c8; padding: 4px 12px; cursor: pointer;
+    font-family: inherit; font-size: 11px;
+  }
+  .topbar button:hover { background: #2a2a3a; }
+  .topbar button.primary {
+    background: #d4a045; color: #14141c; border-color: #d4a045;
+    font-weight: 600;
+  }
+  .topbar button.primary:hover { background: #e6b155; }
+  .topbar button.danger { color: #d45a45; border-color: #6c3a36; }
+
+  /* ----------- left panel: scenes + items ----------- */
+  .left {
+    background: #0f0f17;
+    border-right: 1px solid #1f1f2a;
+    overflow-y: auto;
+    display: flex; flex-direction: column;
+  }
+  .left .section {
+    border-bottom: 1px solid #1a1a26;
+    padding: 8px;
+  }
+  .left .section h2 {
+    margin: 0 0 6px 0; font-size: 10px; font-weight: 600;
+    color: #d4a045; letter-spacing: 0.1em; text-transform: uppercase;
+  }
+  .scene-list, .item-list { list-style: none; margin: 0; padding: 0; }
+  .scene-list li, .item-list li {
+    padding: 4px 6px; cursor: pointer; border-radius: 2px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .scene-list li:hover, .item-list li:hover { background: #1a1a26; }
+  .scene-list li.active, .item-list li.active {
+    background: #2a2418; color: #d4a045;
+  }
+  .scene-list li .swatch {
+    width: 14px; height: 14px; background: #2a2a36; flex: 0 0 14px;
+    border-radius: 2px;
+  }
+  .scene-list li.has-bg .swatch { background: #d4a045; }
+  .scene-list li .count {
+    margin-left: auto; color: #6c7280; font-size: 10px;
+  }
+  .add-btn {
+    margin-top: 6px; background: #1a1a26; border: 1px dashed #3a3a48;
+    color: #8a8c98; padding: 4px 8px; cursor: pointer; width: 100%;
+    font-family: inherit; font-size: 11px;
+  }
+  .add-btn:hover { background: #2a2a3a; color: #d8d4c8; }
+
+  /* ----------- center: canvas preview ----------- */
+  .center {
+    background: #050508;
+    overflow: hidden;
+    position: relative;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .canvas-frame {
+    position: relative;
+    /* 390x844 — phone canvas */
+    width: 390px; height: 844px;
+    background: #000;
+    box-shadow: 0 0 24px rgba(0,0,0,0.6), 0 0 0 1px #2a2a36;
+    overflow: hidden;
+  }
+  .canvas-frame canvas {
+    position: absolute; top: 0; left: 0;
+    width: 100%; height: 100%; display: block;
+    image-rendering: pixelated;
+  }
+  .canvas-frame .overlay {
+    position: absolute; top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+  }
+  .canvas-frame .overlay > * { pointer-events: auto; }
+
+  /* sprite handles */
+  .sprite-handle {
+    position: absolute;
+    border: 1px dashed #d4a045;
+    box-sizing: border-box;
+    cursor: move;
+    user-select: none;
+  }
+  .sprite-handle.selected {
+    border: 2px solid #d4a045;
+    background: rgba(212, 160, 69, 0.08);
+  }
+  .sprite-handle .label {
+    position: absolute; top: -16px; left: 0;
+    background: #d4a045; color: #14141c; padding: 1px 4px;
+    font-size: 9px; white-space: nowrap;
+  }
+  .sprite-handle .resize {
+    position: absolute; width: 10px; height: 10px;
+    background: #d4a045; border: 1px solid #14141c;
+    right: -5px; bottom: -5px; cursor: nwse-resize;
+  }
+
+  /* hitbox handles */
+  .hitbox-handle {
+    position: absolute;
+    border: 1px solid #6cba6c;
+    background: rgba(108, 186, 108, 0.10);
+    box-sizing: border-box;
+    cursor: move;
+  }
+  .hitbox-handle.selected {
+    background: rgba(108, 186, 108, 0.25);
+    border-width: 2px;
+  }
+  .hitbox-handle .label {
+    position: absolute; top: -14px; left: 0;
+    background: #6cba6c; color: #14141c; padding: 1px 4px;
+    font-size: 9px; white-space: nowrap;
+  }
+  .hitbox-handle .resize {
+    position: absolute; width: 10px; height: 10px;
+    background: #6cba6c; border: 1px solid #14141c;
+    right: -5px; bottom: -5px; cursor: nwse-resize;
+  }
+
+  .draw-tool-banner {
+    position: absolute; top: 8px; left: 8px;
+    background: rgba(20,20,28,0.85); border: 1px solid #d4a045;
+    color: #d4a045; padding: 4px 8px; font-size: 11px;
+    pointer-events: none;
+  }
+
+  /* ----------- right panel: properties ----------- */
+  .right {
+    background: #0f0f17;
+    border-left: 1px solid #1f1f2a;
+    overflow-y: auto;
+    padding: 8px;
+  }
+  .right h2 {
+    margin: 0 0 6px 0; font-size: 10px; font-weight: 600;
+    color: #d4a045; letter-spacing: 0.1em; text-transform: uppercase;
+  }
+  .right .field {
+    margin-bottom: 6px;
+  }
+  .right .field label {
+    display: block; color: #8a8c98; font-size: 10px;
+    margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  .right .field input,
+  .right .field select,
+  .right .field textarea {
+    width: 100%; padding: 4px 6px;
+    background: #1a1a26; border: 1px solid #2a2a36;
+    color: #d8d4c8; font-family: inherit; font-size: 11px;
+  }
+  .right .field textarea { resize: vertical; min-height: 48px; }
+  .right .field input:focus,
+  .right .field select:focus,
+  .right .field textarea:focus {
+    outline: none; border-color: #d4a045;
+  }
+  .right .row { display: flex; gap: 4px; }
+  .right .row .field { flex: 1; }
+  .right .actions {
+    display: flex; gap: 4px; margin-top: 8px;
+  }
+  .right .actions button {
+    flex: 1; background: #1a1a26; border: 1px solid #2a2a36;
+    color: #d8d4c8; padding: 4px 6px; cursor: pointer;
+    font-family: inherit; font-size: 11px;
+  }
+  .right .actions button:hover { background: #2a2a3a; }
+  .right .actions button.danger { color: #d45a45; border-color: #6c3a36; }
+  .right .empty {
+    color: #6c7280; font-size: 11px; text-align: center;
+    padding: 20px 8px;
+  }
+
+  /* ----------- bottom bar ----------- */
+  .bottombar {
+    grid-column: 1 / -1;
+    background: #14141c;
+    border-top: 1px solid #2a2a36;
+    display: flex; align-items: center; padding: 0 12px; gap: 12px;
+    font-size: 11px; color: #8a8c98;
+  }
+  .bottombar .tool-group { display: flex; gap: 4px; }
+  .bottombar button {
+    background: #1f1f2a; border: 1px solid #3a3a48;
+    color: #d8d4c8; padding: 2px 10px; cursor: pointer;
+    font-family: inherit; font-size: 11px;
+  }
+  .bottombar button:hover { background: #2a2a3a; }
+  .bottombar button.active {
+    background: #d4a045; color: #14141c; border-color: #d4a045;
+  }
+  .bottombar .hint {
+    margin-left: auto;
+  }
+
+  /* item icon preview */
+  .icon-preview {
+    width: 64px; height: 64px;
+    background: #1a1a26; border: 1px solid #2a2a36;
+    display: flex; align-items: center; justify-content: center;
+    image-rendering: pixelated;
+  }
+  .icon-preview img { max-width: 100%; max-height: 100%; }
+</style>
 </head>
 <body>
-    <header>
-        <h1>GHOST//PROCESS — Authoring</h1>
-        <div class="actions">
-            <button id="save-btn">Save story.json</button>
-            <button id="reload-btn">Reload from disk</button>
-            <span id="status"></span>
-        </div>
-    </header>
 
-    <main>
-        <aside id="sidebar">
-            <h2>Scenes</h2>
-            <ul id="scene-list"></ul>
-            <button id="new-scene-btn">+ New scene</button>
+<div class="topbar">
+  <h1>GHOST//PROCESS — EDITOR</h1>
+  <span id="scene-name">— no scene —</span>
+  <span class="status" id="status">ready</span>
+  <button id="reload-btn" title="Reload from story.json">↻ Reload</button>
+  <button id="save-btn" class="primary">Save story.json</button>
+</div>
 
-            <h2>Items</h2>
-            <ul id="item-list"></ul>
-            <button id="new-item-btn">+ New item</button>
+<div class="left">
+  <div class="section">
+    <h2>Scenes</h2>
+    <ul class="scene-list" id="scene-list"></ul>
+    <button class="add-btn" id="add-scene-btn">+ Add scene</button>
+  </div>
+  <div class="section">
+    <h2>Items</h2>
+    <ul class="item-list" id="item-list"></ul>
+    <button class="add-btn" id="add-item-btn">+ Add item</button>
+  </div>
+</div>
 
-            <h2>Recipes</h2>
-            <ul id="recipe-list"></ul>
-            <button id="new-recipe-btn">+ New recipe</button>
-        </aside>
+<div class="center">
+  <div class="canvas-frame" id="canvas-frame">
+    <canvas id="bg-canvas" width="390" height="844"></canvas>
+    <div class="overlay" id="overlay"></div>
+  </div>
+  <div class="draw-tool-banner" id="tool-banner" style="display:none"></div>
+</div>
 
-        <section id="main-panel">
-            <div id="scene-editor" hidden>
-                <h2>Scene: <span id="scene-editor-id"></span></h2>
-                <label>ID <input id="scene-id"></label>
-                <label>Kind
-                    <select id="scene-kind">
-                        <option value="ink">ink</option>
-                        <option value="choice">choice</option>
-                        <option value="end">end</option>
-                    </select>
-                </label>
-                <label>Background <input id="scene-bg" placeholder="scene_alley"></label>
-                <label>Music <input id="scene-music" placeholder="alley_confrontation.mp3"></label>
-                <label>Ink file <input id="scene-ink" placeholder="ink/alley.ink"></label>
-                <label>Start node <input id="scene-start-node" placeholder="Start"></label>
-                <label>Hitboxes (JSON)
-                    <textarea id="scene-hitboxes" rows="6" placeholder='[{ "x": 0.5, "y": 0.5, "w": 0.1, "h": 0.1, "target": "alley" }]'></textarea>
-                </label>
-            </div>
+<div class="right" id="right">
+  <div class="empty">Select a scene or item from the left panel to edit.</div>
+</div>
 
-            <div id="item-editor" hidden>
-                <h2>Item: <span id="item-editor-id"></span></h2>
-                <label>ID <input id="item-id"></label>
-                <label>Name <input id="item-name"></label>
-                <label>Icon path <input id="item-icon"></label>
-                <label><input type="checkbox" id="item-key" /> Key (persistent)</label>
-            </div>
+<div class="bottombar">
+  <div class="tool-group">
+    <button id="tool-select" class="active">Select</button>
+    <button id="tool-draw-hitbox">Draw hitbox</button>
+    <button id="tool-add-sprite">+ Sprite</button>
+  </div>
+  <span class="hint">Click a sprite to select. Drag to move. Drag the corner to resize. Hitbox is in scene fractions (0..1).</span>
+</div>
 
-            <div id="ink-editor" hidden>
-                <h2>Ink file: <span id="ink-editor-path"></span></h2>
-                <textarea id="ink-text" rows="30" placeholder="// Loading…"></textarea>
-                <button id="save-ink-btn">Save .ink</button>
-            </div>
-
-            <div id="welcome">
-                <h2>Welcome</h2>
-                <p>Pick a scene, item, or recipe from the sidebar to edit. Or upload new assets below.</p>
-                <h3>Upload asset</h3>
-                <input type="file" id="upload-file" />
-                <input type="text" id="upload-name" placeholder="optional: rename on save" />
-                <button id="upload-btn">Upload</button>
-                <pre id="upload-result"></pre>
-            </div>
-        </section>
-    </main>
-
-    <script src="editor.js"></script>
+<script src="/editor.js"></script>
 </body>
 </html>

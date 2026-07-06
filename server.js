@@ -151,8 +151,8 @@ function validateStory(s) {
     if (!s.scenes[s.start]) return `story.start references missing scene "${s.start}"`;
     for (const [id, sc] of Object.entries(s.scenes)) {
         if (sc.id && sc.id !== id) return `scene key "${id}" has id "${sc.id}" (must match key)`;
-        if (!['ink', 'choice', 'end'].includes(sc.kind)) {
-            return `scene "${id}" has invalid kind "${sc.kind}" (must be ink|choice|end)`;
+        if (!['ink', 'choice', 'end', 'title'].includes(sc.kind)) {
+            return `scene "${id}" has invalid kind "${sc.kind}" (must be ink|choice|end|title)`;
         }
         if (!Array.isArray(sc.hitboxes)) return `scene "${id}" hitboxes must be an array`;
         if (sc.ink && typeof sc.ink !== 'string') return `scene "${id}" ink must be a string path`;
