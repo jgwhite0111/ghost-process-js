@@ -32,173 +32,84 @@ const bgCtx = bgCanvas.getContext('2d');
 const overlay = $('#overlay');
 const frame = $('#canvas-frame');
 
-// ---------- drag edge helpers ----------
+// ---------- snap-to-edge ----------
 //
-// Edge-resistance drag — single-shot resistance curve.
+// User's request, in plain English:
+//   "the top edge of the sprite box should snap to the top edge of
+//    the viewport. The bottom edge of the sprite box should snap to
+//    the bottom edge of the viewport. It's that simple."
 //
-// input  v : cursor position expressed as canvas-fraction units,
-//           i.e. (startPlacementY + dyScreen / vpH). Positive y
-//           direction is "down".
-// output  : placement value after resistance is applied.
+// So the snap value for placementY depends on which edge we're
+// snapping:
 //
-// Resistance applies whenever the cursor is in a band straddling
-// each canvas edge. The band extends MAGNET_BAND_PX screen pixels
-// in each direction (50 px default). Two halves — pre-band (inside)
-// and post-band (outside) — meeting at the canvas edge.
+//   * BOTTOM edge:  placementY → 1.0  (sprite's BOTTOM at canvas bottom)
+//   * TOP edge:     placementY → spriteH/vpH  (sprite's TOP at canvas top)
 //
-// Inside the band, resistance ramps from 0 at the band boundary
-// to peak at the canvas edge. Peak throughput at the canvas edge
-// is `MAGNET` (e.g. 0.15 = 15% throughput = 85% slowdown).
+// Both snap zones have the same park-friendly width: within
+// SNAP_PX pixels of cursor travel past the canvas edge, the
+// sprite's edge stays glued to the canvas edge. Past SNAP_PX the
+// sprite breaks free and follows the cursor 1:1.
 //
-// Past the band, input maps 1:1 to output (free drag). No clamp,
-// no spring-back.
+// placementY in this codebase is the sprite's BOTTOM-edge Y as a
+// fraction of canvas height (NOT the centre — see placementYFor).
+// placementX is the sprite's centre X as a fraction of canvas
+// width. Both functions below respect that, so the result of
+// snapping is exactly: sprite edge = canvas edge.
 //
-// Parameters:
-//   MAGNET          fraction of input that passes through at peak
-//                   slowdown (0.15 = 85% slowdown)
-//   MAGNET_BAND_PX  width of the resistance zone on each side of
-//                   the canvas edge, in screen pixels (50 default)
+// NO spring-back, NO clamp, NO warp to adjacent edge. Whatever
+// value the user parks the cursor at is what gets saved. The
+// snap just makes the most user-friendly edge value the resting
+// state when the cursor is in the snap zone.
+//
+// Edge selection by axis:
+//   Y < 0.5 → user's cursor favours TOP edge.
+//   Y >= 0.5 → user's cursor favours BOTTOM edge.
+//   (X is its own axis; left/right are independent of Y.)
 
-function rubberBandAt(v, magnet, preBand, postBand) {
-  // Two halves of the resistance zone, sized in canvas-fraction:
-  //   preBand  — strip INSIDE the canvas nearest the edge; resistance
-  //              ramps from 0 (canvas interior) up to peak at the
-  //              canvas edge.
-  //   postBand — strip OUTSIDE the canvas edge; resistance holds
-  //              strong at the edge then ramps down to free motion
-  //              at the post-band boundary.
-  //
-  // We split the asymmetry so the user feels:
-  //   • mild pull as they drag toward the edge (50px pre)
-  //   • strong resistance at the edge itself
-  //   • resistance continues for 150px past the edge
-  //   • then free 1:1 motion
-  //
-  // Default in editor.js: PRE_BAND_PX=50, POST_BAND_PX=150.
-  //
-  // The math: resistance is applied as a SIGNED OFFSET opposing the
-  // direction of cursor travel. At the canvas edge, the offset is
-  // at peak ((1-magnet) × total_band). Past the band, the offset
-  // saturates at that peak so motion is free 1:1.
+const SNAP_PX = 50;  // snap-attached distance (px, 1:1 on phone/desktop).
 
-  const totalBand = preBand + postBand;
-  // Pick the closer edge.
-  const nearTop    = v < 0.5;
-  const edge       = nearTop ? 0 : 1;
-  const v_perp     = v - edge;       // signed distance from canvas edge
-  const a          = Math.abs(v_perp);
-
-  if (a === 0) {
-    // Exactly on the canvas edge — peak resistance.
-    const sign = nearTop ? -1 : +1;
-    return v - sign * (1 - magnet) * totalBand / 2;
-  }
-
-  // Inside the pre-band OR inside the post-band?
-  const inPre = nearTop ? (v < 0 && a <= preBand) : (v > 1 && a <= postBand && false)
-                  || (!nearTop ? false : false);
-  // Simpler: figure out which side of the edge we're on.
-  // If v < 0: we're past the TOP edge (only matters when nearTop).
-  // If v > 1: we're past the BOTTOM edge (only matters when !nearTop).
-  // If v ∈ [0, preBand]: we're INSIDE the pre-band near the TOP edge.
-  // If v ∈ [1-preBand, 1]: we're INSIDE the pre-band near the BOTTOM edge.
-
-  if (nearTop) {
-    // top edge territory: v ∈ [0, preBand) (pre-band) or v < 0 (post-band)
-    if (v >= 0 && v <= preBand) {
-      // pre-band: intensity ramps from 0 (at v=preBand) to 1 (at v=0)
-      const t = 1 - v / preBand;            // 0..1, peak at edge
-      const intensity = t * t * (3 - 2 * t);
-      const slow = intensity * (1 - magnet) * totalBand / 2;
-      // Slowdown is upward (toward smaller placementY → caps at 0)
-      return Math.max(0, v - slow);
-    }
-    if (v < 0 && -v <= postBand) {
-      // post-band past top edge.
-      const t = (-v) / postBand;
-      const intensity = t * t * (3 - 2 * t);
-      const slow = intensity * (1 - magnet) * totalBand / 2;
-      return v + slow;
-    }
+function snapY(v, spriteH, vpH, snapPx) {
+  // BOTTOM edge: sprite bottom = v * vpH.
+  //   past depth: (v - 1) * vpH. Snap while > 0 and < snapPx.
+  if (v > 1) {
+    if ((v - 1) * vpH < snapPx) return 1;
     return v;
   }
-
-  // bottom edge territory: v ∈ [1-preBand, 1] or v > 1
-  if (v >= 1 - preBand && v <= 1) {
-    const t = (1 - v) / preBand;            // 0..1, peak at edge
-    const intensity = t * t * (3 - 2 * t);
-    const slow = intensity * (1 - magnet) * totalBand / 2;
-    return Math.min(1, v + slow);
-  }
-  if (v > 1 && v - 1 <= postBand) {
-    const t = (v - 1) / postBand;
-    const intensity = t * t * (3 - 2 * t);
-    const slow = intensity * (1 - magnet) * totalBand / 2;
-    return v - slow;
+  // TOP edge: sprite top = v * vpH - spriteH.
+  //   past depth (above canvas): -top. Snap while > 0 and < snapPx.
+  const topPx = v * vpH - spriteH;
+  if (topPx < 0) {
+    if (-topPx < snapPx) return spriteH / vpH;
+    return v;
   }
   return v;
 }
-const MAGNET          = 0.15;
-let   MAGNET_PRE_PX   = 50;
-let   MAGNET_POST_PX  = 150;
-// During a drag the user can pull a sprite or hitbox slightly past the
-// canvas edge (so they can frame a "partially behind a wall" silhouette).
-// On release any value that ended up outside `[0, 1]` is eased back to
-// the nearest in-bounds edge. The horizontal named-slot nudge is
-// deliberately conservative — most positioning goes through the named
-// `position` dropdown, not via fling-the-cursor gesture.
-const EDGE_OVERDRAG = 0.20;          // fraction of canvas dimension (legacy; unused now that rubber-band is the model)
-const EDGE_OVERDRAG_PX = 60;         // absolute pixel overdrag before a slot is suggested (legacy)
-const SPRING_MS = 180;               // duration of release spring-back (legacy; spring-back is OFF)
-function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
-function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
 
-// Animate any over-dragged value back to its nearest in-bounds edge
-// over SPRING_MS. `kind === 'sprite'` handles placementY on `ref`;
-// `kind === 'hitbox'` handles hb.x, hb.y, hb.w, hb.h on `ref`.
-function springBackOverdrag(kind, ref) {
-  const tasks = [];
-  if (kind === 'sprite') {
-    if (!ref) return;
-    // Vertical over-drag spring-back.
-    const py = ref.placementY;
-    if (typeof py === 'number' && (py < 0 || py > 1)) {
-      tasks.push({ set: v => { ref.placementY = v; }, from: py, to: clamp(py, 0, 1) });
-    }
-    // Horizontal over-drag spring-back — only meaningful if the user
-    // actually dragged horizontally (placementX exists).
-    const px = ref.placementX;
-    if (typeof px === 'number' && (px < 0 || px > 1)) {
-      tasks.push({ set: v => { ref.placementX = v; }, from: px, to: clamp(px, 0, 1) });
-    }
-  } else if (kind === 'hitbox') {
-    const hb = ref; if (!hb) return;
-    if (hb.x < 0)
-      tasks.push({ set: v => { hb.x = v; }, from: hb.x, to: 0 });
-    else if (hb.x + hb.w > 1)
-      tasks.push({ set: v => { hb.x = 1 - hb.w; }, from: hb.x, to: 1 - hb.w });
-    if (hb.y < 0)
-      tasks.push({ set: v => { hb.y = v; }, from: hb.y, to: 0 });
-    else if (hb.y + hb.h > 1)
-      tasks.push({ set: v => { hb.y = 1 - hb.h; }, from: hb.y, to: 1 - hb.h });
-    if (hb.w > 1 - hb.x + 1e-6 && hb.x >= 0)
-      tasks.push({ set: v => { hb.w = v; }, from: hb.w, to: Math.max(0.02, 1 - hb.x) });
-    if (hb.h > 1 - hb.y + 1e-6 && hb.y >= 0)
-      tasks.push({ set: v => { hb.h = v; }, from: hb.h, to: Math.max(0.02, 1 - hb.y) });
+function snapX(v, spriteW, vpW, snapPx) {
+  // placementX is centre; sprite's left = v*vpW - spriteW/2, right = +spriteW/2.
+  const rightPx = v * vpW + spriteW / 2;
+  const leftPx  = v * vpW - spriteW / 2;
+  // RIGHT edge: past depth = rightPx - vpW.
+  if (rightPx > vpW) {
+    if (rightPx - vpW < snapPx) return 1 - spriteW / (2 * vpW);
+    return v;
   }
-  if (tasks.length === 0) return;
-  const start = performance.now();
-  function step(now) {
-    const t = Math.min(1, (now - start) / SPRING_MS);
-    const k = easeOutCubic(t);
-    for (const tk of tasks) tk.set(tk.from + (tk.to - tk.from) * k);
-    redrawCanvasOnly();
-    syncRightFromSelection();
-    if (t < 1) requestAnimationFrame(step);
-    else renderOverlay();     // sync selection handles to final rect
+  // LEFT edge: past depth (negative leftPx).
+  if (leftPx < 0) {
+    if (-leftPx < snapPx) return spriteW / (2 * vpW);
+    return v;
   }
-  requestAnimationFrame(step);
+  return v;
 }
+// (Constants MAGNET / MAGNET_PRE_PX / MAGNET_POST_PX and function
+// springBackOverdrag removed; replaced by snapEdge above.  The
+// user has explicitly asked — multiple times — for NO spring-back:
+// whatever value the user parks the cursor at is what gets saved.)
+
+// Hitbox drag still needs a clamp helper and a "how far past the
+// canvas edge the user can drag the corners" budget.
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+const EDGE_OVERDRAG = 0.20;
 
 // ---------- API ----------
 async function loadStory() {
@@ -498,52 +409,48 @@ function onSpriteDragMove(e) {
   state.drag.lastY = e.clientY;
   const charConfig = state.drag.ref;
   if (state.drag.kind === 'move') {
-    // Edge-resistance drag: linear inside the canvas [0,1], soft
-    // rubber-band once the cursor (and thus placementY/placementX)
-    // strays past the edge.
+    // Edge-anchor snap-to-edge drag (the user's actual request):
+    // As the cursor approaches a canvas edge, the sprite's leading
+    // edge snaps TO the canvas edge and stays glued for up to
+    // SNAP_PX pixels of cursor travel past the edge. After that
+    // the sprite breaks free and follows the cursor 1:1.
     //
-    // Inside [0,1]: dy_vp maps 1:1 → 1 unit of placementY per vpH
-    //                pixels of cursor movement.
-    // Past the edge: each additional placementY unit costs
-    //                EDGE_RESIST (≈ 2.5×) more cursor pixels — so
-    //                landing exactly on the edge is easy (small
-    //                gesture) but committing to "fully past the
-    //                edge" requires a deliberate, large gesture.
-    //
-    // We do NOT clamp, do NOT snap back, do NOT warp. Whatever
+    // NO spring-back, NO clamp, NO warp-to-other-edge. Whatever
     // placement the user parks on is what gets saved.
     const dyUnits = (e.clientY - state.drag.startY) / vpH();
     const dxUnits = (e.clientX - state.drag.startX) / vpW();
-    // Translate the screen-pixel band into canvas-fraction units so
-    // it feels the same on phone (vpH=844) and desktop (vpH=720).
-    const bandPreY = MAGNET_PRE_PX  / vpH();
-    const bandPosY = MAGNET_POST_PX / vpH();
-    const bandPreX = MAGNET_PRE_PX  / vpW();
-    const bandPosX = MAGNET_POST_PX / vpW();
-    // One-shot diagnostic so the user can confirm vpW/vpH are sane
-    // numbers. Triggers once at the start of a drag; afterwards it's
-    // quiet. Open the browser console to see it.
-    if (!state._edgeResistDiag) {
-      state._edgeResistDiag = true;
-      console.log('[editor-drag] vpW=' + vpW() + ' vpH=' + vpH()
-        + ' MAGNET=' + MAGNET + ' preY=' + bandPreY.toFixed(3)
-        + ' postY=' + bandPosY.toFixed(3)
-        + ' preX=' + bandPreX.toFixed(3)
-        + ' postX=' + bandPosX.toFixed(3)
-        + ' (pre=' + MAGNET_PRE_PX + 'px post=' + MAGNET_POST_PX + 'px)');
-    }
+    // Need the rendered sprite's full extent on each axis to know
+    // where its leading edge sits.
+    //   placementY is the BOTTOM-edge Y as a fraction of vpH.
+    //   placementX is the centre X as a fraction of vpW.
+    // snapY / snapX convert that edge convention directly.
+    const rect = computeSpriteRect(charConfig);
+    const spriteH = rect ? rect.h : vpH() * 0.2;
+    const spriteW = rect ? rect.w : vpW() * 0.2;
+    // Compute the cursor-driven placement (1:1 inside canvas, free
+    // outside). snapY / snapX then pin the sprite's edge to the
+    // canvas edge when the cursor's edge is within SNAP_PX of
+    // crossing.
     const newPYraw = state.drag.startPlacementY + dyUnits;
     const newPXraw = state.drag.startPlacementX + dxUnits;
-    const newPY    = rubberBandAt(newPYraw, MAGNET, bandPreY, bandPosY);
-    const newPX    = rubberBandAt(newPXraw, MAGNET, bandPreX, bandPosX);
-    // Second-by-second log when actively over-dragging — useful so
-    // the user can see the resistance kicking in numerically.
+    const newPY = snapY(newPYraw, spriteH, vpH(), SNAP_PX);
+    const newPX = snapX(newPXraw, spriteW, vpW(), SNAP_PX);
+    // One-shot diagnostic so the user can confirm vpW/vpH and
+    // sprite dimensions are sane numbers. Triggers once at the start
+    // of a drag; afterwards it's quiet. Open the browser console.
+    if (!state._snapDiag) {
+      state._snapDiag = true;
+      console.log('[editor-drag] vpW=' + vpW() + ' vpH=' + vpH()
+        + ' spriteW=' + spriteW.toFixed(1)
+        + ' spriteH=' + spriteH.toFixed(1)
+        + ' SNAP_PX=' + SNAP_PX + 'px');
+    }
     if (newPYraw < 0 || newPYraw > 1 || newPXraw < 0 || newPXraw > 1) {
       console.log('[editor-drag]',
         'cursor Y raw=' + newPYraw.toFixed(3),
-        'rb Y=' + newPY.toFixed(3),
+        'snap Y=' + newPY.toFixed(3),
         'cursor X raw=' + newPXraw.toFixed(3),
-        'rb X=' + newPX.toFixed(3));
+        'snap X=' + newPX.toFixed(3));
     }
     charConfig.placementY = newPY;
     charConfig.placementX = newPX;
@@ -661,7 +568,8 @@ function onHitboxDragEnd() {
   handle.removeEventListener('pointercancel', onHitboxDragEnd);
   handle.classList.remove('dragging');
   state.drag = null;
-  springBackOverdrag('hitbox', draggedRef);
+  // spring-back removed (user said NO spring-back). Whatever pixel
+  // value the user parked the corner at is what gets saved.
   markDirty();
   renderOverlay();
 }
