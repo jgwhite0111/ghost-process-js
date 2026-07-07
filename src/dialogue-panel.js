@@ -12,6 +12,13 @@
 // For scenes without Ink (intro, alley pre-dialogue), the panel is
 // still rendered but blank + hidden so transitions into/out of
 // dialogue scenes don't visibly pop.
+//
+// Auto-dismiss: when Ink has no more lines AND no choices (onComplete),
+// the next click on the dialogue box hides it. The scene task hint
+// (if any) is shown by Toast at that point so the player has a clear
+// "what to do next" prompt. If Ink later gets new content (e.g. via
+// `_handleCommand('goto', ...)` redirect, or a choice branch emits
+// more text), the panel unhides itself.
 
 class DialoguePanel {
     constructor() {
@@ -21,6 +28,14 @@ class DialoguePanel {
         this.continueEl = null;
         this.choicesEl = null;
         this._currentRunner = null;
+        // True once Ink has signalled onComplete — next click hides
+        // the box. Reset to false whenever the runner fires a new
+        // line, new choices, or the runner is swapped out.
+        this._allSpoken = false;
+        // Optional hook the scene installs so the dialogue click can
+        // hand off to "show the task hint and then hide" logic.
+        // signature: () => void.
+        this._onDismiss = null;
         this._build();
     }
 
@@ -42,9 +57,18 @@ class DialoguePanel {
         root.addEventListener('click', () => {
             // Hover the choices list first — if a real choice button is
             // visible, ignore the click (the button has its own handler).
-            // Otherwise advance the runner.
             if (this.choicesEl && this.choicesEl.offsetParent !== null) return;
-            if (this._currentRunner) this._currentRunner.advance();
+            if (!this._currentRunner) return;
+            // If the dialogue is fully exhausted, a click here means
+            // "I'm done reading" — hand off to the scene's dismiss hook
+            // (which shows the task hint and hides the box) instead of
+            // calling advance() (which would just step() on a dead story).
+            if (this._allSpoken) {
+                if (this._onDismiss) this._onDismiss();
+                this.hide();
+                return;
+            }
+            this._currentRunner.advance();
         });
         document.body.appendChild(root);
         this.root = root;
@@ -61,7 +85,14 @@ class DialoguePanel {
                     e.preventDefault();
                     return;
                 }
-                if (this._currentRunner) this._currentRunner.advance();
+                if (!this._currentRunner) return;
+                if (this._allSpoken) {
+                    if (this._onDismiss) this._onDismiss();
+                    this.hide();
+                    e.preventDefault();
+                    return;
+                }
+                this._currentRunner.advance();
                 e.preventDefault();
             }
             // Number shortcuts for visible choices.
@@ -95,7 +126,22 @@ class DialoguePanel {
         this.setSpeaker('');
         this.setHasMore(false);
         this._currentRunner = null;
+        this._allSpoken = false;
+        this._onDismiss = null;
     }
+
+    // Scene installs this when it has unresolved tasks. Called the
+    // first time the player clicks the (now-exhausted) dialogue box
+    // — the scene uses it to surface the next "what to do" hint and
+    // then the box hides itself.
+    setDismissHook(fn) { this._onDismiss = fn; }
+
+    // Ink signalled onComplete: keep the box visible (player can
+    // re-read the last line) but the next click should hide it.
+    markAllSpoken() { this._allSpoken = true; }
+    hasMoreDialogue() { return !this._allSpoken; }
+    // A new line / choice / runner arrived → reset dismiss behaviour.
+    resetAllSpoken() { this._allSpoken = false; }
 
     setSpeaker(name) {
         this.speakerEl.textContent = name || '';
@@ -104,6 +150,13 @@ class DialoguePanel {
 
     setText(visibleText) {
         this.textEl.textContent = visibleText;
+        // Anything new to display = the dialogue isn't done yet.
+        if (visibleText && visibleText.length > 0) {
+            this.resetAllSpoken();
+            // If the box was dismissed earlier this scene, unhide
+            // it so the new text is visible. (No-op if already shown.)
+            this.show();
+        }
     }
 
     setHasMore(hasMore) {
@@ -119,7 +172,10 @@ class DialoguePanel {
             this.setHasMore(true);
             return;
         }
+        // A choice list showing = there's clearly more dialogue pending.
+        this.resetAllSpoken();
         this.setHasMore(false);
+        this.show();
         const wrap = document.createElement('div');
         wrap.className = 'choices-list';
         choices.forEach((choice, i) => {
@@ -150,13 +206,12 @@ class DialoguePanel {
         // just remembers the current runner so clicks on the dialogue
         // box can call advance() on it.
         this._currentRunner = runner;
+        // New runner = fresh dialogue tree. Reset the dismiss latch.
+        this.resetAllSpoken();
         runner.onComplete && runner.onComplete(() => {
-            // No more lines — dialogue is finished. The next click on
-            // the dialogue box will now advance whatever scene logic
-            // is listening (typically transition_next from Ink). The
-            // panel itself stays visible: an Ink scene can finish
-            // mid-scene (e.g. after choices) and the next thing is
-            // a visual transition, not a UI change.
+            // No more lines — keep the box visible (player may want
+            // to re-read), but flag it so the NEXT click dismisses.
+            this.markAllSpoken();
         });
     }
 }

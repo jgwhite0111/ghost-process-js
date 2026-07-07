@@ -133,6 +133,24 @@ class Scene {
         } else {
             if (window.DialoguePanel) window.DialoguePanel.hide();
         }
+        // Wire scene-task tracking + dialogue dismiss behaviour.
+        // TaskTracker is a singleton; every scene binds fresh on
+        // start. If the scene declares `tasks`, the panel's dismiss
+        // hook will surface the next-open hint via Toast, otherwise
+        // the box just hides on the click.
+        if (window.TaskTracker) {
+            window.TaskTracker.bind(this.sceneId, this.sceneConfig.tasks || []);
+            // If a hint is available right now (no Ink has run, or the
+            // tasks are pre-resolved by inventory), fire it once so
+            // the player gets oriented.
+            const initialHint = window.TaskTracker.nextHint();
+            if (initialHint) window.Toast.show(initialHint, { kind: 'info' });
+        }
+        if (window.DialoguePanel) {
+            window.DialoguePanel.setDismissHook(() => {
+                this._onDialogueDismissed();
+            });
+        }
         // Wire pointerdown on canvas (NOT on hitbox — hitbox layer has its own).
         this.canvas.addEventListener('pointerdown', this._onPointerDown);
         // Kick off the render loop.
@@ -307,6 +325,12 @@ class Scene {
     }
 
     _triggerHitbox(hb, pageX, pageY) {
+        // Notify the task tracker BEFORE the action runs so it can
+        // mark use_item / goto_hitbox tasks as completed even if the
+        // hitbox itself consumes the click without transitioning
+        // (e.g. wrong item on door → no-op but the player's still
+        // expected to have "tried").
+        if (window.TaskTracker) window.TaskTracker.onHitboxClicked(hb);
         if (hb.item) {
             const label = hb.item.replace(/_/g, ' ');
             window.Inventory.addWithFly(hb.item, pageX, pageY, label, () => {
@@ -314,6 +338,10 @@ class Scene {
                 // refresh the hitbox layer so the now-consumed item's
                 // label disappears.
                 if (this.hitboxLayer && this.hitboxLayer.refresh) this.hitboxLayer.refresh();
+                // Tasks may now be satisfied (pickup). If the dialogue
+                // box is currently hidden, re-show the next hint so the
+                // player sees updated progress.
+                this._refreshTaskHint();
             });
             const item = window.STORY.items[hb.item];
             if (item && item.pickup_message) {
@@ -328,6 +356,33 @@ class Scene {
         }
         if (hb.target) {
             this._transition(hb.target);
+        }
+    }
+
+    // Called by the dialogue panel after the player clicks the (now-
+    // exhausted) dialogue box. Surfaces the next unresolved task hint
+    // via Toast. If no tasks are defined, the box just hides silently.
+    _onDialogueDismissed() {
+        if (!window.TaskTracker) return;
+        // Re-show the box when Ink emits new content (e.g. via a
+        // # goto redirect from a hitbox trigger). Setting a hook on
+        // the runner's onLine + onChoices does this from the other
+        // side; this method only fires AFTER dismissal.
+        const hint = window.TaskTracker.nextHint();
+        if (hint) window.Toast.show(hint, { kind: 'info' });
+    }
+
+    // Re-evaluate task completion after a hitbox event and, if the
+    // dialogue box is hidden, surface any updated hint.
+    _refreshTaskHint() {
+        if (!window.TaskTracker) return;
+        if (!window.DialoguePanel) return;
+        if (window.DialoguePanel.hasMoreDialogue()) return; // box still up — text/choices are the hint
+        // If the dialogue is dismissed and we just made progress,
+        // push the next hint so the player sees it immediately.
+        if (window.TaskTracker.hasOpen()) {
+            const hint = window.TaskTracker.nextHint();
+            if (hint) window.Toast.show(hint, { kind: 'info' });
         }
     }
 
@@ -426,6 +481,10 @@ class Scene {
             // Before redirecting, suppress next step so the now-empty
             // story doesn't fire "ran out of content" warnings.
             if (r) r._suppressStep = true;
+            // Goto fires a goto_dialog task completion (matching
+            // `ink_node`) so the task tracker can drop that hint and
+            // surface the next one if the box is hidden.
+            if (window.TaskTracker) window.TaskTracker.onInkNodeReached(cmd.target);
             // Redirect — Inky InkRunner supports a direct path bind.
             // The simplest cross-runtime way is to set r._currentTags
             // = {} and then step from the new path. InkJS exposes

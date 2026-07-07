@@ -617,6 +617,8 @@ function renderRight() {
     right.appendChild(makeField('music', 'Music (assets/audio/*)', makePlaceholder()));
     fillAsync($('#right .field[data-key="music"] .ctrl'), makeMusicPicker(sc));
     right.appendChild(makeField('ink', 'Ink file', makeTextInput(sc.ink || '', v => { sc.ink = v; markDirty(); })));
+    // --- Scene tasks (per-scene, surfaced as toast hints + auto-completion) ---
+    right.appendChild(makeTasksPanel(sc));
   }
 
   if (state.selected?.kind === 'sprite') {
@@ -706,6 +708,158 @@ function makeField(key, labelText, controlEl) {
   div.appendChild(ctrl);
   return div;
 }
+
+// --- Tasks panel --------------------------------------------------------
+// Per-scene task list. Each task is a small object the runtime TaskTracker
+// reads from sceneConfig.tasks[]. The runtime recognises these types:
+//   pickup       — { item }
+//   use_item     — { item, on_hitbox }
+//   goto_hitbox  — { target } (label of a hitbox the player must click)
+//   trigger_dialog — { ink_node } (resolved by Ink # goto:<node>)
+//   combine      — { items[] } (future)
+//   custom       — Ink calls EXTERNAL complete_task(id) when satisfied
+// `hint` is shown in a toast when dialogue is dismissed and any task is
+// still open; it disappears on completion.
+const TASK_TYPES = ['pickup', 'use_item', 'goto_hitbox', 'trigger_dialog', 'combine', 'custom'];
+
+function makeTasksPanel(sc) {
+  const div = document.createElement('div');
+  div.className = 'field tasks-panel';
+  div.dataset.key = 'tasks';
+  const hdr = document.createElement('label');
+  hdr.textContent = 'Tasks (player-facing hints + auto-completion)';
+  div.appendChild(hdr);
+  const list = document.createElement('div');
+  list.className = 'tasks-list';
+  div.appendChild(list);
+
+  const renderList = () => {
+    list.innerHTML = '';
+    const tasks = sc.tasks || (sc.tasks = []);
+    if (tasks.length === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'tasks-empty';
+      empty.textContent = 'No tasks. Click "+ Add" to author one.';
+      list.appendChild(empty);
+      return;
+    }
+    tasks.forEach((t, idx) => list.appendChild(makeTaskRow(t, idx, tasks, renderList)));
+  };
+  renderList();
+
+  const actions = document.createElement('div');
+  actions.className = 'actions';
+  const addBtn = document.createElement('button');
+  addBtn.textContent = '+ Add task';
+  addBtn.onclick = () => {
+    const tasks = sc.tasks || (sc.tasks = []);
+    tasks.push({ id: `task_${tasks.length + 1}`, type: 'pickup', hint: '' });
+    markDirty();
+    renderRight();
+  };
+  actions.appendChild(addBtn);
+  div.appendChild(actions);
+  return div;
+}
+
+function makeTaskRow(t, idx, tasks, refresh) {
+  const row = document.createElement('div');
+  row.className = 'task-row';
+  const head = document.createElement('div');
+  head.className = 'task-head';
+  // Type select
+  const typeSel = document.createElement('select');
+  for (const ty of TASK_TYPES) {
+    const opt = document.createElement('option');
+    opt.value = ty; opt.textContent = ty;
+    if (ty === t.type) opt.selected = true;
+    typeSel.appendChild(opt);
+  }
+  typeSel.onchange = () => {
+    // Reset type-specific fields when type changes so we don't carry over
+    // orphan keys (e.g. an old `item` from a use_item row when switching
+    // to a `goto_hitbox`).
+    const oldKeys = Object.keys(t);
+    t.type = typeSel.value;
+    if (t.type === 'pickup')      { delete t.on_hitbox; delete t.items; delete t.ink_node; }
+    else if (t.type === 'use_item'){ delete t.items; delete t.ink_node; }
+    else if (t.type === 'goto_hitbox') { delete t.item; delete t.on_hitbox; delete t.items; delete t.ink_node; }
+    else if (t.type === 'trigger_dialog') { delete t.item; delete t.on_hitbox; delete t.items; delete t.target; }
+    else if (t.type === 'combine') { delete t.item; delete t.on_hitbox; delete t.ink_node; delete t.target; }
+    else if (t.type === 'custom') { delete t.item; delete t.on_hitbox; delete t.items; delete t.ink_node; delete t.target; }
+    markDirty();
+    renderRight();
+  };
+  head.appendChild(typeSel);
+
+  const delBtn = document.createElement('button');
+  delBtn.className = 'danger small';
+  delBtn.textContent = '✕';
+  delBtn.title = 'Delete this task';
+  delBtn.onclick = () => {
+    tasks.splice(idx, 1);
+    markDirty();
+    renderRight();
+  };
+  head.appendChild(delBtn);
+  row.appendChild(head);
+
+  // ID (always shown — used as the EXTERNAL complete_task argument)
+  const idInput = document.createElement('input');
+  idInput.type = 'text';
+  idInput.placeholder = 'id';
+  idInput.value = t.id || '';
+  idInput.oninput = () => { t.id = idInput.value.trim(); markDirty(); };
+  row.appendChild(idInput);
+
+  // Hint (always shown)
+  const hintInput = document.createElement('input');
+  hintInput.type = 'text';
+  hintInput.placeholder = 'hint shown to the player';
+  hintInput.value = t.hint || '';
+  hintInput.oninput = () => { t.hint = hintInput.value; markDirty(); };
+  row.appendChild(hintInput);
+
+  // Type-specific fields
+  if (t.type === 'pickup') {
+    appendField(row, 'item', t.item || '', v => { t.item = v; markDirty(); },
+      'item id to pick up');
+  } else if (t.type === 'use_item') {
+    appendField(row, 'item', t.item || '', v => { t.item = v; markDirty(); },
+      'item id to use');
+    appendField(row, 'on_hitbox', t.on_hitbox || '', v => { t.on_hitbox = v; markDirty(); },
+      'hitbox label / target');
+  } else if (t.type === 'goto_hitbox') {
+    appendField(row, 'target', t.target || '', v => { t.target = v; markDirty(); },
+      'hitbox label / target to click');
+  } else if (t.type === 'trigger_dialog') {
+    appendField(row, 'ink_node', t.ink_node || '', v => { t.ink_node = v; markDirty(); },
+      'Ink knot name (# goto:...)');
+  } else if (t.type === 'combine') {
+    const itemsInput = document.createElement('input');
+    itemsInput.type = 'text';
+    itemsInput.placeholder = 'items (comma-separated)';
+    itemsInput.value = (t.items || []).join(',');
+    itemsInput.oninput = () => {
+      t.items = itemsInput.value.split(',').map(s => s.trim()).filter(Boolean);
+      markDirty();
+    };
+    row.appendChild(itemsInput);
+  }
+  // custom has no extra fields beyond id + hint.
+
+  return row;
+}
+
+function appendField(row, key, value, onChange, placeholder) {
+  const i = document.createElement('input');
+  i.type = 'text';
+  i.placeholder = placeholder || key;
+  i.value = value;
+  i.oninput = () => onChange(i.value);
+  row.appendChild(i);
+}
+
 function makePlaceholder() {
   const span = document.createElement('span');
   span.textContent = 'loading…';

@@ -173,11 +173,95 @@ class Inventory {
         if (!window.STATE) return;
         if (window.STATE.inventory.indexOf(itemId) !== -1) return;
         window.STATE.inventory.push(itemId);
+        // Notify the per-scene task tracker so `pickup` tasks resolve
+        // immediately. Scene-base re-evaluates the open hint if the
+        // dialogue box is currently hidden.
+        if (window.TaskTracker) window.TaskTracker.onItemAcquired(itemId);
+        if (window.__activeScene && window.__activeScene._refreshTaskHint) {
+            window.__activeScene._refreshTaskHint();
+        }
         this.ensureButton();
         this._updateCount();
         // If the popup is currently open, refresh it so the new item
         // shows up without the user having to close+reopen.
         if (this.popup) this._openPopup(); // close+reopen pattern
+    }
+
+    // Pickup with a visual "fly to inventory" animation. Spawns a
+    // floating icon at (originX, originY) in page coords that arcs
+    // toward the INV button over ~700ms, then commits the item to
+    // inventory. Returns immediately; the call site can chain more
+    // work (e.g. revealing a hidden character) via `then` if needed.
+    addWithFly(itemId, originX, originY, label, onComplete) {
+        // Already picked up? Skip animation, just no-op.
+        if (!window.STATE) return;
+        if (window.STATE.inventory.indexOf(itemId) !== -1) {
+            if (onComplete) onComplete();
+            return;
+        }
+        const item = window.STORY && window.STORY.items && window.STORY.items[itemId];
+        if (!item) {
+            this.add(itemId);
+            if (onComplete) onComplete();
+            return;
+        }
+        if (!this.button) {
+            // No INV button yet — fall back to instant add.
+            this.add(itemId);
+            if (onComplete) onComplete();
+            return;
+        }
+        // Spawn flying icon.
+        const icon = document.createElement('img');
+        icon.src = item.icon;
+        icon.alt = '';
+        icon.className = 'inv-fly';
+        icon.style.left = originX + 'px';
+        icon.style.top = originY + 'px';
+        icon.style.opacity = '1';
+        icon.style.transform = 'translate(-50%, -50%) scale(1)';
+        document.body.appendChild(icon);
+        // Compute target.
+        const rect = this.button.getBoundingClientRect();
+        const tx = rect.left + rect.width / 2;
+        const ty = rect.top + rect.height / 2;
+        // Two-phase animation: 0-50% scale up + arc upward; 50-100%
+        // // scale down + ease into target. CSS keyframes are simple,
+        // but we drive via JS for the arc.
+        const startX = originX;
+        const startY = originY;
+        const dx = tx - originX;
+        const dy = ty - originY;
+        const dist = Math.hypot(dx, dy);
+        const duration = 700;
+        const start = performance.now();
+        const arcHeight = Math.min(80, dist * 0.25);
+        const animate = (now) => {
+            const t = Math.min(1, (now - start) / duration);
+            // Ease-out cubic.
+            const e = 1 - Math.pow(1 - t, 3);
+            // Parabolic arc: peaks at t=0.5, then descends.
+            const arc = Math.sin(t * Math.PI) * arcHeight;
+            const x = startX + dx * e;
+            const y = startY + dy * e - arc;
+            // Scale: 1 -> 1.3 -> 0.6 (smaller when reaching target).
+            const scale = t < 0.5
+                ? 1 + (t / 0.5) * 0.3
+                : 1.3 - ((t - 0.5) / 0.5) * 0.7;
+            icon.style.left = x + 'px';
+            icon.style.top = y + 'px';
+            icon.style.transform = `translate(-50%, -50%) scale(${scale})`;
+            icon.style.opacity = String(1 - t * 0.5);
+            if (t < 1) {
+                requestAnimationFrame(animate);
+            } else {
+                // Commit + cleanup.
+                if (icon.parentNode) icon.parentNode.removeChild(icon);
+                this.add(itemId);
+                if (onComplete) onComplete();
+            }
+        };
+        requestAnimationFrame(animate);
     }
 
     remove(itemId) {

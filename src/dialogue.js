@@ -27,7 +27,26 @@ class DialogueRunner {
         this.onLine = callbacks.onLine || (() => {});
         this.onChoices = callbacks.onChoices || (() => {});
         this.onCommand = callbacks.onCommand || (() => {});
-        this.onComplete = callbacks.onComplete || (() => {});
+        this._onCompleteFns = [];
+        // Back-compat: callers that still pass onComplete in the
+        // callbacks bag get the same first-party dispatch.
+        if (typeof callbacks.onComplete === 'function') {
+            this._onCompleteFns.push(callbacks.onComplete);
+        }
+        // New API: runner.onComplete(fn) registers a listener. Multiple
+        // listeners are supported (panel + scene can both subscribe).
+        // Calling without args fires all registered listeners (used by
+        // the runner itself when Ink is exhausted).
+        this.onComplete = (fnOrFire) => {
+            if (typeof fnOrFire === 'function') {
+                this._onCompleteFns.push(fnOrFire);
+                return;
+            }
+            // No arg = dispatch.
+            for (const cb of this._onCompleteFns) {
+                try { cb(); } catch (e) { console.warn('[dialogue] onComplete listener threw', e); }
+            }
+        };
 
         try {
             const compiler = new inkjs.Compiler(inkText);
@@ -56,6 +75,12 @@ class DialogueRunner {
         });
         this.story.BindExternalFunction('has', (itemId) => {
             return (window.STATE?.inventory || []).indexOf(itemId) !== -1;
+        });
+        // EXTERNAL complete_task(id) — Ink signals a `custom` task is
+        // done. The TaskTracker singleton records it; the scene's
+        // dismiss hook picks up the next-open hint afterwards.
+        this.story.BindExternalFunction('complete_task', (taskId) => {
+            if (window.TaskTracker) window.TaskTracker.complete(taskId);
         });
 
         // Don't auto-start here — the caller may need to wire runner.onLine/
@@ -104,6 +129,19 @@ class DialogueRunner {
                 this.onCommand(key, value ? [value] : []);
             }
             this.showLine(line, tags);
+            // After surfacing a line, Ink may now be empty (single-line
+            // scene) or choices may be on the stack. Either way the
+            // player has everything they need to read — fire onComplete
+            // so the panel can mark the box dismissable on next click
+            // rather than making the player no-op step() through an
+            // empty story.
+            if (!this.story.canContinue && (!this.story.currentChoices || this.story.currentChoices.length === 0)) {
+                // Defer until the typewriter finishes so the player sees
+                // the line before the box tries to disappear on them.
+                setTimeout(() => {
+                    if (!this.typing) this.onComplete();
+                }, this.typing ? Math.max(50, (this.currentLine?.length || 0) * 30 + 80) : 50);
+            }
             return;
         }
         // Ink has nothing more to emit (canContinue === false). At
@@ -131,16 +169,18 @@ class DialogueRunner {
         this.step();
     }
 
-    _cancelNextStep() {
-        this._suppressStep = true;
-    }
+    // Externally mark Ink as exhausted (used by dialogue-panel/dismiss
+    // flow when a scene chooses a goto redirect and we want to suppress
+    // the next step so the empty story doesn't fire onComplete).
+    markAllDone() { this._allDone = true; }
+    // Same name as the older method (kept for scenes that still call it).
+    _cancelNextStep() { this._suppressStep = true; }
 
     showLine(line, tags) {
         this.typing = true;
         this.currentLine = line;
         this.currentTags = tags;
         this.onLine(line, tags, 0, line.length);
-
         let i = 0;
         const target = line;
         const self = this;
