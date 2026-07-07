@@ -34,48 +34,113 @@ const frame = $('#canvas-frame');
 
 // ---------- drag edge helpers ----------
 //
-// Edge-resistance drag — the "few-ms" model the user described:
-// a small MAGNET right at the canvas edge gives way to free 1:1
-// motion once the user has committed to dragging past.
+// Edge-resistance drag — single-shot resistance curve.
 //
-//   input v = the desired placement after cursor deltas from
-//             drag start, in fraction-of-canvas units. so
-//             v = 1 means "cursor at the bottom edge", v = 2
-//             means "cursor 100% of canvas-height past the bottom".
+// input  v : cursor position expressed as canvas-fraction units,
+//           i.e. (startPlacementY + dyScreen / vpH). Positive y
+//           direction is "down".
+// output  : placement value after resistance is applied.
 //
-// Inside the canvas (v ∈ [0, 1])  :  output = v, 1:1 with cursor.
+// Resistance applies whenever the cursor is in a band straddling
+// each canvas edge. The band extends MAGNET_BAND_PX screen pixels
+// in each direction (50 px default). Two halves — pre-band (inside)
+// and post-band (outside) — meeting at the canvas edge.
 //
-// Past the edge:
-//   • MAGNET_BAND_PX screen-pixels of cursor drag (default 40px,
-//     same on phone and desktop) = the resistance band.
-//   • Inside the band: every MAGNET_BAND_PX of cursor-past-edge
-//     input advances placement by MAGNET_BAND_PX * MAGNET. With
-//     MAGNET=0.4, the user has to drag 2.5× the cursor distance
-//     of the band to push placement all the way through the band.
-//   • Past the band: every further pixel of cursor-past-edge
-//     input advances placement by 1:1 — no resistance, no spring.
+// Inside the band, resistance ramps from 0 at the band boundary
+// to peak at the canvas edge. Peak throughput at the canvas edge
+// is `MAGNET` (e.g. 0.15 = 15% throughput = 85% slowdown).
 //
-// Tunable:
-//   MAGNET          fraction of cursor pixels that pass through
-//                   the band (0.4 = 40%, lower = stickier edge)
-//   MAGNET_BAND_PX  width of the resistance band in screen pixels
+// Past the band, input maps 1:1 to output (free drag). No clamp,
+// no spring-back.
 //
-// Conversion between screen pixels and placement fraction is done
-// by the drag handlers — this function only operates on
-// pre-converted cursor values, in canvas-fraction units.
-function rubberBandAt(v, magnet, bandFraction) {
-  if (v >= 0 && v <= 1) return v;
-  if (v > 1) {
-    const over = v - 1;
-    if (over <= bandFraction) return 1 + over * magnet;
-    return 1 + bandFraction * magnet + (over - bandFraction);   // past band: 1:1
+// Parameters:
+//   MAGNET          fraction of input that passes through at peak
+//                   slowdown (0.15 = 85% slowdown)
+//   MAGNET_BAND_PX  width of the resistance zone on each side of
+//                   the canvas edge, in screen pixels (50 default)
+
+function rubberBandAt(v, magnet, preBand, postBand) {
+  // Two halves of the resistance zone, sized in canvas-fraction:
+  //   preBand  — strip INSIDE the canvas nearest the edge; resistance
+  //              ramps from 0 (canvas interior) up to peak at the
+  //              canvas edge.
+  //   postBand — strip OUTSIDE the canvas edge; resistance holds
+  //              strong at the edge then ramps down to free motion
+  //              at the post-band boundary.
+  //
+  // We split the asymmetry so the user feels:
+  //   • mild pull as they drag toward the edge (50px pre)
+  //   • strong resistance at the edge itself
+  //   • resistance continues for 150px past the edge
+  //   • then free 1:1 motion
+  //
+  // Default in editor.js: PRE_BAND_PX=50, POST_BAND_PX=150.
+  //
+  // The math: resistance is applied as a SIGNED OFFSET opposing the
+  // direction of cursor travel. At the canvas edge, the offset is
+  // at peak ((1-magnet) × total_band). Past the band, the offset
+  // saturates at that peak so motion is free 1:1.
+
+  const totalBand = preBand + postBand;
+  // Pick the closer edge.
+  const nearTop    = v < 0.5;
+  const edge       = nearTop ? 0 : 1;
+  const v_perp     = v - edge;       // signed distance from canvas edge
+  const a          = Math.abs(v_perp);
+
+  if (a === 0) {
+    // Exactly on the canvas edge — peak resistance.
+    const sign = nearTop ? -1 : +1;
+    return v - sign * (1 - magnet) * totalBand / 2;
   }
-  const over = -v;
-  if (over <= bandFraction) return -(over * magnet);
-  return -(bandFraction * magnet + (over - bandFraction));
+
+  // Inside the pre-band OR inside the post-band?
+  const inPre = nearTop ? (v < 0 && a <= preBand) : (v > 1 && a <= postBand && false)
+                  || (!nearTop ? false : false);
+  // Simpler: figure out which side of the edge we're on.
+  // If v < 0: we're past the TOP edge (only matters when nearTop).
+  // If v > 1: we're past the BOTTOM edge (only matters when !nearTop).
+  // If v ∈ [0, preBand]: we're INSIDE the pre-band near the TOP edge.
+  // If v ∈ [1-preBand, 1]: we're INSIDE the pre-band near the BOTTOM edge.
+
+  if (nearTop) {
+    // top edge territory: v ∈ [0, preBand) (pre-band) or v < 0 (post-band)
+    if (v >= 0 && v <= preBand) {
+      // pre-band: intensity ramps from 0 (at v=preBand) to 1 (at v=0)
+      const t = 1 - v / preBand;            // 0..1, peak at edge
+      const intensity = t * t * (3 - 2 * t);
+      const slow = intensity * (1 - magnet) * totalBand / 2;
+      // Slowdown is upward (toward smaller placementY → caps at 0)
+      return Math.max(0, v - slow);
+    }
+    if (v < 0 && -v <= postBand) {
+      // post-band past top edge.
+      const t = (-v) / postBand;
+      const intensity = t * t * (3 - 2 * t);
+      const slow = intensity * (1 - magnet) * totalBand / 2;
+      return v + slow;
+    }
+    return v;
+  }
+
+  // bottom edge territory: v ∈ [1-preBand, 1] or v > 1
+  if (v >= 1 - preBand && v <= 1) {
+    const t = (1 - v) / preBand;            // 0..1, peak at edge
+    const intensity = t * t * (3 - 2 * t);
+    const slow = intensity * (1 - magnet) * totalBand / 2;
+    return Math.min(1, v + slow);
+  }
+  if (v > 1 && v - 1 <= postBand) {
+    const t = (v - 1) / postBand;
+    const intensity = t * t * (3 - 2 * t);
+    const slow = intensity * (1 - magnet) * totalBand / 2;
+    return v - slow;
+  }
+  return v;
 }
 const MAGNET          = 0.15;
-let   MAGNET_BAND_PX  = 150;
+let   MAGNET_PRE_PX   = 50;
+let   MAGNET_POST_PX  = 150;
 // During a drag the user can pull a sprite or hitbox slightly past the
 // canvas edge (so they can frame a "partially behind a wall" silhouette).
 // On release any value that ended up outside `[0, 1]` is eased back to
@@ -451,21 +516,26 @@ function onSpriteDragMove(e) {
     const dxUnits = (e.clientX - state.drag.startX) / vpW();
     // Translate the screen-pixel band into canvas-fraction units so
     // it feels the same on phone (vpH=844) and desktop (vpH=720).
-    const bandFracY = MAGNET_BAND_PX / vpH();
-    const bandFracX = MAGNET_BAND_PX / vpW();
+    const bandPreY = MAGNET_PRE_PX  / vpH();
+    const bandPosY = MAGNET_POST_PX / vpH();
+    const bandPreX = MAGNET_PRE_PX  / vpW();
+    const bandPosX = MAGNET_POST_PX / vpW();
     // One-shot diagnostic so the user can confirm vpW/vpH are sane
     // numbers. Triggers once at the start of a drag; afterwards it's
     // quiet. Open the browser console to see it.
     if (!state._edgeResistDiag) {
       state._edgeResistDiag = true;
       console.log('[editor-drag] vpW=' + vpW() + ' vpH=' + vpH()
-        + ' MAGNET=' + MAGNET + ' bandY=' + bandFracY.toFixed(3)
-        + ' bandX=' + bandFracX.toFixed(3) + ' (' + MAGNET_BAND_PX + 'px)');
+        + ' MAGNET=' + MAGNET + ' preY=' + bandPreY.toFixed(3)
+        + ' postY=' + bandPosY.toFixed(3)
+        + ' preX=' + bandPreX.toFixed(3)
+        + ' postX=' + bandPosX.toFixed(3)
+        + ' (pre=' + MAGNET_PRE_PX + 'px post=' + MAGNET_POST_PX + 'px)');
     }
     const newPYraw = state.drag.startPlacementY + dyUnits;
     const newPXraw = state.drag.startPlacementX + dxUnits;
-    const newPY    = rubberBandAt(newPYraw, MAGNET, bandFracY);
-    const newPX    = rubberBandAt(newPXraw, MAGNET, bandFracX);
+    const newPY    = rubberBandAt(newPYraw, MAGNET, bandPreY, bandPosY);
+    const newPX    = rubberBandAt(newPXraw, MAGNET, bandPreX, bandPosX);
     // Second-by-second log when actively over-dragging — useful so
     // the user can see the resistance kicking in numerically.
     if (newPYraw < 0 || newPYraw > 1 || newPXraw < 0 || newPXraw > 1) {
