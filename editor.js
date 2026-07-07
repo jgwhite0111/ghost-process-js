@@ -74,8 +74,8 @@ function rubberBandAt(v, magnet, bandFraction) {
   if (over <= bandFraction) return -(over * magnet);
   return -(bandFraction * magnet + (over - bandFraction));
 }
-const MAGNET          = 0.3;
-let   MAGNET_BAND_PX  = 80;
+const MAGNET          = 0.15;
+let   MAGNET_BAND_PX  = 150;
 // During a drag the user can pull a sprite or hitbox slightly past the
 // canvas edge (so they can frame a "partially behind a wall" silhouette).
 // On release any value that ended up outside `[0, 1]` is eased back to
