@@ -52,9 +52,16 @@ function springBackOverdrag(kind, ref) {
   const tasks = [];
   if (kind === 'sprite') {
     if (!ref) return;
+    // Vertical over-drag spring-back.
     const py = ref.placementY;
     if (typeof py === 'number' && (py < 0 || py > 1)) {
       tasks.push({ set: v => { ref.placementY = v; }, from: py, to: clamp(py, 0, 1) });
+    }
+    // Horizontal over-drag spring-back — only meaningful if the user
+    // actually dragged horizontally (placementX exists).
+    const px = ref.placementX;
+    if (typeof px === 'number' && (px < 0 || px > 1)) {
+      tasks.push({ set: v => { ref.placementX = v; }, from: px, to: clamp(px, 0, 1) });
     }
   } else if (kind === 'hitbox') {
     const hb = ref; if (!hb) return;
@@ -194,6 +201,19 @@ function targetHFor(charConfig) {
   return vpH() * 0.85;
 }
 function placementXFor(charConfig, spriteW) {
+  // Continuous numeric placementX takes priority when present — it
+  // tracks the user's actual drag position. Falls back to the named
+  // slot dropdown otherwise so existing characters keep working.
+  if (typeof charConfig.placementX === 'number') {
+    // 0 = sprite's centre pinned at left edge of canvas
+    // 1 = sprite's centre pinned at right edge of canvas
+    // We centre the sprite on the fraction, but clamp so a half-width
+    // sprite never falls fully off-canvas.
+    const half = (spriteW || 0) / 2;
+    const minX = half;
+    const maxX = vpW() - half;
+    return clamp(vpW() * charConfig.placementX, minX, maxX);
+  }
   const pos = charConfig.position || 'center';
   if (pos === 'bottomright' && spriteW) return vpW() - 20 - spriteW / 2;
   switch (pos) {
@@ -331,6 +351,14 @@ function attachSpriteDrag(div, charConfig) {
     renderRight();
 
     const isResize = e.target.classList.contains('resize');
+    // Compute the current visual centre of the sprite as a fraction
+    // of vpW. This works whether the sprite uses continuous
+    // placementX or the legacy named position slot — we just look at
+    // the rendered centre. We snapshot it at mousedown so the first
+    // horizontal move is purely incremental (no jump) regardless of
+    // what positioning model the character uses today.
+    const r = computeSpriteRect(charConfig);
+    const startPX = (r && vpW() > 0) ? ((r.x + r.w / 2) / vpW()) : 0.5;
     state.drag = {
       kind: isResize ? 'resize' : 'move',
       targetKind: 'sprite',
@@ -339,6 +367,7 @@ function attachSpriteDrag(div, charConfig) {
       startX: e.clientX, startY: e.clientY,
       lastX: e.clientX, lastY: e.clientY,
       startPlacementY: typeof charConfig.placementY === 'number' ? charConfig.placementY : 0.97,
+      startPlacementX: startPX,
       startTargetH: typeof charConfig.targetH === 'number' ? charConfig.targetH : 0.85,
     };
     div.classList.add('dragging');
@@ -362,13 +391,15 @@ function onSpriteDragMove(e) {
     // sprite springs back inside (see onSpriteDragEnd).
     const newPY = state.drag.startPlacementY + (e.clientY - state.drag.startY) / vpH();
     charConfig.placementY = clamp(newPY, -EDGE_OVERDRAG, 1 + EDGE_OVERDRAG);
-    // Horizontal: free movement during drag. We deliberately do NOT
-    // overwrite the named position slot here — auto-snap-jumping the
-    // user to 'left'/'right' on a 40px wiggle was too aggressive and
-    // prevented precise placement. Horizontal slot is now only
-    // affected on release if the cursor strays far past the edges
-    // (see onSpriteDragEnd) and even then as a gentle hint, not a
-    // hard overwrite.
+    // Horizontal: free continuous movement during drag, just like
+    // vertical. Snap-back on release (handled in springBackOverdrag)
+    // if the user pushed past the canvas edge.
+    const newPX = state.drag.startPlacementX + (e.clientX - state.drag.startX) / vpW();
+    charConfig.placementX = clamp(newPX, -EDGE_OVERDRAG, 1 + EDGE_OVERDRAG);
+    // The legacy named position slot (`left`/`right`/`center`/`…`)
+    // conflicts with continuous placementX — clear it once numeric
+    // dragging starts so the inspector doesn't show a stale slot.
+    if ('position' in charConfig) delete charConfig.position;
   } else {
     // resize: vertical delta from the START of the drag (the notch
     // bottom), not the (post-rebuild) rect of the handle. startTargetH
@@ -402,25 +433,12 @@ function onSpriteDragEnd(e) {
   handle.removeEventListener('pointercancel', onSpriteDragEnd);
   handle.classList.remove('dragging');
   state.drag = null;
-  if (e?.clientX != null && draggedRef) {
-    // Horizontal slot nudge on release: only suggest a slot change if
-    // the released cursor is genuinely OFF the canvas edge by a
-    // noticeable margin. Inside the canvas → keep whatever the user
-    // typed in the inspector (don't overwrite their intent). The
-    // string slots (`left`/`right`) are coarse so this rarely fires;
-    // most precise work stays in the named `position` dropdown.
-    //
-    // Use the scaled visual width of the frame, not the logical vpW —
-    // the cursor is in screen pixels and the frame is rendered at a
-    // CSS scale (state.vpW is the LOGICAL canvas width).
-    const fr = frame.getBoundingClientRect();
-    const dxsx = e.clientX - fr.left;
-    const visW = fr.width;
-    let posChanged = false;
-    if (dxsx < -EDGE_OVERDRAG_PX) { draggedRef.position = 'left'; posChanged = true; }
-    else if (dxsx > visW + EDGE_OVERDRAG_PX) { draggedRef.position = 'right'; posChanged = true; }
-    if (posChanged) renderRight();   // reflect the new slot in the inspector
-  }
+  // Horizontal/vertical positioning is now entirely numeric
+  // (placementX / placementY) — the legacy `position` string slot
+  // was removed mid-drag in onSpriteDragMove, so the right inspector
+  // needs to be rebuilt to drop the position dropdown and show the
+  // placementX number field instead.
+  renderRight();
   springBackOverdrag('sprite', draggedRef);
   markDirty();
   // Re-render overlay once at the end so selection handles are correct.
@@ -528,8 +546,10 @@ function syncRightFromSelection() {
   const right = $('#right');
   if (state.selected.kind === 'sprite') {
     const c = state.selected.ref;
+    const px = right.querySelector('input[data-sync="placementX"]');
     const py = right.querySelector('input[data-sync="placementY"]');
     const th = right.querySelector('input[data-sync="targetH"]');
+    if (px) px.value = (typeof c.placementX === 'number') ? c.placementX.toFixed(3) : '';
     if (py) py.value = (typeof c.placementY === 'number') ? c.placementY.toFixed(3) : '';
     if (th) th.value = (typeof c.targetH === 'number') ? c.targetH.toFixed(3) : '';
   }
@@ -712,10 +732,20 @@ function renderRight() {
   if (state.selected?.kind === 'sprite') {
     const c = state.selected.ref;
     right.appendChild(makeField('header', `Sprite — ${c.id}`));
-    right.appendChild(makeField('position', 'Position slot',
-      makeSelect(c.position || 'center',
-        [['left','left'], ['center','center'], ['right','right'], ['bottomright','bottomright'], ['closeup','closeup']],
-        v => { c.position = v; markDirty(); renderAll(); })));
+    // Legacy named position slot — only meaningful when the sprite
+    // doesn't have a numeric placementX. If placementX is set, hide
+    // this dropdown to avoid confusion (the two are mutually
+    // exclusive — see onSpriteDragMove which deletes `position` on
+    // first numeric drag).
+    if (typeof c.placementX !== 'number') {
+      right.appendChild(makeField('position', 'Position slot',
+        makeSelect(c.position || 'center',
+          [['left','left'], ['center','center'], ['right','right'], ['bottomright','bottomright'], ['closeup','closeup']],
+          v => { c.position = v; delete c.placementX; markDirty(); renderAll(); })));
+    }
+    right.appendChild(makeField('placementX', 'placementX (0=left, 1=right)',
+      makeNumberInput(typeof c.placementX === 'number' ? c.placementX : 0.5,
+        v => { c.placementX = v; delete c.position; markDirty(); renderAll(); }, 0, 1, 0.01, 'placementX')));
     right.appendChild(makeField('placementY', 'placementY (0=top, 1=bottom)',
       makeNumberInput(typeof c.placementY === 'number' ? c.placementY : 0.97, v => { c.placementY = v; markDirty(); renderAll(); }, 0, 1, 0.01, 'placementY')));
     right.appendChild(makeField('targetH', 'targetH (fraction of canvas height)',
