@@ -32,16 +32,58 @@ const bgCtx = bgCanvas.getContext('2d');
 const overlay = $('#overlay');
 const frame = $('#canvas-frame');
 
-// ---------- drag edge / spring-back helpers ----------
+// ---------- drag edge helpers ----------
+//
+// Edge-resistance drag — the "few-ms" model the user described:
+// the very tip of the rubber-band lives in a tiny band right at
+// the canvas edge; outside that band the cursor drives placement
+// 1:1.
+//
+//   input delta to placement fraction = v ∈ [0,1]  :   output = v
+//   input crosses past the edge by `over` units   :
+//     • overdrag 0 ≤ d ≤ EDGE_BAND (default 0.05):
+//         throttle the next EDGE_BAND units of input by
+//         MAGNET (default 0.4) → output = edge + d * MAGNET
+//     • overdrag beyond that:
+//         throttle = 1 → output = input (free, no resistance)
+//
+// At the precise edge (d = 0), the user has to push 1 / MAGNET
+// (= 2.5×) cursor pixels for each unit of displacement past the
+// edge — i.e. a "few ms of pull" they described. After they pass
+// EDGE_BAND (= 5% of canvas) the gate gives way and they're free
+// to drag the sprite as far past the edge as they want, with no
+// further resistance, no clamp, no spring-back.
+//
+// Tunable:
+//   MAGNET      fraction of input that gets through the band
+//               (lower = stiffer initial push past edge)
+//   EDGE_BAND   how wide the resistance band is, as fraction of
+//               canvas (larger = a bigger "few ms" zone)
+// Example: MAGNET=0.4, EDGE_BAND=0.05
+//   cursor past edge by 5% of canvas:  spring passes 2% of canvas
+//   cursor past edge by 10% of canvas: 5% from the band, then free
+function rubberBandAt(v, magnet, edgeBand) {
+  if (v >= 0 && v <= 1) return v;
+  if (v > 1) {
+    const over = v - 1;
+    if (over <= edgeBand) return 1 + over * magnet;
+    return 1 + edgeBand * magnet + (over - edgeBand);   // past the band: free
+  }
+  const over = -v;
+  if (over <= edgeBand) return -(over * magnet);
+  return -(edgeBand * magnet + (over - edgeBand));
+}
+const MAGNET     = 0.4;
+const EDGE_BAND  = 0.05;
 // During a drag the user can pull a sprite or hitbox slightly past the
 // canvas edge (so they can frame a "partially behind a wall" silhouette).
 // On release any value that ended up outside `[0, 1]` is eased back to
 // the nearest in-bounds edge. The horizontal named-slot nudge is
 // deliberately conservative — most positioning goes through the named
 // `position` dropdown, not via fling-the-cursor gesture.
-const EDGE_OVERDRAG = 0.20;          // fraction of canvas dimension
-const EDGE_OVERDRAG_PX = 60;         // absolute pixel overdrag before a slot is suggested
-const SPRING_MS = 180;               // duration of release spring-back
+const EDGE_OVERDRAG = 0.20;          // fraction of canvas dimension (legacy; unused now that rubber-band is the model)
+const EDGE_OVERDRAG_PX = 60;         // absolute pixel overdrag before a slot is suggested (legacy)
+const SPRING_MS = 180;               // duration of release spring-back (legacy; spring-back is OFF)
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
 
@@ -187,9 +229,13 @@ window.addEventListener('resize', scaleFrameToFit);
 function vpW() { return state.vpW; }
 function vpH() { return state.vpH; }
 function placementYFor(charConfig) {
+  // placementY is ALWAYS a canvas-height fraction. 0 = top edge of
+  // canvas, 1 = bottom edge, >1 = past the bottom (sprite partially
+  // off-canvas below). The drag handler now allows values past the
+  // edge so the user can park a sprite partially off-canvas if they
+  // want — we treat those values as a fraction, not as raw pixels.
   if (typeof charConfig.placementY === 'number') {
-    const v = charConfig.placementY;
-    return (v >= 0 && v <= 1) ? vpH() * v : v;
+    return vpH() * charConfig.placementY;
   }
   return vpH() - 30;
 }
@@ -204,15 +250,16 @@ function placementXFor(charConfig, spriteW) {
   // Continuous numeric placementX takes priority when present — it
   // tracks the user's actual drag position. Falls back to the named
   // slot dropdown otherwise so existing characters keep working.
+  //
+  // placementX is the centre-X as a fraction of canvas width:
+  //   0 = sprite centre pinned at the left edge of the canvas
+  //   1 = sprite centre pinned at the right edge
+  //   <0 or >1 = partially / fully past the edge (allowed — the
+  //     drag handler rubber-bands past the edges symmetrically with
+  //     placementY; we do NOT clamp here so the user can place the
+  //     sprite partially off-canvas if they want).
   if (typeof charConfig.placementX === 'number') {
-    // 0 = sprite's centre pinned at left edge of canvas
-    // 1 = sprite's centre pinned at right edge of canvas
-    // We centre the sprite on the fraction, but clamp so a half-width
-    // sprite never falls fully off-canvas.
-    const half = (spriteW || 0) / 2;
-    const minX = half;
-    const maxX = vpW() - half;
-    return clamp(vpW() * charConfig.placementX, minX, maxX);
+    return vpW() * charConfig.placementX;
   }
   const pos = charConfig.position || 'center';
   if (pos === 'bottomright' && spriteW) return vpW() - 20 - spriteW / 2;
@@ -385,20 +432,48 @@ function onSpriteDragMove(e) {
   state.drag.lastY = e.clientY;
   const charConfig = state.drag.ref;
   if (state.drag.kind === 'move') {
-    // Vertical: allow a small over-drag past the canvas edges during
-    // the drag itself so the user can park the sprite partially off-
-    // screen for "coming from behind a wall" framings. On release the
-    // sprite springs back inside (see onSpriteDragEnd).
-    const newPY = state.drag.startPlacementY + (e.clientY - state.drag.startY) / vpH();
-    charConfig.placementY = clamp(newPY, -EDGE_OVERDRAG, 1 + EDGE_OVERDRAG);
-    // Horizontal: free continuous movement during drag, just like
-    // vertical. Snap-back on release (handled in springBackOverdrag)
-    // if the user pushed past the canvas edge.
-    const newPX = state.drag.startPlacementX + (e.clientX - state.drag.startX) / vpW();
-    charConfig.placementX = clamp(newPX, -EDGE_OVERDRAG, 1 + EDGE_OVERDRAG);
-    // The legacy named position slot (`left`/`right`/`center`/`…`)
-    // conflicts with continuous placementX — clear it once numeric
-    // dragging starts so the inspector doesn't show a stale slot.
+    // Edge-resistance drag: linear inside the canvas [0,1], soft
+    // rubber-band once the cursor (and thus placementY/placementX)
+    // strays past the edge.
+    //
+    // Inside [0,1]: dy_vp maps 1:1 → 1 unit of placementY per vpH
+    //                pixels of cursor movement.
+    // Past the edge: each additional placementY unit costs
+    //                EDGE_RESIST (≈ 2.5×) more cursor pixels — so
+    //                landing exactly on the edge is easy (small
+    //                gesture) but committing to "fully past the
+    //                edge" requires a deliberate, large gesture.
+    //
+    // We do NOT clamp, do NOT snap back, do NOT warp. Whatever
+    // placement the user parks on is what gets saved.
+    const dyUnits = (e.clientY - state.drag.startY) / vpH();
+    const dxUnits = (e.clientX - state.drag.startX) / vpW();
+    // One-shot diagnostic so the user can confirm vpW/vpH are sane
+    // numbers. Triggers once at the start of a drag; afterwards it's
+    // quiet. Open the browser console to see it.
+    if (!state._edgeResistDiag) {
+      state._edgeResistDiag = true;
+      console.log('[editor-drag] vpW=' + vpW() + ' vpH=' + vpH()
+        + ' MAGNET=' + MAGNET + ' EDGE_BAND=' + EDGE_BAND);
+    }
+    const newPYraw = state.drag.startPlacementY + dyUnits;
+    const newPXraw = state.drag.startPlacementX + dxUnits;
+    const newPY    = rubberBandAt(newPYraw, MAGNET, EDGE_BAND);
+    const newPX    = rubberBandAt(newPXraw, MAGNET, EDGE_BAND);
+    // Second-by-second log when actively over-dragging — useful so
+    // the user can see the resistance kicking in numerically.
+    if (newPYraw < 0 || newPYraw > 1 || newPXraw < 0 || newPXraw > 1) {
+      console.log('[editor-drag]',
+        'cursor Y raw=' + newPYraw.toFixed(3),
+        'rb Y=' + newPY.toFixed(3),
+        'cursor X raw=' + newPXraw.toFixed(3),
+        'rb X=' + newPX.toFixed(3));
+    }
+    charConfig.placementY = rubberBandAt(newPYraw, MAGNET, EDGE_BAND);
+    charConfig.placementX = rubberBandAt(newPXraw, MAGNET, EDGE_BAND);
+    // The legacy named position slot conflicts with continuous
+    // placementX — clear it once numeric dragging starts so the
+    // inspector doesn't show a stale slot.
     if ('position' in charConfig) delete charConfig.position;
   } else {
     // resize: vertical delta from the START of the drag (the notch
@@ -433,15 +508,14 @@ function onSpriteDragEnd(e) {
   handle.removeEventListener('pointercancel', onSpriteDragEnd);
   handle.classList.remove('dragging');
   state.drag = null;
-  // Horizontal/vertical positioning is now entirely numeric
-  // (placementX / placementY) — the legacy `position` string slot
-  // was removed mid-drag in onSpriteDragMove, so the right inspector
-  // needs to be rebuilt to drop the position dropdown and show the
-  // placementX number field instead.
-  renderRight();
-  springBackOverdrag('sprite', draggedRef);
+  // No spring-back. Whatever the user parked on (linear inside
+  // [0,1], rubber-banded past the edge) is the value that stays.
+  // Save the cursor position to discourage the legacy Position-slot
+  // dropdown showing a stale value, then live-sync the inspector
+  // number fields.
+  if (draggedRef && 'position' in draggedRef) renderRight();
+  else { syncRightFromSelection(); }
   markDirty();
-  // Re-render overlay once at the end so selection handles are correct.
   renderOverlay();
 }
 
@@ -1170,6 +1244,18 @@ async function main() {
   await loadStory();
   const ids = Object.keys(state.story.scenes || {});
   state.sceneId = ids.includes('alley') ? 'alley' : (ids[0] || null);
+  // If state.vpW / state.vpH were never initialised (this code path
+  // hit on a fresh editor load — setViewport is only called from the
+  // dropdown's onchange, which doesn't fire on first load), inherit
+  // the dropdown's currently-selected value. Without this, vpW() /
+  // vpH() return undefined and every drag movement is divided by
+  // undefined, producing NaN placement values that no one can read.
+  if (typeof state.vpW !== 'number' || typeof state.vpH !== 'number') {
+    const sel = document.getElementById('viewport-size');
+    const def = sel ? sel.value : '390x844';
+    const [dw, dh] = def.split('x').map(Number);
+    state.vpW = dw; state.vpH = dh;
+  }
   setViewport(state.vpW, state.vpH);
   setupViewportToolbar();
   setupMobileTabs();
