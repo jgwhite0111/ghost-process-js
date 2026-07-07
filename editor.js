@@ -32,6 +32,59 @@ const bgCtx = bgCanvas.getContext('2d');
 const overlay = $('#overlay');
 const frame = $('#canvas-frame');
 
+// ---------- drag edge / spring-back helpers ----------
+// During a drag the user can pull a sprite or hitbox slightly past the
+// canvas edge (so they can frame a "partially behind a wall" silhouette).
+// On release any value that ended up outside `[0, 1]` is eased back to
+// the nearest in-bounds edge. The horizontal named-slot nudge is
+// deliberately conservative — most positioning goes through the named
+// `position` dropdown, not via fling-the-cursor gesture.
+const EDGE_OVERDRAG = 0.20;          // fraction of canvas dimension
+const EDGE_OVERDRAG_PX = 60;         // absolute pixel overdrag before a slot is suggested
+const SPRING_MS = 180;               // duration of release spring-back
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+
+// Animate any over-dragged value back to its nearest in-bounds edge
+// over SPRING_MS. `kind === 'sprite'` handles placementY on `ref`;
+// `kind === 'hitbox'` handles hb.x, hb.y, hb.w, hb.h on `ref`.
+function springBackOverdrag(kind, ref) {
+  const tasks = [];
+  if (kind === 'sprite') {
+    if (!ref) return;
+    const py = ref.placementY;
+    if (typeof py === 'number' && (py < 0 || py > 1)) {
+      tasks.push({ set: v => { ref.placementY = v; }, from: py, to: clamp(py, 0, 1) });
+    }
+  } else if (kind === 'hitbox') {
+    const hb = ref; if (!hb) return;
+    if (hb.x < 0)
+      tasks.push({ set: v => { hb.x = v; }, from: hb.x, to: 0 });
+    else if (hb.x + hb.w > 1)
+      tasks.push({ set: v => { hb.x = 1 - hb.w; }, from: hb.x, to: 1 - hb.w });
+    if (hb.y < 0)
+      tasks.push({ set: v => { hb.y = v; }, from: hb.y, to: 0 });
+    else if (hb.y + hb.h > 1)
+      tasks.push({ set: v => { hb.y = 1 - hb.h; }, from: hb.y, to: 1 - hb.h });
+    if (hb.w > 1 - hb.x + 1e-6 && hb.x >= 0)
+      tasks.push({ set: v => { hb.w = v; }, from: hb.w, to: Math.max(0.02, 1 - hb.x) });
+    if (hb.h > 1 - hb.y + 1e-6 && hb.y >= 0)
+      tasks.push({ set: v => { hb.h = v; }, from: hb.h, to: Math.max(0.02, 1 - hb.y) });
+  }
+  if (tasks.length === 0) return;
+  const start = performance.now();
+  function step(now) {
+    const t = Math.min(1, (now - start) / SPRING_MS);
+    const k = easeOutCubic(t);
+    for (const tk of tasks) tk.set(tk.from + (tk.to - tk.from) * k);
+    redrawCanvasOnly();
+    syncRightFromSelection();
+    if (t < 1) requestAnimationFrame(step);
+    else renderOverlay();     // sync selection handles to final rect
+  }
+  requestAnimationFrame(step);
+}
+
 // ---------- API ----------
 async function loadStory() {
   const res = await fetch('/api/story');
@@ -303,20 +356,24 @@ function onSpriteDragMove(e) {
   state.drag.lastY = e.clientY;
   const charConfig = state.drag.ref;
   if (state.drag.kind === 'move') {
+    // Vertical: allow a small over-drag past the canvas edges during
+    // the drag itself so the user can park the sprite partially off-
+    // screen for "coming from behind a wall" framings. On release the
+    // sprite springs back inside (see onSpriteDragEnd).
     const newPY = state.drag.startPlacementY + (e.clientY - state.drag.startY) / vpH();
-    charConfig.placementY = Math.max(0, Math.min(1, newPY));
-    // Also let user drag horizontally to pick a position slot.
-    const absDx = e.clientX - state.drag.startX;
-    if (Math.abs(absDx) > 40) {
-      if (absDx > 0) charConfig.position = 'right';
-      else charConfig.position = 'left';
-      state.drag.startPlacementY = charConfig.placementY; // rebaseline
-      state.drag.startX = e.clientX;
-    }
+    charConfig.placementY = clamp(newPY, -EDGE_OVERDRAG, 1 + EDGE_OVERDRAG);
+    // Horizontal: free movement during drag. We deliberately do NOT
+    // overwrite the named position slot here — auto-snap-jumping the
+    // user to 'left'/'right' on a 40px wiggle was too aggressive and
+    // prevented precise placement. Horizontal slot is now only
+    // affected on release if the cursor strays far past the edges
+    // (see onSpriteDragEnd) and even then as a gentle hint, not a
+    // hard overwrite.
   } else {
     // resize: vertical delta from the START of the drag (the notch
     // bottom), not the (post-rebuild) rect of the handle. startTargetH
-    // is the height fraction at mousedown; we add dy/H to it.
+    // is the height fraction at mousedown; we add dy/H to it. Clamp
+    // stays tight — height has no "off canvas" natural meaning.
     const newTH = state.drag.startTargetH + (e.clientY - state.drag.startY) / vpH();
     charConfig.targetH = Math.max(0.05, Math.min(1.5, newTH));
   }
@@ -339,11 +396,32 @@ function onSpriteDragMove(e) {
 
 function onSpriteDragEnd(e) {
   const handle = state.drag.handle;
+  const draggedRef = state.drag.ref;
   handle.removeEventListener('pointermove', onSpriteDragMove);
   handle.removeEventListener('pointerup', onSpriteDragEnd);
   handle.removeEventListener('pointercancel', onSpriteDragEnd);
   handle.classList.remove('dragging');
   state.drag = null;
+  if (e?.clientX != null && draggedRef) {
+    // Horizontal slot nudge on release: only suggest a slot change if
+    // the released cursor is genuinely OFF the canvas edge by a
+    // noticeable margin. Inside the canvas → keep whatever the user
+    // typed in the inspector (don't overwrite their intent). The
+    // string slots (`left`/`right`) are coarse so this rarely fires;
+    // most precise work stays in the named `position` dropdown.
+    //
+    // Use the scaled visual width of the frame, not the logical vpW —
+    // the cursor is in screen pixels and the frame is rendered at a
+    // CSS scale (state.vpW is the LOGICAL canvas width).
+    const fr = frame.getBoundingClientRect();
+    const dxsx = e.clientX - fr.left;
+    const visW = fr.width;
+    let posChanged = false;
+    if (dxsx < -EDGE_OVERDRAG_PX) { draggedRef.position = 'left'; posChanged = true; }
+    else if (dxsx > visW + EDGE_OVERDRAG_PX) { draggedRef.position = 'right'; posChanged = true; }
+    if (posChanged) renderRight();   // reflect the new slot in the inspector
+  }
+  springBackOverdrag('sprite', draggedRef);
   markDirty();
   // Re-render overlay once at the end so selection handles are correct.
   renderOverlay();
@@ -384,11 +462,19 @@ function onHitboxDragMove(e) {
   const dx = e.clientX - state.drag.startX;
   const dy = e.clientY - state.drag.startY;
   if (state.drag.kind === 'move') {
-    hb.x = Math.max(0, Math.min(1 - hb.w, state.drag.startXFrac + dx / vpW()));
-    hb.y = Math.max(0, Math.min(1 - hb.h, state.drag.startYFrac + dy / vpH()));
+    // Allow modest over-drag past canvas edges; spring back inside on
+    // release (see onHitboxDragEnd → springBackOverdrag).
+    const newX = state.drag.startXFrac + dx / vpW();
+    const newY = state.drag.startYFrac + dy / vpH();
+    hb.x = clamp(newX, -EDGE_OVERDRAG, 1 + EDGE_OVERDRAG - Math.max(0.02, hb.w));
+    hb.y = clamp(newY, -EDGE_OVERDRAG, 1 + EDGE_OVERDRAG - Math.max(0.02, hb.h));
   } else {
-    hb.w = Math.max(0.02, Math.min(1 - hb.x, state.drag.startWFrac + dx / vpW()));
-    hb.h = Math.max(0.02, Math.min(1 - hb.y, state.drag.startHFrac + dy / vpH()));
+    // Resize is wall-anchored: width/height are clamped to keep the
+    // hitbox on-canvas in both directions. Tiny over-drag is allowed
+    // here too so a "drag past corner" doesn't visually snap to the
+    // edge mid-gesture.
+    hb.w = clamp(state.drag.startWFrac + dx / vpW(), 0.02, 1 + EDGE_OVERDRAG - hb.x);
+    hb.h = clamp(state.drag.startHFrac + dy / vpH(), 0.02, 1 + EDGE_OVERDRAG - hb.y);
   }
   const r = hitboxRectPx(hb);
   state.drag.handle.style.left = r.x + 'px';
@@ -401,11 +487,13 @@ function onHitboxDragMove(e) {
 
 function onHitboxDragEnd() {
   const handle = state.drag.handle;
+  const draggedRef = state.drag.ref;
   handle.removeEventListener('pointermove', onHitboxDragMove);
   handle.removeEventListener('pointerup', onHitboxDragEnd);
   handle.removeEventListener('pointercancel', onHitboxDragEnd);
   handle.classList.remove('dragging');
   state.drag = null;
+  springBackOverdrag('hitbox', draggedRef);
   markDirty();
   renderOverlay();
 }
