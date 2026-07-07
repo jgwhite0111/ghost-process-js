@@ -35,46 +35,47 @@ const frame = $('#canvas-frame');
 // ---------- drag edge helpers ----------
 //
 // Edge-resistance drag — the "few-ms" model the user described:
-// the very tip of the rubber-band lives in a tiny band right at
-// the canvas edge; outside that band the cursor drives placement
-// 1:1.
+// a small MAGNET right at the canvas edge gives way to free 1:1
+// motion once the user has committed to dragging past.
 //
-//   input delta to placement fraction = v ∈ [0,1]  :   output = v
-//   input crosses past the edge by `over` units   :
-//     • overdrag 0 ≤ d ≤ EDGE_BAND (default 0.05):
-//         throttle the next EDGE_BAND units of input by
-//         MAGNET (default 0.4) → output = edge + d * MAGNET
-//     • overdrag beyond that:
-//         throttle = 1 → output = input (free, no resistance)
+//   input v = the desired placement after cursor deltas from
+//             drag start, in fraction-of-canvas units. so
+//             v = 1 means "cursor at the bottom edge", v = 2
+//             means "cursor 100% of canvas-height past the bottom".
 //
-// At the precise edge (d = 0), the user has to push 1 / MAGNET
-// (= 2.5×) cursor pixels for each unit of displacement past the
-// edge — i.e. a "few ms of pull" they described. After they pass
-// EDGE_BAND (= 5% of canvas) the gate gives way and they're free
-// to drag the sprite as far past the edge as they want, with no
-// further resistance, no clamp, no spring-back.
+// Inside the canvas (v ∈ [0, 1])  :  output = v, 1:1 with cursor.
+//
+// Past the edge:
+//   • MAGNET_BAND_PX screen-pixels of cursor drag (default 40px,
+//     same on phone and desktop) = the resistance band.
+//   • Inside the band: every MAGNET_BAND_PX of cursor-past-edge
+//     input advances placement by MAGNET_BAND_PX * MAGNET. With
+//     MAGNET=0.4, the user has to drag 2.5× the cursor distance
+//     of the band to push placement all the way through the band.
+//   • Past the band: every further pixel of cursor-past-edge
+//     input advances placement by 1:1 — no resistance, no spring.
 //
 // Tunable:
-//   MAGNET      fraction of input that gets through the band
-//               (lower = stiffer initial push past edge)
-//   EDGE_BAND   how wide the resistance band is, as fraction of
-//               canvas (larger = a bigger "few ms" zone)
-// Example: MAGNET=0.4, EDGE_BAND=0.05
-//   cursor past edge by 5% of canvas:  spring passes 2% of canvas
-//   cursor past edge by 10% of canvas: 5% from the band, then free
-function rubberBandAt(v, magnet, edgeBand) {
+//   MAGNET          fraction of cursor pixels that pass through
+//                   the band (0.4 = 40%, lower = stickier edge)
+//   MAGNET_BAND_PX  width of the resistance band in screen pixels
+//
+// Conversion between screen pixels and placement fraction is done
+// by the drag handlers — this function only operates on
+// pre-converted cursor values, in canvas-fraction units.
+function rubberBandAt(v, magnet, bandFraction) {
   if (v >= 0 && v <= 1) return v;
   if (v > 1) {
     const over = v - 1;
-    if (over <= edgeBand) return 1 + over * magnet;
-    return 1 + edgeBand * magnet + (over - edgeBand);   // past the band: free
+    if (over <= bandFraction) return 1 + over * magnet;
+    return 1 + bandFraction * magnet + (over - bandFraction);   // past band: 1:1
   }
   const over = -v;
-  if (over <= edgeBand) return -(over * magnet);
-  return -(edgeBand * magnet + (over - edgeBand));
+  if (over <= bandFraction) return -(over * magnet);
+  return -(bandFraction * magnet + (over - bandFraction));
 }
-const MAGNET     = 0.4;
-const EDGE_BAND  = 0.05;
+const MAGNET          = 0.3;
+let   MAGNET_BAND_PX  = 80;
 // During a drag the user can pull a sprite or hitbox slightly past the
 // canvas edge (so they can frame a "partially behind a wall" silhouette).
 // On release any value that ended up outside `[0, 1]` is eased back to
@@ -448,18 +449,23 @@ function onSpriteDragMove(e) {
     // placement the user parks on is what gets saved.
     const dyUnits = (e.clientY - state.drag.startY) / vpH();
     const dxUnits = (e.clientX - state.drag.startX) / vpW();
+    // Translate the screen-pixel band into canvas-fraction units so
+    // it feels the same on phone (vpH=844) and desktop (vpH=720).
+    const bandFracY = MAGNET_BAND_PX / vpH();
+    const bandFracX = MAGNET_BAND_PX / vpW();
     // One-shot diagnostic so the user can confirm vpW/vpH are sane
     // numbers. Triggers once at the start of a drag; afterwards it's
     // quiet. Open the browser console to see it.
     if (!state._edgeResistDiag) {
       state._edgeResistDiag = true;
       console.log('[editor-drag] vpW=' + vpW() + ' vpH=' + vpH()
-        + ' MAGNET=' + MAGNET + ' EDGE_BAND=' + EDGE_BAND);
+        + ' MAGNET=' + MAGNET + ' bandY=' + bandFracY.toFixed(3)
+        + ' bandX=' + bandFracX.toFixed(3) + ' (' + MAGNET_BAND_PX + 'px)');
     }
     const newPYraw = state.drag.startPlacementY + dyUnits;
     const newPXraw = state.drag.startPlacementX + dxUnits;
-    const newPY    = rubberBandAt(newPYraw, MAGNET, EDGE_BAND);
-    const newPX    = rubberBandAt(newPXraw, MAGNET, EDGE_BAND);
+    const newPY    = rubberBandAt(newPYraw, MAGNET, bandFracY);
+    const newPX    = rubberBandAt(newPXraw, MAGNET, bandFracX);
     // Second-by-second log when actively over-dragging — useful so
     // the user can see the resistance kicking in numerically.
     if (newPYraw < 0 || newPYraw > 1 || newPXraw < 0 || newPXraw > 1) {
@@ -469,8 +475,8 @@ function onSpriteDragMove(e) {
         'cursor X raw=' + newPXraw.toFixed(3),
         'rb X=' + newPX.toFixed(3));
     }
-    charConfig.placementY = rubberBandAt(newPYraw, MAGNET, EDGE_BAND);
-    charConfig.placementX = rubberBandAt(newPXraw, MAGNET, EDGE_BAND);
+    charConfig.placementY = newPY;
+    charConfig.placementX = newPX;
     // The legacy named position slot conflicts with continuous
     // placementX — clear it once numeric dragging starts so the
     // inspector doesn't show a stale slot.
