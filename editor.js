@@ -57,8 +57,7 @@ const frame = $('#canvas-frame');
 //
 // Both snap zones have the same park-friendly width: within
 // SNAP_PX pixels of cursor travel past the canvas edge, the
-// sprite's edge stays glued to the canvas edge. Past SNAP_PX the
-// sprite breaks free and follows the cursor 1:1.
+// Edge-resistance snap for the Y axis.
 //
 // placementY in this codebase is the sprite's BOTTOM-edge Y as a
 // fraction of canvas height (NOT the centre — see placementYFor).
@@ -66,10 +65,21 @@ const frame = $('#canvas-frame');
 // width. Both functions below respect that, so the result of
 // snapping is exactly: sprite edge = canvas edge.
 //
-// NO spring-back, NO clamp, NO warp to adjacent edge. Whatever
-// value the user parks the cursor at is what gets saved. The
-// snap just makes the most user-friendly edge value the resting
-// state when the cursor is in the snap zone.
+// snapY now returns a value in [spriteH/vpH, 1] — i.e. snapping
+// is applied the moment the cursor is past the edge, NOT only
+// within SNAP_PX. Reasoning: the runtime silently clamps
+// placementY > 1 to 1 on render, AND the editor's canvas
+// preview is WYSIWYG-clamped to canvas edges. If we let drag
+// save values > 1, the drag handle and the sprite draw become
+// visually desynced from each other AND from the runtime
+// rendering. To keep the box and the sprite in lock-step, snap
+// returns clamped values once the cursor is past the edge. The
+// snap zone (SNAP_PX) still controls how aggressively the value
+// sticks once the cursor approaches the edge.
+//
+// To park a sprite beyond the canvas (e.g. for an animation
+// where it walks into frame later), edit placementY directly
+// via the inspector input on the right panel.
 //
 // Edge selection by axis:
 //   Y < 0.5 → user's cursor favours TOP edge.
@@ -79,18 +89,17 @@ const frame = $('#canvas-frame');
 const SNAP_PX = 50;  // snap-attached distance (px, 1:1 on phone/desktop).
 
 function snapY(v, spriteH, vpH, snapPx) {
-  // BOTTOM edge: sprite bottom = v * vpH.
-  //   past depth: (v - 1) * vpH. Snap while > 0 and < snapPx.
+  // BOTTOM edge: snap to v=1 once cursor is past the edge.
+  // Attaches at full value the moment cursor crosses canvas bottom.
   if (v > 1) {
     if ((v - 1) * vpH < snapPx) return 1;
-    return v;
+    return 1;  // extend snap-to-edge past the snap zone: keep handle glued to canvas bottom
   }
-  // TOP edge: sprite top = v * vpH - spriteH.
-  //   past depth (above canvas): -top. Snap while > 0 and < snapPx.
+  // TOP edge: snap to spriteH/vpH once cursor is past top.
   const topPx = v * vpH - spriteH;
   if (topPx < 0) {
     if (-topPx < snapPx) return spriteH / vpH;
-    return v;
+    return spriteH / vpH;  // extend snap-to-edge past the snap zone
   }
   return v;
 }
@@ -99,15 +108,15 @@ function snapX(v, spriteW, vpW, snapPx) {
   // placementX is centre; sprite's left = v*vpW - spriteW/2, right = +spriteW/2.
   const rightPx = v * vpW + spriteW / 2;
   const leftPx  = v * vpW - spriteW / 2;
-  // RIGHT edge: past depth = rightPx - vpW.
+  // RIGHT edge: snap to v=(vpW-spriteW/2)/vpW once cursor is past right.
   if (rightPx > vpW) {
     if (rightPx - vpW < snapPx) return 1 - spriteW / (2 * vpW);
-    return v;
+    return 1 - spriteW / (2 * vpW);  // extend snap-to-edge past snap zone
   }
-  // LEFT edge: past depth (negative leftPx).
+  // LEFT edge: snap to v=spriteW/(2*vpW) once cursor is past left.
   if (leftPx < 0) {
     if (-leftPx < snapPx) return spriteW / (2 * vpW);
-    return v;
+    return spriteW / (2 * vpW);  // extend snap-to-edge past snap zone
   }
   return v;
 }
