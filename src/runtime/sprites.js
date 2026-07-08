@@ -131,14 +131,26 @@ class CharacterSprite {
     // when set in story.json. Default scene-base uses canvasH - 30.
     placementY(canvasH) {
         if (this.character && typeof this.character.placementY === 'number') {
+            // placementY is a fraction (0..1) of canvasH. It
+            // represents where the sprite's BOTTOM edge lands on
+            // the canvas. Values < 0 or > 1 are valid — the
+            // editor lets you park a sprite past the edge so
+            // parts of it go off-canvas (e.g. cinematic closeups
+            // where the camera is "too close"). When the value
+            // is out of range, the runtime draws the sprite with
+            // the relevant part clipped by the canvas border
+            // (and the console gets a one-shot warning so the
+            // author can decide if it's intentional).
             const v = this.character.placementY;
-            // placementY is a fraction (0..1) of canvasH.
-            // v < 0 / v > 1 is treated as a corrupt value from the
-            // editor (e.g. dragging past the edge saves values like
-            // 1.109 or -0.05). Clamp to the valid range so the sprite
-            // still renders instead of going off-canvas silently.
-            if (v >= 0 && v <= 1) return canvasH * v;
-            return canvasH * Math.max(0, Math.min(1, v));
+            if ((v < 0 || v > 1) && !this._warnedOffCanvasY) {
+                console.warn(
+                    `[sprites] placementY=${v} on "${this.character.id || '?'}" in canvasH=${canvasH} is past the canvas edge. ` +
+                    `The sprite will be drawn with the relevant part clipped. ` +
+                    `If this is intentional (closeup / off-screen character), you can ignore this warning.`
+                );
+                this._warnedOffCanvasY = true;
+            }
+            return canvasH * v;
         }
         return canvasH - 30;
     }
@@ -151,12 +163,20 @@ class CharacterSprite {
         // honour that exact position. Falls back to the legacy named
         // position slot for characters that haven't been dragged yet.
         if (this.character && typeof this.character.placementX === 'number') {
+            // Same off-canvas behaviour as placementY: values
+            // < 0 or > 1 are valid (e.g. a character parked to
+            // the left of the canvas for a closeup). The console
+            // gets a one-shot warning.
             const v = this.character.placementX;
-            // Same clamp rule as placementY: out-of-range = corrupt
-            // editor value, snap to the valid range so the sprite
-            // still renders.
-            if (v >= 0 && v <= 1) return canvasW * v;
-            return canvasW * Math.max(0, Math.min(1, v));
+            if ((v < 0 || v > 1) && !this._warnedOffCanvasX) {
+                console.warn(
+                    `[sprites] placementX=${v} on "${this.character.id || '?'}" in canvasW=${canvasW} is past the canvas edge. ` +
+                    `The sprite will be drawn with the relevant part clipped. ` +
+                    `If this is intentional (closeup / off-screen character), you can ignore this warning.`
+                );
+                this._warnedOffCanvasX = true;
+            }
+            return canvasW * v;
         }
         // For 'bottomright' (jailbreak thug whose body runs to the right
         // edge of its 180px-wide source) we right-align against the

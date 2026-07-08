@@ -68,12 +68,13 @@ const frame = $('#canvas-frame');
 // snapY returns the snap-friendly edge value when the cursor is
 // within SNAP_PX of an edge, and the raw value otherwise — even
 // if the raw value is <0 or >1 (i.e. cursor parked past the
-// canvas edge). The runtime silently clamps out-of-range values
-// on render, and the editor's canvas preview mirrors that
-// clamp. So the drag handle follows the cursor 1:1 (incl. past
-// the edge), the canvas draw sits at the canvas edge, and the
-// saved value reflects what the user parked. WYSIWYG-on-render,
-// honest-on-read.
+// canvas edge). The runtime does NOT clamp out-of-range values
+// (v0.2.32+): the editor and the runtime both trust the saved
+// value and the canvas clips naturally at its border, with a
+// one-shot console warning. So the drag handle, the canvas
+// preview, and the in-game render all read from the same
+// placementX/placementY and disagree only at the canvas
+// border — not with each other. Honest-about-position.
 //
 // placementY in this codebase is the sprite's BOTTOM-edge Y as a
 // fraction of canvas height (NOT the centre — see placementYFor).
@@ -840,13 +841,13 @@ function renderRight() {
           [['left','left'], ['center','center'], ['right','right'], ['bottomright','bottomright'], ['closeup','closeup']],
           v => { c.position = v; delete c.placementX; markDirty(); renderAll(); })));
     }
-    right.appendChild(makeField('placementX', 'placementX (0=left, 1=right)',
+    right.appendChild(makeField('placementX', 'placementX (0=left, 1=right, off-canvas OK)',
       makeNumberInput(typeof c.placementX === 'number' ? c.placementX : 0.5,
-        v => { c.placementX = v; delete c.position; markDirty(); renderAll(); }, 0, 1, 0.01, 'placementX')));
-    right.appendChild(makeField('placementY', 'placementY (0=top, 1=bottom)',
-      makeNumberInput(typeof c.placementY === 'number' ? c.placementY : 0.97, v => { c.placementY = v; markDirty(); renderAll(); }, 0, 1, 0.01, 'placementY')));
+        v => { c.placementX = v; delete c.position; markDirty(); renderAll(); }, undefined, undefined, 0.01, 'placementX')));
+    right.appendChild(makeField('placementY', 'placementY (0=top, 1=bottom, off-canvas OK)',
+      makeNumberInput(typeof c.placementY === 'number' ? c.placementY : 0.97, v => { c.placementY = v; markDirty(); renderAll(); }, undefined, undefined, 0.01, 'placementY')));
     right.appendChild(makeField('targetH', 'targetH (fraction of canvas height)',
-      makeNumberInput(typeof c.targetH === 'number' ? c.targetH : 0.85, v => { c.targetH = v; markDirty(); renderAll(); }, 0.05, 1.5, 0.01, 'targetH')));
+      makeNumberInput(typeof c.targetH === 'number' ? c.targetH : 0.85, v => { c.targetH = v; markDirty(); renderAll(); }, 0.05, 3, 0.01, 'targetH')));
     right.appendChild(makeField('speaker', 'Speaker label',
       makeTextInput(c.speaker || '', v => { c.speaker = v; markDirty(); })));
     const scfg = (c.scenes || {})[state.sceneId];
