@@ -2,7 +2,16 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <!-- Pin the CSS viewport to the game design size (390px wide)
+         so the runtime renders identically on every device — iPhone,
+         S24, Pixel, etc. all see the same 390x844 layout the editor
+         previews on. Phones wider than 390 (S24 ~412, iPhone 14 Pro
+         ~393) get small centered letterbox bars on the sides;
+         phones narrower than 390 (rare today) get #game shrunk via
+         max-width:100vw in styles.css.
+         Playwright sets viewport size via CDP, bypassing this meta,
+         so existing test scripts remain valid. -->
+    <meta name="viewport" content="width=390, initial-scale=1, maximum-scale=1, user-scalable=no" />
     <title>GHOST//PROCESS</title>
     <link rel="stylesheet" href="styles.css" />
 </head>
