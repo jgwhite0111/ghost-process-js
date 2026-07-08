@@ -35,21 +35,29 @@ tree right now: status, what shipped, what's dirty, what's open.
 ### What's on disk (HEAD)
 
 ```
-HEAD = 1d47112 (v0.2.35 — pass-3 edge-green kill)
+HEAD = 8fbf5f4 (docs: LEGACY.md + Godot-remnant strip; editor.js:1144 .tres→.js fix)
 Branch: main
 Sync: in sync with origin/main
 ```
 
-Last 6 commits (all work on 2026-07-08):
+Last 7 commits (all work on 2026-07-08):
 
 ```
+8fbf5f4 docs: extract Godot-era history to LEGACY.md, strip remnants  ← new
+ddc2c8e handoff: initialize AI-HANDOFF.md for this repo               ← new
 1d47112 v0.2.35 — iterative edge-green kill (pass 3)
 cde14cb v0.2.34 — soften despill pass-2 (catch skin-leak green without nuking head)
 860e9d1 v0.2.33 — drop runtime's silent placementX/Y clamp (canvas clips naturally)
 499efce v0.2.32 — restore v0.2.28 drag behavior; drop v0.2.29/2.30/2.31 canvas-clamp split
 cf162c4 v0.2.31 — snap-to-edge clamps once cursor is past edge (now superseded)
-1306e81 v0.2.30 — fix editor drag handle clamp after v0.2.29
 ```
+
+The `8fbf5f4` and `ddc2c8e` commits are docs-only — no code changes
+(to the runtime, ink files, sprite pipeline, or hitbox math).
+The one code change inside `8fbf5f4` is a stale-file-extension
+fix in `editor.js:makePalettePicker` (`.tres` → `.js/.json`),
+which had been silently emptying the palette dropdown since
+the editor was ported.
 
 ### What those commits actually do (forensic)
 
@@ -297,14 +305,18 @@ sitting unused, `rm` them or move to `ink/_drafts/`.
 ### Suggested first read order for a new session
 
 1. This file (AI-HANDOFF.md).
-2. `git log --oneline -20` — what actually shipped.
-3. `git status -s` — what's dirty.
-4. `AGENTS.md` — project rules.
-5. `SPEC.md` — architecture.
-6. Run `python3 tools/test_full_chain.py` — confirm smoke test
+2. `LEGACY.md` — if you're tempted to look at how the previous
+   attempts did something, **start here**. The previous projects
+   are abandoned; `LEGACY.md` explains what was kept vs discarded
+   so you don't reach for them as a "switch back to" target.
+3. `git log --oneline -20` — what actually shipped.
+4. `git status -s` — what's dirty.
+5. `AGENTS.md` — project rules.
+6. `SPEC.md` — architecture.
+7. Run `python3 tools/test_full_chain.py` — confirm smoke test
    passes (this catches drift between the runtime contract and
    what the test exercises).
-7. Read `~/.hermes/skills/ghost-process-js-rebuild/SKILL.md`
+8. Read `~/.hermes/skills/ghost-process-js-rebuild/SKILL.md`
    for the procedural TL;DR of the latest 8 versions.
 
 ### External setup (machines that need this)
