@@ -209,9 +209,9 @@
     <div id="viewport-toolbar">
       <label>Viewport:</label>
       <select id="viewport-size">
-        <option value="390x844">Phone — 390×844 (game default)</option>
+        <option value="390x844">Phone — 390×844 (mobile)</option>
         <option value="390x600">Phone short — 390×600</option>
-        <option value="1280x720">Desktop — 1280×720</option>
+        <option value="1280x720" selected>Desktop — 1280×720 (game default)</option>
         <option value="1920x1080">Wide — 1920×1080</option>
         <option value="custom">Custom…</option>
       </select>
@@ -224,7 +224,11 @@
       <label style="font-size:11px;color:#6c7280">click canvas + drag = draw hitbox (tool)</label>
     </div>
     <div id="canvas-frame">
-      <canvas id="bg-canvas" width="390" height="844"></canvas>
+      <!-- Canvas default size = DESKTOP 1280x720. Editor state.vpW/vpH
+           default to the same so a fresh load matches the desktop
+           runtime viewport. Users targeting mobile can switch via the
+           viewport dropdown (Phone - 390x844). -->
+      <canvas id="bg-canvas" width="1280" height="720"></canvas>
       <div id="overlay"></div>
     </div>
   </main>

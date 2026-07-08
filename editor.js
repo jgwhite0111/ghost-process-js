@@ -17,9 +17,19 @@ const state = {
   spriteFrames: {},
   tool: 'select',
   dirty: false,
-  // Viewport (canvas size in pixels — independent of on-screen CSS scale)
-  vpW: 390,
-  vpH: 844,
+  // Viewport (canvas size in pixels — independent of on-screen CSS
+  // scale). Defaults to DESKTOP 1280×720 because that's the
+  // PlayStation-style window the desktop runtime renders at and
+  // the one the user is most likely to be testing against. Mobile
+  // is reachable via the viewport dropdown (Phone — 390×844).
+  //
+  // IMPORTANT: editor and runtime MUST agree on the meaning of
+  // placement values. The runtime clamps out-of-range [0,1]
+  // fraction values to canvasH / 0 (v0.2.27/v0.2.28 — see
+  // src/runtime/sprites.js). The editor preview also clamps so
+  // that what you see matches what the runtime will draw.
+  vpW: 1280,
+  vpH: 720,
   // Currently-active drag state. We never re-render the overlay
   // mid-drag; instead we mutate the handle element directly so pointer
   // events keep firing on it.
@@ -249,6 +259,23 @@ function placementXFor(charConfig, spriteW) {
     default:           return vpW() * 0.50;
   }
 }
+// Match the runtime's clamp behaviour (v0.2.27/v0.2.28) so the
+// editor preview shows what the runtime will actually draw. The
+// drag handler still SAVES raw unclamped values (e.g. 1.085) so
+// the user can park a sprite past the edge during editing — the
+// clamp only affects the visual preview and the drag overlay, not
+// what gets persisted to story.json.
+function clampPlacementForPreview(p, vp) {
+  // The runtime treats out-of-range fraction values (>2 or <-2) as
+  // raw pixel coordinates, then clamps to [0, vp]. We mirror that
+  // here so the editor preview matches.
+  if (p < -2 || p > 2) {
+    // Treat as raw pixel value, clamped to [0, vp]
+    return Math.max(0, Math.min(vp, p));
+  }
+  // Fraction — clamp to [0, 1] of viewport
+  return vp * Math.max(0, Math.min(1, p));
+}
 function computeSpriteRect(charConfig) {
   const img = state.spriteFrames[charConfig.id + '/' + state.sceneId];
   if (!img) return null;
@@ -257,8 +284,11 @@ function computeSpriteRect(charConfig) {
   if (img.width * scale > maxW) scale = maxW / img.width;
   const w = img.width * scale;
   const h = img.height * scale;
-  const cx = placementXFor(charConfig, w);
-  const cy = placementYFor(charConfig);
+  // Apply runtime clamp to match what the runtime will draw.
+  const rawY = placementYFor(charConfig);
+  const rawX = placementXFor(charConfig, w);
+  const cy = clampPlacementForPreview(rawY / vpH(), vpH());
+  const cx = clampPlacementForPreview(rawX / vpW(), vpW());
   return { x: cx - w / 2, y: cy - h, w, h };
 }
 function hitboxRectPx(hb) {
