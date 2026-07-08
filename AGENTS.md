@@ -87,7 +87,6 @@ Run before claiming any task is done so the next chat picks up cleanly:
 ```bash
 pkill -f "node server.js" 2>/dev/null
 cd /Users/jwhite/ghost-process-js
-rm -rf .godot  # none here — placeholder
 npm start &   # verify server boots
 git status    # expect clean (or intentional uncommitted)
 ```

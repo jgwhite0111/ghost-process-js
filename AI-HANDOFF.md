@@ -251,25 +251,25 @@ sitting unused, `rm` them or move to `ink/_drafts/`.
 
 ### What's actually built (inventory — verify against disk)
 
-- `editor.html`, `editor.js`, `boot.js`, `index.html` — page-rendering
-  + editor + main game entry.
-- `src/runtime/*.js` — canvas, sprites, hitbox, dialogue, tasks,
-  audio, music, scene-graph, runtime-phaser.
-- `src/ink-loader.js`, `src/dialogue-panel.js` — InkJS integration.
+- `README.md` — quick start.
+- `SPEC.md` — architecture spec.
+- `AGENTS.md` — working rules for AI agents.
+- `AI-HANDOFF.md` — most recent session's state.
+- `LEGACY.md` — historical context for the abandoned `~/ghost-process-98/`
+  and `~/ghost-process/` projects. Read this if you're tempted to
+  "look at how the previous attempt did it" — they're abandoned,
+  not alternative stacks.
 - `ink/*.ink` — Ink story sources (10 files now, 4 of them
   potentially newly added in this session).
 - `tools/gen_asset.py`, `tools/dither_*.js`, `tools/test_*.py`,
-  `tools/palettes_to_godot.py` — content pipeline + tests.
+  `tools/palettes.py` — content pipeline + tests.
 - `assets/backgrounds/`, `assets/sprites/`, `assets/portraits/`,
   `assets/palettes/`, `assets/fonts/` — content.
 - `assets/backgrounds/_deleted/`, `assets/sprites/_deleted/` —
   archive directories (not committed; verify contents match deleted
   entries).
-- `vendor/` — Phaser, InkJS, etc. (TRACKED per SPEC.md §89).
+- `vendor/` — InkJS (TRACKED per SPEC.md §89).
 - `boot.js`, `index.html` — Express routes / static serving.
-- `SPEC.md` — architecture spec.
-- `AGENTS.md` — working rules for AI agents.
-- `README.md` — project README.
 
 ### Architecture so you don't re-design the same thing
 

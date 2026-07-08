@@ -55,14 +55,12 @@ DOM CSS overlay (`.scanlines` in `styles.css`); the canvas uses
 
 ---
 
-## Rollback
+## Historical context
 
-The two prior projects remain on disk and can be picked up at any time:
-
-```bash
-cd ~/ghost-process-98    # JS prototype with 34-scene story.json (different stack)
-cd ~/ghost-process       # Godot project; git tag pre-gdscript-refactor
-```
-
-The v0.2 / Phaser-era commits are also still in this repo's git
-history if you want to compare the engine approach.
+Two prior attempts at this project (`~/ghost-process-98/` and
+`~/ghost-process/`) are abandoned and live on disk as reference
+material. They are **not** alternative stacks, **not** parallel
+projects, and **not** "what to switch back to". See
+[`LEGACY.md`](./LEGACY.md) for the full timeline and what was
+kept vs discarded. The Phaser 3 era of this repo is also in
+the git history (`git log --grep="phaser"`) for comparison.

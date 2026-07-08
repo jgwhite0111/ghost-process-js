@@ -3,39 +3,57 @@
 Status: v0.2 in progress — Phaser removed, vanilla-JS engine ships.
 Owner: jwhite
 Created: 2026-07-04
-Replaces: `~/ghost-process-98/` (pre-Godot JS prototype) + `~/ghost-process/` (abandoned Godot 4.7 refactor)
+
+For historical context (the abandoned `~/ghost-process-98/` and
+`~/ghost-process/` projects that share a name), see
+[`LEGACY.md`](./LEGACY.md). This SPEC is for the current
+vanilla-JS implementation only.
 
 ---
 
 ## 1. Why this exists
 
-The project went through three false starts:
+The current implementation is the third attempt at this project.
+See [`LEGACY.md`](./LEGACY.md) for the full timeline. Briefly:
 
-1. **`~/ghost-process-98/`** — pre-Godot JS prototype. `story.json`-driven, point-and-click hitboxes, DOM-only renderer, 34 scenes but no real sprite compositing and an inconsistent art style.
+1. **`~/ghost-process-98/`** — abandoned DOM-only prototype. 34
+   scenes, point-and-click hitboxes, no real sprite compositing,
+   inconsistent art style.
+2. **`~/ghost-process/`** — abandoned alternative engine attempt.
+   Strong asset pipeline (palettes, 16-color dither, character
+   sprite sheets) and a codified style bible. Bogged down in
+   engine-specific deployment issues.
+3. **`~/ghost-process-js/` v0.1 (Phaser 3 era)** — initial Phaser
+   3 + InkJS + plain JS attempt. Phaser's scene lifecycle, mid-
+   transition bugs, "ran out of content" errors on the Ink runner,
+   and scene-stacking quirks cost more debugging time than the
+   renderer itself saved. **v0.2 dropped Phaser**; everything
+   UI/sprite/dialogue is now plain JavaScript.
 
-2. **`~/ghost-process/`** — Godot 4.7 Mono project with C# + Ink + FluidSynth MIDI. Strong asset pipeline (palettes, PC-98 shader, character sprite sheets), mature Android sprite + idle animation, and `AGENTS.md` rules that codify "mature PC-98 cyberpunk, no moe, no figures baked into backgrounds." Bogged down in Mono WASM, Inkgd unmaintained, FluidSynth unbrowserable.
-
-3. **`~/ghost-process-js/` v0.1 (Phaser 3 era)** — initially built on Phaser 3 + InkJS + plain JS. Phaser's scene lifecycle, mid-transition bugs, "ran out of content" errors on the Ink runner mid-transition, and scene-stacking quirks were costing more time than the renderer itself saved. **v0.2 dropped Phaser**; everything UI/sprite/dialogue is now plain JavaScript.
-
-What we kept:
+What we kept (from the abandoned projects):
 
 | Carried over | From |
 |---|---|
 | `story.json` as single source of truth | v0.1 |
 | InkJS for branching dialogue | v0.1 |
-| PC-98 palette + dither look (CSS overlay + pixelated canvas) | Godot `AGENTS.md` |
-| 16-frame idle sprites per character | Godot sprite pipeline |
-| 7 scenes: intro → cold_open → alley → chase → corridor → jailbreak → eidolon_return | v0.98 + v0.1 |
-| 3 MP3 audio tracks (pre-rendered via FluidSynth from the Godot project) | Godot |
-| Madou Futo Maru + Nouveau IBM typography | Godot |
+| PC-98 palette + 16-color dither look | previous attempt's pipeline |
+| 16-frame idle sprites per character | previous attempt's pipeline |
+| 7-scene outline (intro → cold_open → … → jailbreak) | v0.98 + v0.1 |
+| 3 MP3 audio tracks (pre-rendered MIDI) | previous attempt |
+| Pixel-serif typography (Madou Futo Maru + Nouveau IBM) | previous attempt |
 | Data-driven scene config (bg, music, characters, hitboxes) | v0.98 |
+| Mature-PC-98 style bible (no moe, no figures in BG) | previous attempt's AGENTS.md |
 
-What we discarded:
+What we discarded (and why):
 
-- Phaser 3 (scene lifecycle, scene-stacking, post-fx pipeline) — replaced by a vanilla-JS engine in `src/runtime/`
-- Godot scene files, Mono, .NET, FluidSynth
-- The hand-rolled DOM renderer from v0.98 (we now use a single `<canvas>`)
-- The Blade Runner-cinematic style backgrounds from v0.98 (figures baked in)
+- Phaser 3 (scene lifecycle, scene-stacking, post-fx pipeline) —
+  replaced by a vanilla-JS engine in `src/runtime/`
+- The previous engine's runtime requirements — replaced by plain
+  JS + WebAudio
+- The hand-rolled DOM renderer from v0.98 (we now use a single
+  `<canvas>`)
+- The Blade Runner-cinematic style backgrounds from v0.98
+  (figures baked in)
 
 ---
 
@@ -245,7 +263,7 @@ EXTERNAL has(item_id)
 
 1. CSS overlay `.scanlines` on the body — a 1px-on/1px-off repeating gradient with `mix-blend-mode: multiply`. This is the signature interlace look. `body.no-scanlines .scanlines { display: none; }` toggles it.
 2. `<canvas image-rendering: pixelated>` — nearest-neighbor scaling so 640×480 stays crisp at any viewport size.
-3. Background plates are pre-quantized to the 16-color palette at generation time (this happens in the Godot `gen_asset.py` pipeline; in v0.2 we run it offline and ship the PNGs as-is).
+3. Background plates are pre-quantized to the 16-color palette at generation time. Backgrounds are generated through the Minimax image model with palette-aware prompts (see `~/.hermes/skills/pc98-asset-generation-pipeline/`); the slot map (6 lighting + 8 identity + 2 accent) is canonical to this repo and visible in every `assets/palettes/*.js`. In v0.2 the pipeline is run offline and the pre-quantized PNGs are shipped as-is.
 
 Adding a GPU shader for live Bayer dither is a v0.3+ optimization. The visual fidelity is identical at the source-asset level; what changes is what happens when the player resizes the window or zooms.
 
@@ -259,7 +277,7 @@ Idle animations in v0.2 loop the 16-frame sheet at 4-6 fps while the speaker is 
 
 `src/runtime/music.js` — `MusicHandler`. Single Audio instance per filename, preloaded once via `Runtime.loadAudio`. On `play(filename, baseVolume, fadeMs)` the handler ramps the new track from 0 → baseVolume; if a previous track was playing, it ramps the previous one to 0 in parallel (crossfade), then pauses it. The same singleton persists across scene transitions so crossfades can span boundaries.
 
-MP3s are pre-rendered at build time (see `tools/render-midi.sh` from the Godot project). MIDIs are source of truth; `.mp3` is what the browser plays.
+MP3s are pre-rendered at build time (see `tools/render-midi.sh` in this repo). MIDIs are source of truth; `.mp3` is what the browser plays.
 
 ---
 
@@ -279,7 +297,7 @@ Out of scope for v0.2. v1 had `editor.html` + `editor.js` for browser-based scen
 - 2 fonts: `nouveau_ibm.ttf` (UI/dialogue), `madou-futo-maru.ttf` (titles, "PRESS START").
 - 7 item icons in `assets/items/`.
 
-### 8.2 Style bible (carried over from Godot `AGENTS.md`)
+### 8.2 Style bible (carried over from the previous attempt's AGENTS.md)
 
 > **Mature proportions.** No moe. No anime cuteness. No big dough eyes, no tiny chins, no oversized heads on small bodies, no "kawaii" expressions. Characters must look like adults under stress. Reference: Snatcher, Policenauts, Brandish, Rune Soldier.
 
@@ -326,24 +344,33 @@ Each phase is a `git commit` so rollback is one command.
 
 ---
 
-## 11. Migration path from old projects
+## 11. Migration path from previous attempts
 
-### From `~/ghost-process-98/`
+This section is kept for the historical record. **All the
+"migration" work referenced here was completed during the v0.1
+→ v0.2 transition and is not ongoing work.** See
+[`LEGACY.md`](./LEGACY.md) for the current state of the old
+projects (abandoned, on disk only as reference).
+
+### From `~/ghost-process-98/` (DOM-only prototype)
 
 - `server.js` — already ported, kept verbatim.
 - `game.hitbox.js`, `game.inventory.js` — ported as `src/runtime/hitbox.js` and `src/inventory.js` (no engine deps).
 - `story.json` SCENE STRUCTURE ported; backgrounds and sprite art regenerated.
 
-### From `~/ghost-process/` (Godot)
+### From `~/ghost-process/` (previous engine attempt)
 
 - `AGENTS.md` rules ported to this repo's `AGENTS.md`.
 - 3 MP3 audio tracks pre-rendered via `tools/render-midi.sh` (FluidSynth → MP3).
-- 7 background plates regenerated via `gen_asset.py` (one per scene).
+- 7 background plates regenerated via the asset-generation pipeline (one per scene).
 - Android + Thug character sprites: base image regenerated, talking animation extracted as 16-frame PNG sequences (`idle_01.png` ... `idle_16.png`).
 
 ### Old projects
 
-- **Keep them.** Rollback path: `cd ~/ghost-process-98 && cd ~/ghost-process && git status`.
+- **Keep them as reference, not as rollback.** The old projects
+  are not maintained and not on a current stack. Reading them is
+  fine; using them as a "switch back to" target is not. See
+  [`LEGACY.md`](./LEGACY.md) for the full reasoning.
 
 ---
 

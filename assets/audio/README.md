@@ -25,7 +25,7 @@ three options:
 ### Option A (current): Pre-render MIDI → MP3 via FluidSynth
 
 - **Tool:** `tools/render-midi.sh` (calls `fluidsynth` + `ffmpeg`).
-- **Runtime cost:** Plain MP3. Phaser plays it like any other audio asset.
+- **Runtime cost:** Plain MP3. The runtime's `MusicHandler` plays it via `HTMLAudioElement` with manual volume ramps for crossfading.
 - **Pros:** Simple runtime, autoplay-friendly, no extra JS dependency,
   predictable timing, supports `loop` and `seek` natively.
 - **Cons:** ~2 MB of audio per scene regardless of length. Loses
@@ -60,10 +60,11 @@ three options:
 
 ## Recommendation
 
-**Stay on Option A for v1.** It matches what the previous Godot project
-did (`AudioBootstrap.cs` cached FluidSynth-rendered MP3s and played them
-via `AudioStreamMP3`), the music already sounds correct in the browser,
-and we don't yet have Ink scenes that need live music control.
+**Stay on Option A for v1.** It matches what the previous attempt
+did (cached FluidSynth-rendered MP3s at build time and shipped
+the cached audio for runtime playback), the music already sounds
+correct in the browser, and we don't yet have Ink scenes that
+need live music control.
 
 **Move to Option B when** any of these becomes true:
 - A scene needs `loop` with a beat-aligned seam (FluidSynth gets free
@@ -89,9 +90,9 @@ Requires `fluidsynth` (Homebrew: `brew install fluid-synth`) and
 ## Provenance
 
 - `alley_confrontation.mid` / `clinic_tension.mid` — sourced from the
-  previous Godot project at `~/ghost-process/audio/`. Originally
-  composed with the SC-55-style patch list (channel 10 drums, CC#91
-  reverb, CC#1 modulation).
+  previous attempt's audio assets at `~/ghost-process/audio/`.
+  Originally composed with the SC-55-style patch list (channel 10
+  drums, CC#91 reverb, CC#1 modulation).
 - `sc55.sf2` — `VintageDreamsWaves-v2.sf2` from the Homebrew
   `fluid-synth` formula. General MIDI compatible, free for any use.
   **Not** a true Roland SC-55 ROM; we use it as a stand-in. For

@@ -1,7 +1,7 @@
 // assets/palettes/alley.js
 //
 // PC-98 16-colour scene palette for the alley chase and backstreet scenes.
-// Slot map (matches tools/palettes.py in the Godot-era pipeline):
+// Slot map (matches the canonical slot definitions in SPEC.md / assets/palettes/*.js):
 //   [0..5]   LIGHTING — varies per scene
 //   [6..10]  IDENTITY — stable across all scenes (sash, hair, gold, skin, scar)
 //   [11..13] ACCENT  — varies per scene (neon, warning, alert)

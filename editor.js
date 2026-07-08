@@ -1141,10 +1141,10 @@ async function makeBgPicker(sc) {
 async function makePalettePicker(sc) {
   const sel = document.createElement('select');
   const files = await listDir('assets/palettes').catch(() => []);
-  const tres = files.filter(f => /\.tres$/.test(f));
+  const paletteFiles = files.filter(f => /\.(js|json)$/.test(f));
   const noBg = document.createElement('option'); noBg.value = ''; noBg.textContent = '— none —'; sel.appendChild(noBg);
-  for (const f of tres) {
-    const o = document.createElement('option'); o.value = f.replace(/\.tres$/, ''); o.textContent = f; sel.appendChild(o);
+  for (const f of paletteFiles) {
+    const o = document.createElement('option'); o.value = f.replace(/\.(js|json)$/, ''); o.textContent = f; sel.appendChild(o);
   }
   sel.value = sc.bgPalette || '';
   sel.onchange = () => { sc.bgPalette = sel.value || null; markDirty(); };
