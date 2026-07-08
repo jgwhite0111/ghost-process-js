@@ -65,21 +65,27 @@ const frame = $('#canvas-frame');
 // width. Both functions below respect that, so the result of
 // snapping is exactly: sprite edge = canvas edge.
 //
-// snapY now returns a value in [spriteH/vpH, 1] — i.e. snapping
-// is applied the moment the cursor is past the edge, NOT only
-// within SNAP_PX. Reasoning: the runtime silently clamps
-// placementY > 1 to 1 on render, AND the editor's canvas
-// preview is WYSIWYG-clamped to canvas edges. If we let drag
-// save values > 1, the drag handle and the sprite draw become
-// visually desynced from each other AND from the runtime
-// rendering. To keep the box and the sprite in lock-step, snap
-// returns clamped values once the cursor is past the edge. The
-// snap zone (SNAP_PX) still controls how aggressively the value
-// sticks once the cursor approaches the edge.
+// snapY returns the snap-friendly edge value when the cursor is
+// within SNAP_PX of an edge, and the raw value otherwise — even
+// if the raw value is <0 or >1 (i.e. cursor parked past the
+// canvas edge). The runtime silently clamps out-of-range values
+// on render, and the editor's canvas preview mirrors that
+// clamp. So the drag handle follows the cursor 1:1 (incl. past
+// the edge), the canvas draw sits at the canvas edge, and the
+// saved value reflects what the user parked. WYSIWYG-on-render,
+// honest-on-read.
 //
-// To park a sprite beyond the canvas (e.g. for an animation
-// where it walks into frame later), edit placementY directly
-// via the inspector input on the right panel.
+// placementY in this codebase is the sprite's BOTTOM-edge Y as a
+// fraction of canvas height (NOT the centre — see placementYFor).
+// placementX is the sprite's centre X as a fraction of canvas
+// width. Both functions below respect that, so the result of
+// snapping is exactly: sprite edge = canvas edge.
+//
+// NO spring-back, NO clamp, NO warp to adjacent edge. The snap
+// only kicks in within SNAP_PX of the edge so the user gets a
+// sticky feel when they're close to the edge but the value still
+// tracks when they're far from it (in any direction, including
+// past the edge).
 //
 // Edge selection by axis:
 //   Y < 0.5 → user's cursor favours TOP edge.
@@ -89,17 +95,16 @@ const frame = $('#canvas-frame');
 const SNAP_PX = 50;  // snap-attached distance (px, 1:1 on phone/desktop).
 
 function snapY(v, spriteH, vpH, snapPx) {
-  // BOTTOM edge: snap to v=1 once cursor is past the edge.
-  // Attaches at full value the moment cursor crosses canvas bottom.
+  // BOTTOM edge: snap to v=1 within snapPx past the edge.
   if (v > 1) {
     if ((v - 1) * vpH < snapPx) return 1;
-    return 1;  // extend snap-to-edge past the snap zone: keep handle glued to canvas bottom
+    return v;  // cursor far past edge: save raw value
   }
-  // TOP edge: snap to spriteH/vpH once cursor is past top.
+  // TOP edge: snap to spriteH/vpH within snapPx past top.
   const topPx = v * vpH - spriteH;
   if (topPx < 0) {
     if (-topPx < snapPx) return spriteH / vpH;
-    return spriteH / vpH;  // extend snap-to-edge past the snap zone
+    return v;  // cursor far past top: save raw value
   }
   return v;
 }
@@ -108,15 +113,15 @@ function snapX(v, spriteW, vpW, snapPx) {
   // placementX is centre; sprite's left = v*vpW - spriteW/2, right = +spriteW/2.
   const rightPx = v * vpW + spriteW / 2;
   const leftPx  = v * vpW - spriteW / 2;
-  // RIGHT edge: snap to v=(vpW-spriteW/2)/vpW once cursor is past right.
+  // RIGHT edge: snap within snapPx past right.
   if (rightPx > vpW) {
     if (rightPx - vpW < snapPx) return 1 - spriteW / (2 * vpW);
-    return 1 - spriteW / (2 * vpW);  // extend snap-to-edge past snap zone
+    return v;  // cursor far past right: save raw value
   }
-  // LEFT edge: snap to v=spriteW/(2*vpW) once cursor is past left.
+  // LEFT edge: snap within snapPx past left.
   if (leftPx < 0) {
     if (-leftPx < snapPx) return spriteW / (2 * vpW);
-    return spriteW / (2 * vpW);  // extend snap-to-edge past snap zone
+    return v;  // cursor far past left: save raw value
   }
   return v;
 }
@@ -268,11 +273,15 @@ function placementXFor(charConfig, spriteW) {
     default:           return vpW() * 0.50;
   }
 }
-// Match the runtime's clamp behaviour (v0.2.27/v0.2.28) so the
-// canvas preview shows what the runtime will actually draw. The
-// drag handle itself follows the user's cursor 1:1 (raw rect)
-// so they can park off the edge — the clamp only affects what
-// gets drawn on the canvas, not what gets persisted to story.json.
+// On-canvas rect for a sprite at its current placement values.
+// Returns RAW (no clamp). The drag overlay (orange dashed box)
+// and the canvas draw both use this raw rect so they move
+// together 1:1 with the cursor — including past the canvas
+// edge, where the canvas's own clipping (canvas.drawImage to
+// outside-frame geometry) decides what is visible.
+//
+// placementYFor / placementXFor already return px values, NOT
+// fractions — do not multiply by vpW / vpH here.
 function computeSpriteRect(charConfig) {
   const img = state.spriteFrames[charConfig.id + '/' + state.sceneId];
   if (!img) return null;
@@ -281,31 +290,9 @@ function computeSpriteRect(charConfig) {
   if (img.width * scale > maxW) scale = maxW / img.width;
   const w = img.width * scale;
   const h = img.height * scale;
-  // Return RAW (unclamped) on-canvas rect. Out-of-range
-  // placementY/placementX (e.g. 1.085 — saved when the user
-  // parked the cursor past the edge) yields a rect whose bottom
-  // is past the canvas bottom or whose centre is past the canvas
-  // edge. That's intentional: the drag overlay (orange dashed
-  // box) follows the user's cursor 1:1 so they can park off the
-  // edge, and the saved value in story.json reflects where they
-  // parked. The runtime silently clamps on render so the sprite
-  // doesn't actually draw past the viewport.
-  // placementYFor/placementXFor already return px values, NOT
-  // fractions — do not multiply by vpW/vpH here.
   const cy = placementYFor(charConfig);
   const cx = placementXFor(charConfig, w);
   return { x: cx - w / 2, y: cy - h, w, h };
-}
-
-// Runtime-clamped on-canvas rect — what the bg canvas will draw.
-// Used by the preview render so the user sees WYSIWYG (the
-// runtime clamps out-of-range values, so the canvas must too).
-function computeSpriteRectClamped(charConfig) {
-  const r = computeSpriteRect(charConfig);
-  if (!r) return null;
-  const cx = Math.max(0, Math.min(vpW(), r.x + r.w / 2));
-  const cy = Math.max(0, Math.min(vpH(), r.y + r.h));
-  return { x: cx - r.w / 2, y: cy - r.h, w: r.w, h: r.h };
 }
 function hitboxRectPx(hb) {
   return { x: hb.x * vpW(), y: hb.y * vpH(), w: hb.w * vpW(), h: hb.h * vpH() };
@@ -332,11 +319,12 @@ async function renderPreview() {
   for (const c of (sc.characters || [])) {
     const img = state.spriteFrames[c.id + '/' + state.sceneId];
     if (!img) continue;
-    // Use the runtime-clamped rect for the canvas draw so what the
-    // user sees in the preview is what the runtime will actually
-    // render. (Drag overlay uses the raw rect so the user can park
-    // the handle past the edge.)
-    const r = computeSpriteRectClamped(c);
+    // Use the same raw rect as the drag overlay — the canvas and
+    // the orange box move together 1:1 with the cursor, including
+    // past the canvas edge. Canvas clipping at the frame border
+    // decides what's visible; the saved value in story.json can
+    // land outside [0,1] and is what the runtime will render.
+    const r = computeSpriteRect(c);
     if (r) bgCtx.drawImage(img, r.x, r.y, r.w, r.h);
   }
   renderOverlay();
@@ -643,10 +631,8 @@ async function redrawCanvasOnly() {
   for (const c of (sc.characters || [])) {
     const img = state.spriteFrames[c.id + '/' + state.sceneId];
     if (!img) continue;
-    // Clamp on canvas draw so the preview matches runtime even when
-    // the drag has parked the handle past the edge. (The handle
-    // itself still uses the raw rect — see onSpriteDragMove.)
-    const r = computeSpriteRectClamped(c);
+    // Same raw rect as the overlay's drag handle — see renderPreview.
+    const r = computeSpriteRect(c);
     if (r) bgCtx.drawImage(img, r.x, r.y, r.w, r.h);
   }
 }
