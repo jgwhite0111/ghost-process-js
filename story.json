@@ -51,7 +51,8 @@
       "ink": "ink/cold_open.ink",
       "start_node": "Start",
       "characters": [],
-      "hitboxes": []
+      "hitboxes": [],
+      "tasks": []
     },
     "alley": {
       "id": "alley",
@@ -65,8 +66,7 @@
         {
           "id": "android",
           "speaker": "ANDROID",
-          "position": "right",
-          "placementY": 0.5,
+          "placementY": 1,
           "targetH": 0.5,
           "scenes": {
             "alley": {
@@ -74,13 +74,14 @@
               "fps": 4,
               "loop": true
             }
-          }
+          },
+          "placementX": 0.7246210809475506
         }
       ],
       "hitboxes": [
         {
-          "x": 0.15,
-          "y": 0.55,
+          "x": 0.4470252403846154,
+          "y": 0.654736328125,
           "w": 0.1,
           "h": 0.15,
           "item": "rusty_key",
@@ -115,10 +116,12 @@
               "fps": 6,
               "loop": true
             }
-          }
+          },
+          "placementY": 1
         }
       ],
-      "hitboxes": []
+      "hitboxes": [],
+      "tasks": []
     },
     "corridor": {
       "id": "corridor",
@@ -139,10 +142,12 @@
               "fps": 6,
               "loop": true
             }
-          }
+          },
+          "placementY": 1
         }
       ],
-      "hitboxes": []
+      "hitboxes": [],
+      "tasks": []
     },
     "jailbreak": {
       "id": "jailbreak",
@@ -156,17 +161,19 @@
         {
           "id": "thug",
           "speaker": "THUG",
-          "position": "bottomright",
           "scenes": {
             "jailbreak": {
               "frames": "assets/sprites/thug/jailbreak/idle_*.png",
               "fps": 6,
               "loop": true
             }
-          }
+          },
+          "placementY": 1,
+          "placementX": 0.7947566105769232
         }
       ],
-      "hitboxes": []
+      "hitboxes": [],
+      "tasks": []
     },
     "kabukicho": {
       "id": "kabukicho",
@@ -187,7 +194,8 @@
               "fps": 6,
               "loop": true
             }
-          }
+          },
+          "placementY": 1
         }
       ],
       "hitboxes": [
@@ -199,7 +207,8 @@
           "item": "datacard",
           "label": "Approach the vendor"
         }
-      ]
+      ],
+      "tasks": []
     },
     "corp_office": {
       "id": "corp_office",
@@ -220,10 +229,12 @@
               "fps": 4,
               "loop": true
             }
-          }
+          },
+          "placementY": 1
         }
       ],
-      "hitboxes": []
+      "hitboxes": [],
+      "tasks": []
     },
     "terminal_lab": {
       "id": "terminal_lab",
@@ -244,10 +255,12 @@
               "fps": 6,
               "loop": true
             }
-          }
+          },
+          "placementY": 1
         }
       ],
-      "hitboxes": []
+      "hitboxes": [],
+      "tasks": []
     },
     "ship_engine": {
       "id": "ship_engine",
@@ -261,14 +274,15 @@
         {
           "id": "thug",
           "speaker": "THUG",
-          "position": "bottomright",
           "scenes": {
             "ship_engine": {
               "frames": "assets/sprites/thug/jailbreak/idle_*.png",
               "fps": 6,
               "loop": true
             }
-          }
+          },
+          "placementY": 1,
+          "placementX": 0.86552734375
         },
         {
           "id": "android",
@@ -280,10 +294,12 @@
               "fps": 4,
               "loop": true
             }
-          }
+          },
+          "placementY": 1
         }
       ],
-      "hitboxes": []
+      "hitboxes": [],
+      "tasks": []
     }
   },
   "items": {

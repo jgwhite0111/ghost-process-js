@@ -133,8 +133,12 @@ class CharacterSprite {
         if (this.character && typeof this.character.placementY === 'number') {
             const v = this.character.placementY;
             // placementY is a fraction (0..1) of canvasH.
+            // v < 0 / v > 1 is treated as a corrupt value from the
+            // editor (e.g. dragging past the edge saves values like
+            // 1.109 or -0.05). Clamp to the valid range so the sprite
+            // still renders instead of going off-canvas silently.
             if (v >= 0 && v <= 1) return canvasH * v;
-            return v; // raw pixel value
+            return canvasH * Math.max(0, Math.min(1, v));
         }
         return canvasH - 30;
     }

@@ -96,19 +96,21 @@ html, body {
 }
 
 #game {
-    /* Fixed game design size — 390x844 portrait. The editor previews
-       at this exact size, and the runtime now renders here too, so
-       sprite placementY/X fractions in story.json mean the same thing
-       in both tools. On phones wider than 390 (S24 ~412, iPhone 14
-       Pro ~393) this is centered with CSS letterbox bars on the sides
-       (background colour shows through); on phones narrower than 390
-       (uncommon in 2026) max-width:100vw lets the box shrink to fit.
-       On desktop, the 390x844 box sits centered in the window with
-       letterbox bars on all sides. */
-    width: 390px;
-    height: 844px;
+    /* v0.2.27 — revert v0.2.24's "390px column" behaviour and let
+       #game fill the available viewport. The canvas backbuffer
+       sizes itself to the parent on init via parent.clientWidth/
+       Height, so backgrounds use coverRect (zoom-to-fill, crop if
+       needed) to maintain the scene's aspect ratio. Sprites use
+       normalised [0..1] coordinates so they anchor correctly at
+       any canvas size.
+       Pre-v0.2.24 was exactly this; the v0.2.24 change was meant
+       to fix the S24 placement gap (which was actually caused by
+       the meta viewport forcing a different layout viewport, not
+       by the canvas-fill approach — see v0.2.27 commit message). */
+    width: 100vw;
+    height: 100vh;
     max-width: 100vw;
-    margin: 0 auto;
+    max-height: 100vh;
     display: block;
     position: relative;
     background: #000;
