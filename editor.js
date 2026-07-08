@@ -260,22 +260,10 @@ function placementXFor(charConfig, spriteW) {
   }
 }
 // Match the runtime's clamp behaviour (v0.2.27/v0.2.28) so the
-// editor preview shows what the runtime will actually draw. The
-// drag handler still SAVES raw unclamped values (e.g. 1.085) so
-// the user can park a sprite past the edge during editing — the
-// clamp only affects the visual preview and the drag overlay, not
-// what gets persisted to story.json.
-function clampPlacementForPreview(p, vp) {
-  // The runtime treats out-of-range fraction values (>2 or <-2) as
-  // raw pixel coordinates, then clamps to [0, vp]. We mirror that
-  // here so the editor preview matches.
-  if (p < -2 || p > 2) {
-    // Treat as raw pixel value, clamped to [0, vp]
-    return Math.max(0, Math.min(vp, p));
-  }
-  // Fraction — clamp to [0, 1] of viewport
-  return vp * Math.max(0, Math.min(1, p));
-}
+// canvas preview shows what the runtime will actually draw. The
+// drag handle itself follows the user's cursor 1:1 (raw rect)
+// so they can park off the edge — the clamp only affects what
+// gets drawn on the canvas, not what gets persisted to story.json.
 function computeSpriteRect(charConfig) {
   const img = state.spriteFrames[charConfig.id + '/' + state.sceneId];
   if (!img) return null;
@@ -284,12 +272,31 @@ function computeSpriteRect(charConfig) {
   if (img.width * scale > maxW) scale = maxW / img.width;
   const w = img.width * scale;
   const h = img.height * scale;
-  // Apply runtime clamp to match what the runtime will draw.
-  const rawY = placementYFor(charConfig);
-  const rawX = placementXFor(charConfig, w);
-  const cy = clampPlacementForPreview(rawY / vpH(), vpH());
-  const cx = clampPlacementForPreview(rawX / vpW(), vpW());
+  // Return RAW (unclamped) on-canvas rect. Out-of-range
+  // placementY/placementX (e.g. 1.085 — saved when the user
+  // parked the cursor past the edge) yields a rect whose bottom
+  // is past the canvas bottom or whose centre is past the canvas
+  // edge. That's intentional: the drag overlay (orange dashed
+  // box) follows the user's cursor 1:1 so they can park off the
+  // edge, and the saved value in story.json reflects where they
+  // parked. The runtime silently clamps on render so the sprite
+  // doesn't actually draw past the viewport.
+  // placementYFor/placementXFor already return px values, NOT
+  // fractions — do not multiply by vpW/vpH here.
+  const cy = placementYFor(charConfig);
+  const cx = placementXFor(charConfig, w);
   return { x: cx - w / 2, y: cy - h, w, h };
+}
+
+// Runtime-clamped on-canvas rect — what the bg canvas will draw.
+// Used by the preview render so the user sees WYSIWYG (the
+// runtime clamps out-of-range values, so the canvas must too).
+function computeSpriteRectClamped(charConfig) {
+  const r = computeSpriteRect(charConfig);
+  if (!r) return null;
+  const cx = Math.max(0, Math.min(vpW(), r.x + r.w / 2));
+  const cy = Math.max(0, Math.min(vpH(), r.y + r.h));
+  return { x: cx - r.w / 2, y: cy - r.h, w: r.w, h: r.h };
 }
 function hitboxRectPx(hb) {
   return { x: hb.x * vpW(), y: hb.y * vpH(), w: hb.w * vpW(), h: hb.h * vpH() };
@@ -316,7 +323,11 @@ async function renderPreview() {
   for (const c of (sc.characters || [])) {
     const img = state.spriteFrames[c.id + '/' + state.sceneId];
     if (!img) continue;
-    const r = computeSpriteRect(c);
+    // Use the runtime-clamped rect for the canvas draw so what the
+    // user sees in the preview is what the runtime will actually
+    // render. (Drag overlay uses the raw rect so the user can park
+    // the handle past the edge.)
+    const r = computeSpriteRectClamped(c);
     if (r) bgCtx.drawImage(img, r.x, r.y, r.w, r.h);
   }
   renderOverlay();
@@ -623,7 +634,10 @@ async function redrawCanvasOnly() {
   for (const c of (sc.characters || [])) {
     const img = state.spriteFrames[c.id + '/' + state.sceneId];
     if (!img) continue;
-    const r = computeSpriteRect(c);
+    // Clamp on canvas draw so the preview matches runtime even when
+    // the drag has parked the handle past the edge. (The handle
+    // itself still uses the raw rect — see onSpriteDragMove.)
+    const r = computeSpriteRectClamped(c);
     if (r) bgCtx.drawImage(img, r.x, r.y, r.w, r.h);
   }
 }
