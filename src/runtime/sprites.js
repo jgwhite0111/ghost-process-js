@@ -107,15 +107,34 @@ class CharacterSprite {
         // without a second buffer, so do pass 2 here against the
         // already-killed data — solid pixels are unaffected by the
         // pass-1 alpha kill, so it's safe.
+        // Pass 2: greenscreen ghosting on solid pixels.
+        //
+        // The greenscreen outline (pass 1) is fully keyed out, but
+        // the source PNG also has G-dominant tint leaking into the
+        // *body* pixels — most visible on the thug's bald head
+        // (the high-green halo bleeds into the dark skin shading
+        // and you can see a green wash on the silhouette). Pulling
+        // G toward (r+b)/2 at 70% didn't catch this because the
+        // average still has G higher than both R and B after the
+        // pull (e.g. (0,84,20) -> (0,32,20) still flags as
+        // green-dominant).
+        //
+        // Strategy: only modify pixels that are *clearly* green-
+        // excess (G higher than R by 20+ AND higher than B by 15+
+        // — natural skin/jacket pixels don't satisfy both). Pull
+        // G halfway toward max(R, B) — half-strength to avoid the
+        // last-time mistake of stripping the head into transparency.
         for (let i = 0; i < px.length; i += 4) {
             if (px[i + 3] < 240) continue; // only solid pixels
             const r = px[i], g = px[i + 1], b = px[i + 2];
-            if (g > r * 1.15 && g > b * 1.15 && g < 210) {
-                // Desaturate: pull G toward the average of R and B.
-                // 70% blend toward (r+b)/2 keeps some structure but
-                // removes the green cast.
-                const mid = (r + b) / 2;
-                px[i + 1] = Math.round(g * 0.3 + mid * 0.7);
+            const gExcessR = g - r;
+            const gExcessB = g - b;
+            if (gExcessR > 20 && gExcessB > 15) {
+                // 50% blend toward max(R, B). Half-strength: leaves
+                // some structure (the pixel doesn't go to neutral
+                // grey) but kills most of the green dominance.
+                const target = Math.max(r, b);
+                px[i + 1] = Math.round(g * 0.5 + target * 0.5);
             }
         }
         ctx.putImageData(data, 0, 0);
