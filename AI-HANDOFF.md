@@ -30,9 +30,59 @@ tree right now: status, what shipped, what's dirty, what's open.
 
 ---
 
-## Update (2026-07-08)
+## Update (2026-07-08) — music shape rewrite (commit c57f709)
 
-### What's on disk (HEAD)
+### What shipped
+
+**A-side rewrites** (8 SCENES entries): All 8 scenes now have real song
+shapes (intro/build/climax/breakdown/rebuild/release) instead of loops
+that felt like the same 4-bar phrase over and over. Each is bespoke:
+- `cold_open` — drone + whisper lead + big swell + cutoff + breath
+- `chase` — kick-only → fill → full band → half-time drop → rebuild → blast
+- `corridor` — sparse music box → chord → SILENCE → re-entry → decay
+- `jailbreak` — arpeggio → kick-only → 4-on-floor + tempo push → climax → release
+- `terminal_lab` — stutter → build → cascade (with tempo lift) → return to stutter
+- `kabukicho` — AABA' jazz (sax melody, varied ending, sax solo, return)
+- `corp_office` — EP stabs → chords → full band → subtle crescendo → crash
+- `ship_engine` — bass pulse → kick → hats → snare+lead → roll → rev-up octave
+
+**B-side rewrites** (8 SCENES_B entries): Each is the complement of A in
+the same family (key/BPM/patch/bar count) but a different dynamic curve.
+A/B pairs now match in duration to within 1s for 6/8 scenes (terminal_lab
+intentionally mismatched — A has stutter intro silence, B is sustained
+cascade).
+
+**Render pipeline fix (tools/render-midi.sh)**: `silenceremove stop_periods=-1`
+was a bug — per ffmpeg docs that means "leave only first period", which
+silently trimmed everything after the first 1s+ silence segment. Changed
+to `stop_periods=9000` (max finite) which keeps all content + last silence.
+
+### Verification
+
+- `python3 tools/test_full_chain.py` — 10 scenes, 0 errors
+- All 8 A/B pairs now in 47-101s range
+- See commit message for full duration table
+
+### Known concerns
+
+- **terminal_lab A/B mismatch (62s vs 81s)** — design intent (stutter
+  intro vs sustained cascade), but the medley crossfade lands at A's 70%
+  point = ~43s, while B is 81s. Loop boundary will be perceptible. If
+  this sounds bad in playtest, either shorten terminal_lab_b or extend
+  terminal_lab with content past bar 18 to push the trim point forward.
+- **fluidsynth "End of MIDI, not all notes received note off" warnings**
+  on jailbreak and clinic_tension — non-fatal, notes auto-OFFed by
+  fluidsynth. Could fix by adding explicit note_off events at the end
+  of those SCENES, but no audible artifact.
+
+### Files changed
+
+- `tools/make_scene_loop.py` — 8 SCENES + 8 SCENES_B rewritten; helpers
+  (`vel_ramp`, `tempo_changes`, `pad_vel_ramp`, `pad_breakdowns`,
+  `drum_shapes`) extended but not redesigned
+- `tools/render-midi.sh` — 1-line silenceremove fix
+- `docs/MUSIC_BSIDE_GUIDE.md` — new (B-side mirroring plan)
+- `assets/audio/*.mid` + `assets/audio/*.mp3` — re-rendered from new SCENES
 
 ```
 HEAD = 8fbf5f4 (docs: LEGACY.md + Godot-remnant strip; editor.js:1144 .tres→.js fix)
