@@ -137,6 +137,43 @@ class CharacterSprite {
                 px[i + 1] = Math.round(g * 0.5 + target * 0.5);
             }
         }
+        // Pass 3: kill solid green-dominant pixels at the silhouette
+        // boundary. After pass 1 keys the half-alpha outer ring to
+        // alpha 0, the next layer in is now the new edge — and those
+        // solid pixels are often still green-dominant (this is the
+        // "green ring around the whole sprite" the user reported).
+        // We can't tell from a single pixel whether it's at the
+        // boundary, so we check 4-neighbors: if any neighbor is now
+        // transparent, this pixel is at the edge. Run the pass
+        // iteratively (3 passes is plenty) so killing an outer pixel
+        // exposes the next inner layer, which also gets killed if it's
+        // green-dominant. This is bounded — interior pixels aren't
+        // next to transparent so they don't get touched.
+        for (let iter = 0; iter < 3; iter++) {
+            let changed = 0;
+            for (let y = 0; y < h; y++) {
+                for (let x = 0; x < w; x++) {
+                    const i = (y * w + x) * 4;
+                    if (px[i + 3] < 240) continue; // only solid pixels
+                    const r = px[i], g = px[i + 1], b = px[i + 2];
+                    // Is this pixel next to a transparent neighbor?
+                    let nextToTransparent = false;
+                    if (x > 0 && px[((y * w) + (x - 1)) * 4 + 3] < 5) nextToTransparent = true;
+                    else if (x < w - 1 && px[((y * w) + (x + 1)) * 4 + 3] < 5) nextToTransparent = true;
+                    else if (y > 0 && px[(((y - 1) * w) + x) * 4 + 3] < 5) nextToTransparent = true;
+                    else if (y < h - 1 && px[(((y + 1) * w) + x) * 4 + 3] < 5) nextToTransparent = true;
+                    if (!nextToTransparent) continue;
+                    // Green-dominant? Same threshold as pass 1 (1.15x
+                    // each channel) — slightly looser than pass 2's
+                    // g-r/g-b threshold so we catch the inner ring.
+                    if (g > r * 1.15 && g > b * 1.15) {
+                        px[i + 3] = 0;
+                        changed++;
+                    }
+                }
+            }
+            if (changed === 0) break;
+        }
         ctx.putImageData(data, 0, 0);
         return c;
     }
