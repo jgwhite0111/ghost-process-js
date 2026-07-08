@@ -77,6 +77,12 @@ html, body {
     height: 100%;
     background: #000;
     overflow: hidden;
+    /* Safe-area-inset-bottom holds the height of the system navigation
+     * bar (Android button nav, iOS home indicator). Mobile browsers with
+     * viewport-fit=cover expose the inset here; on desktop it's 0px.
+     * The dialogue box uses this to lift itself above the nav bar so the
+     * last wrapped line isn't hidden behind it. */
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
     /* Kill anti-aliasing on every text element for the chunky pixel look.
      * -webkit-: Chrome/Safari
      * -moz-osx-: Firefox on macOS (grayscale still AA's; 'auto' is close enough)
@@ -227,7 +233,7 @@ html, body {
    actually delineates the box visually. */
 .dialogue-box {
     position: absolute;
-    bottom: 0;
+    bottom: var(--safe-bottom, 0px);
     left: 0;
     right: 0;
     z-index: 20;
@@ -451,7 +457,7 @@ html, body {
     position: fixed;
     left: 0;
     right: 0;
-    bottom: 200px;            /* sits above the dialogue box */
+    bottom: calc(200px + var(--safe-bottom, 0px));   /* sits above the dialogue box + clear of nav bar */
     z-index: 60;
     display: flex;
     flex-direction: column;

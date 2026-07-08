@@ -204,16 +204,30 @@ class DialoguePanel {
         this.choicesEl = wrap;
 
         // Lift the dialogue box so it sits directly above the
-        // choices menu. Choices-list is position:fixed at bottom:200px
-        // and its height varies (1 to N buttons). Without this lift,
-        // the box stays anchored to viewport bottom and a chunk of
-        // empty alley scene appears between the last line of dialogue
-        // and the first choice button — the "last line hidden" bug.
-        // Lift = choices-list CSS bottom (200) + its rendered height
-        // + a small visual gap (8px).
+        // choices menu. Choices-list is position:fixed at
+        // bottom:calc(200px + safe-bottom) and its height varies
+        // (1 to N buttons). Without this lift, the box stays anchored
+        // to viewport bottom and a chunk of empty alley scene appears
+        // between the last line of dialogue and the first choice
+        // button — the "last line hidden" bug. Lift = choices-list CSS
+        // bottom (200 + safe-bottom) + its rendered height + a small
+        // visual gap (8px).
         const choicesH = wrap.offsetHeight;
-        this.root.style.bottom = (200 + choicesH + 8) + 'px';
+        const safeBottom = this._safeBottom();
+        this.root.style.bottom = (200 + choicesH + 8 + safeBottom) + 'px';
         this.root.classList.add('choices-active');
+    }
+
+    _safeBottom() {
+        // Read the CSS variable set on :root that holds
+        // env(safe-area-inset-bottom). Falls back to 0 if env() is
+        // unsupported or the variable isn't set. Returns a number.
+        if (this._cachedSafeBottom !== undefined) return this._cachedSafeBottom;
+        const raw = getComputedStyle(document.documentElement)
+            .getPropertyValue('--safe-bottom') || '0px';
+        const v = parseFloat(raw);
+        this._cachedSafeBottom = isFinite(v) ? v : 0;
+        return this._cachedSafeBottom;
     }
 
     attachRunner(runner) {
