@@ -169,6 +169,11 @@ class DialoguePanel {
             this.choicesEl = null;
         }
         if (!choices || choices.length === 0) {
+            // No choices — restore the dialogue box to its default
+            // bottom-anchored position so the most recent line sits
+            // flush with the viewport bottom.
+            this.root.style.bottom = '';
+            this.root.classList.remove('choices-active');
             this.setHasMore(true);
             return;
         }
@@ -197,6 +202,18 @@ class DialoguePanel {
         });
         this.root.appendChild(wrap);
         this.choicesEl = wrap;
+
+        // Lift the dialogue box so it sits directly above the
+        // choices menu. Choices-list is position:fixed at bottom:200px
+        // and its height varies (1 to N buttons). Without this lift,
+        // the box stays anchored to viewport bottom and a chunk of
+        // empty alley scene appears between the last line of dialogue
+        // and the first choice button — the "last line hidden" bug.
+        // Lift = choices-list CSS bottom (200) + its rendered height
+        // + a small visual gap (8px).
+        const choicesH = wrap.offsetHeight;
+        this.root.style.bottom = (200 + choicesH + 8) + 'px';
+        this.root.classList.add('choices-active');
     }
 
     attachRunner(runner) {
