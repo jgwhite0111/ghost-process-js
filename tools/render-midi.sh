@@ -34,8 +34,13 @@ if [[ ! -f "$SOUNDFONT" ]]; then
 fi
 
 # Trailing-silence trim: stop when output stays under -50dB for at least 1.0s.
+# stop_periods=9000 (large finite): trim up to 9000 silence segments, leaving
+# the LAST content + LAST silence alone. The previous value -1 was a bug:
+# per ffmpeg docs "leave only first period" — that drops everything after the
+# first 1s+ silence, which broke cold_open_b (multiple sustained drone silences
+# in bars 8-15) and corridor/corridor_b (cinematic silence bars).
 # This matches the existing intro_theme.mp3 loop length convention.
-SILENCE_FILTER='silenceremove=stop_periods=-1:stop_duration=1.0:stop_threshold=-50dB'
+SILENCE_FILTER='silenceremove=stop_periods=9000:stop_duration=1.0:stop_threshold=-50dB'
 
 render_one() {
     local mid="$1"
