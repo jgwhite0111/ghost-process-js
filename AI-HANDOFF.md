@@ -39,7 +39,7 @@ shapes (intro/build/climax/breakdown/rebuild/release) instead of loops
 that felt like the same 4-bar phrase over and over. Each is bespoke:
 - `cold_open` — drone + whisper lead + big swell + cutoff + breath
 - `chase` — kick-only → fill → full band → half-time drop → rebuild → blast
-- `corridor` — sparse music box → chord → SILENCE → re-entry → decay
+- `corridor` — music box ostinato (every bar bars 0-3) → chord enters bar 4 → climax arpeggios bar 12 → decay bar 18 (was: 16s of silence before first chord, fixed 2026-07-09)
 - `jailbreak` — arpeggio → kick-only → 4-on-floor + tempo push → climax → release
 - `terminal_lab` — stutter → build → cascade (with tempo lift) → return to stutter
 - `kabukicho` — AABA' jazz (sax melody, varied ending, sax solo, return)
@@ -397,3 +397,83 @@ git status -s
 # 4. Recent commits
 git log --oneline -15
 ```
+
+---
+
+## Update (2026-07-09) — corridor intro fix (commit pending)
+
+User feedback after c57f709: *"the corridor music seems very intermittent and
+takes a long while to start - i wonder if that didn't quite come out as planned?
+try and fix that scene"*.
+
+### Root cause
+
+`corridor` A-side's original intro was:
+- bar 0: 4 music-box notes (~1s of audio)
+- bars 1-3: silence (12 seconds of nothing)
+- bar 4: motif repeats (4 more notes)
+- bars 5-5: silence (4 seconds)
+- bar 6: chord enters
+
+So from t=0 to t=16 the listener heard 1s of music → 12s silence → 1s music →
+4s silence → chord. **16 seconds before the chord enters, 16+ seconds of
+intermittent content.** RMS profile (before fix) confirmed:
+```
+t=0s:  -44 dB   ← first note
+t=2-14s: -93 dB  ← dead air
+t=16s: -29 dB   ← chord
+t=18-22s: -93 dB  ← another silence
+t=24-32s: -31 dB  ← pad builds
+```
+
+### What changed in `tools/make_scene_loop.py` SCENES["corridor"]
+
+1. **`pad_chords`** moved earlier:
+   - Cm at bar 6 → **bar 4** (12s chord-earlier)
+   - Ab at bar 14 → **bar 12**
+2. **`pad_breakdowns`** shifted:
+   - `[(12, 13), (20, 23)]` → **`[(10, 11), (18, 23)]`**
+3. **`lead_pattern` bars 0-3** restructured:
+   - **was:** 1 motif at bar 0, 1 motif at bar 4 (12s gap)
+   - **now:** motif plays at bars 0, 1, 2, 3 (every bar, 4s spacing)
+4. **`bass_pattern`** shrunk drone to bars 0-3 (was 0-5), motion bars 4-11
+   (was 6-13), Ab bars 12-19 (was 14-21), rest bars 20-21 (was 22-23).
+5. **Climax section** shifted back 2 bars (peak note at bar 11, climax
+   arpeggios bars 12-17, decay bars 18-23).
+
+### Resulting RMS profile (after fix)
+
+```
+t=0s:  -44 dB   ← first note
+t=4s:  -32 dB   ← motif every bar now
+t=8s:  -30 dB
+t=12s: -30 dB
+t=16s+: continuous pad + climax
+```
+
+The 16-second opening silence is gone. Music-box ostinato now plays every
+4 seconds from the start. Chord enters at t=16 (4 bars in) instead of t=24
+(6 bars in). Loop length unchanged: A=101s, B=101s.
+
+### Verification
+
+- `python3 tools/test_full_chain.py` — 10 scenes, 0 errors
+- `corridor` MP3 activity profile: first silence gap reduced from 12s to 3s
+  (the natural rest between music-box motifs); chord enters 8s earlier
+- A/B pair still matches perfectly (101s / 101s)
+
+### Files changed
+
+- `tools/make_scene_loop.py` — SCENES["corridor"] pad_chords, pad_breakdowns,
+  lead_pattern (intro + climax shift), bass_pattern
+- `assets/audio/corridor.mid` + `assets/audio/corridor.mp3` — regenerated
+
+### NOT changed
+
+- **corridor_b (B-side)**: the user's complaint was about corridor (A-side,
+  played first in the medley). corridor_b already had continuous celesta
+  motifs every 2 bars + active bass pulses, so no fix needed there.
+- **other 7 SCENES entries**: untouched. The c57f709 shape rewrites already
+  produce reasonable intros for those scenes.
+- **render pipeline**: the silenceremove fix from c57f709 is still working
+  (corridor renders at 101s, matching its WAV length).

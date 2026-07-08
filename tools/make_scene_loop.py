@@ -757,82 +757,95 @@ SCENES["corridor"] = {
     "key_intervals": MINOR,
     "root": 0,                               # C minor
     "lead_mod_ramp": (0, 30),                # music box gets breath
-    # Pad chords: chord 1 (Cm) enters at bar 6 quietly; chord 2 (Ab) enters
-    # at bar 14 for the climax section. pad_breakdowns create the silence
-    # at bar 12 (expression=0 mid-bar-12) and the decay at bars 20-23.
+    # Pad chords: chord 1 (Cm) enters at bar 4 (was bar 6 — too late for
+    # the corridor scene; 16s of silence before first chord felt broken
+    # in playtest). chord 2 (Ab) enters at bar 12 for the climax section.
+    # pad_breakdowns create the silence at bar 10 (expression=0 mid-bar-10)
+    # and the decay at bars 18-23.
     "pad_chords": [
-        (6,  [N(0,3), N(3,3), N(7,3), N(10,3)]),       # Cm enters at bar 6
-        (14, [N(8,3), N(0,4), N(3,4), N(7,4)]),        # Ab enters at bar 14 (climax)
+        (4,  [N(0,3), N(3,3), N(7,3), N(10,3)]),       # Cm enters at bar 4
+        (12, [N(8,3), N(0,4), N(3,4), N(7,4)]),        # Ab enters at bar 12 (climax)
     ],
-    # Pad expression ramp: 0→110 across the loop. At bar 6 (the chord entry
-    # point), CC11 ≈ 0 + 110*(6/24) = 27.5, very quiet — matches spec.
-    # Breakdown at bar 12 zeros it for the silence, restores at bar 13
-    # for the re-entry (with single peak arpeggio note), then breakdown at
-    # bars 20-23 zeros it for the final decay.
+    # Pad expression ramp: 0→110 across the loop. At bar 4 (the chord entry
+    # point), CC11 ≈ 0 + 110*(4/24) ≈ 18 — very quiet, matches the music-box
+    # entry dynamic. Breakdown at bar 10 zeros it for the silence, restores
+    # at bar 11 for the re-entry (with single peak arpeggio note), then
+    # breakdown at bars 18-23 zeros it for the final decay.
     "pad_vel_ramp": (0, 110, 24),
-    "pad_breakdowns": [(12, 13), (20, 23)],
+    "pad_breakdowns": [(10, 11), (18, 23)],
     # Lead: music box arpeggios ONLY for bars 0-5 (one motif, repeats).
     # Then two arpeggiated voices expand bars 7-11. Single peak note
     # at bar 13. Climax arpeggios + Ab chord bars 14-19. Decay
     # bars 20-23 with a final held note fading to the wrap.
     "lead_pattern": [
-        # bars 0-5 — single motif, sparse (every 2 bars the motif repeats)
-        (0, [                                          # bar 0
-            (N(0,5), PPQ, 0), (N(3,5), PPQ, 0),
-            (N(7,5), PPQ, 0), (N(10,5), PPQ, 0),
-            (None, PPQ*16, 0),                         # bars 1-3 silence
-        ]),
-        (PPQ*16, [                                     # bar 4 — motif repeats
-            (N(0,5), PPQ, 0), (N(3,5), PPQ, 0),
-            (N(7,5), PPQ, 0), (N(10,5), PPQ, 0),
-            (None, PPQ*4, 0),                          # bars 5 partial rest
-        ]),
-        # bars 6-11 — pad chord enters; arpeggios expand to TWO voices
-        (PPQ*24, [                                     # bar 6 — voice 1
+        # bars 0-3 — single motif every 1 bar so there's no dead air after
+        # the first note (was every 2 bars — 8s gaps between motifs
+        # still felt "intermittent" in playtest. Every-bar gives a
+        # continuous ostinato in the intro.)
+        (0, [                                          # bar 0 — motif plays
             (N(0,5), PPQ, 0), (N(3,5), PPQ, 0),
             (N(7,5), PPQ, 0), (N(10,5), PPQ, 0),
         ]),
-        (PPQ*28, [                                     # bar 7 — voice 2 joins (octave above)
+        (PPQ*4, [                                      # bar 1 — motif repeats
+            (N(0,5), PPQ, 0), (N(3,5), PPQ, 0),
+            (N(7,5), PPQ, 0), (N(10,5), PPQ, 0),
+        ]),
+        (PPQ*8, [                                      # bar 2 — motif repeats
+            (N(0,5), PPQ, 0), (N(3,5), PPQ, 0),
+            (N(7,5), PPQ, 0), (N(10,5), PPQ, 0),
+        ]),
+        (PPQ*12, [                                     # bar 3 — motif repeats
+            (N(0,5), PPQ, 0), (N(3,5), PPQ, 0),
+            (N(7,5), PPQ, 0), (N(10,5), PPQ, 0),
+        ]),
+        # bars 4-9 — pad chord enters; arpeggios expand to TWO voices,
+        # every 2 bars (was bars 6-11, shifted earlier so the intro isn't
+        # 16 seconds of dead air)
+        (PPQ*16, [                                     # bar 4 — voice 1
+            (N(0,5), PPQ, 0), (N(3,5), PPQ, 0),
+            (N(7,5), PPQ, 0), (N(10,5), PPQ, 0),
+        ]),
+        (PPQ*20, [                                     # bar 5 — voice 2 joins (octave above)
             (N(0,6), PPQ, 0), (N(3,6), PPQ, 0),
             (N(7,6), PPQ, 0), (N(10,6), PPQ, 0),
         ]),
-        (PPQ*32, [                                     # bar 8 — interleave
+        (PPQ*24, [                                     # bar 6 — interleave
             (N(0,5), PPQ, 0), (N(3,5), PPQ, 0),
             (N(7,5), PPQ, 0), (N(10,5), PPQ, 0),
             (N(0,6), PPQ, 0), (N(3,6), PPQ, 0),
             (N(7,6), PPQ, 0), (N(10,6), PPQ, 0),
         ]),
-        (PPQ*40, [                                     # bar 10 — variation
+        (PPQ*32, [                                     # bar 8 — variation
             (N(10,5), PPQ, 0), (N(7,5), PPQ, 0),
             (N(3,5), PPQ, 0), (N(0,5), PPQ, 0),
             (N(10,6), PPQ, 0), (N(7,6), PPQ, 0),
             (N(3,6), PPQ, 0), (N(0,6), PPQ, 0),
         ]),
-        # bar 12 — SILENCE: no notes scheduled at all
-        # bar 13 — single BIG arpeggio peak note (chord re-enters loud)
-        (PPQ*52, [
+        # bar 10 — SILENCE: pad_breakdowns zeros expression; lead has no notes
+        # bar 11 — single BIG arpeggio peak note (chord re-enters loud)
+        (PPQ*44, [
             (N(3,6), PPQ*4, 15),                       # Eb6 peak, accent +15
         ]),
-        # bars 14-19 — climax arpeggios with Ab chord, two voices
-        (PPQ*56, [                                     # bar 14
+        # bars 12-17 — climax arpeggios with Ab chord, two voices
+        (PPQ*48, [                                     # bar 12
             (N(8,5), PPQ, 0), (N(0,6), PPQ, 0),
             (N(3,6), PPQ, 0), (N(7,6), PPQ, 0),
             (N(8,6), PPQ, 0), (N(0,7), PPQ, 0),
             (N(3,7), PPQ, 0), (N(7,7), PPQ, 0),
         ]),
-        (PPQ*64, [                                     # bar 16
+        (PPQ*56, [                                     # bar 14
             (N(8,5), PPQ, 0), (N(7,5), PPQ, 0),
             (N(3,6), PPQ, 0), (N(0,6), PPQ, 0),
             (N(7,6), PPQ, 0), (N(3,6), PPQ, 0),
             (N(0,6), PPQ, 0), (N(8,5), PPQ, 0),
         ]),
-        (PPQ*72, [                                     # bar 18 — peak
+        (PPQ*64, [                                     # bar 16 — peak
             (N(0,7), PPQ, 0), (N(3,7), PPQ, 0),
             (N(7,7), PPQ, 0), (N(3,7), PPQ, 0),
             (N(0,7), PPQ*2, 5), (N(7,7), PPQ*2, 5),
         ]),
-        # bars 20-23 — decay: arpeggios slow, final held note fades
-        (PPQ*80, [                                     # bar 20 — slowing
+        # bars 18-23 — decay: arpeggios slow, final held note fades
+        (PPQ*72, [                                     # bar 18 — slowing
             (N(3,6), PPQ*2, -5), (N(0,6), PPQ*2, -8),
             (None, PPQ*8, 0),
         ]),
@@ -842,13 +855,14 @@ SCENES["corridor"] = {
         # bar 23 — silence
     ],
     "bass_pattern": [
-        # Long drone C (bars 0-7) — slow harmonic movement
-        (0, [(N(0,2), PPQ*24, 0)]),                    # bars 0-5: C2
-        (PPQ*24, [(N(0,2), PPQ*8, 0), (N(7,1), PPQ*8, 0),
-                  (N(5,2), PPQ*8, 0), (N(7,2), PPQ*8, 0)]),  # bars 6-13: motion
-        (PPQ*56, [(N(8,2), PPQ*8, 0), (N(3,2), PPQ*8, 0),
-                  (N(8,2), PPQ*8, 0), (N(3,2), PPQ*8, 0)]),  # bars 14-21: Ab
-        (PPQ*88, [(None, PPQ*8, 0)]),                  # bar 22-23: rest
+        # Long drone C (bars 0-3) — slow harmonic movement
+        # (was bars 0-5 — shrunk to match new earlier chord entry at bar 4)
+        (0, [(N(0,2), PPQ*16, 0)]),                    # bars 0-3: C2
+        (PPQ*16, [(N(0,2), PPQ*8, 0), (N(7,1), PPQ*8, 0),
+                  (N(5,2), PPQ*8, 0), (N(7,2), PPQ*8, 0)]),  # bars 4-11: motion
+        (PPQ*48, [(N(8,2), PPQ*8, 0), (N(3,2), PPQ*8, 0),
+                  (N(8,2), PPQ*8, 0), (N(3,2), PPQ*8, 0)]),  # bars 12-19: Ab
+        (PPQ*80, [(None, PPQ*8, 0)]),                  # bar 20-21: rest
     ],
     "drum_pattern": [],
     "cross_boundary_crash": False,
