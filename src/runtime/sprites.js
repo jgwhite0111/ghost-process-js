@@ -144,6 +144,20 @@ class CharacterSprite {
     }
 
     placementX(canvasW, position, spriteW) {
+        // Continuous numeric placementX takes priority when present —
+        // it stores the sprite's CENTRE X as a fraction of canvas
+        // width (same convention as editor.js placementXFor). When
+        // set, the editor saved it from a drag and the runtime MUST
+        // honour that exact position. Falls back to the legacy named
+        // position slot for characters that haven't been dragged yet.
+        if (this.character && typeof this.character.placementX === 'number') {
+            const v = this.character.placementX;
+            // Same clamp rule as placementY: out-of-range = corrupt
+            // editor value, snap to the valid range so the sprite
+            // still renders.
+            if (v >= 0 && v <= 1) return canvasW * v;
+            return canvasW * Math.max(0, Math.min(1, v));
+        }
         // For 'bottomright' (jailbreak thug whose body runs to the right
         // edge of its 180px-wide source) we right-align against the
         // canvas edge with a small inset — same as the 165a370 baseline.
