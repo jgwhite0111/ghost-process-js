@@ -495,3 +495,63 @@ The 16-second opening silence is gone. Music-box ostinato now plays every
   font-swap experiment. When the user is ready, drop a real
   SC-55 soundfont at `assets/audio/sc55.sf2` and re-run
   `tools/render-midi.sh` to render fresh MP3s for A/B comparison.
+
+## Walking bassline pass (sessions after 1e303b8)
+
+### What changed
+
+Six scenes previously had a one-note hammered bass (Synth Bass 2)
+that the user described as "constant thrum" — overpowering, like
+tapping one piano key.
+
+Rewrote ch 1 in those six scenes as a real walking bassline:
+
+| Scene             | Chord progression                              | Bars |
+|-------------------|------------------------------------------------|------|
+| terminal_lab      | Cmaj7  → Em7                                  | 32   |
+| ship_engine       | Dm7    → Am11                                 | 32   |
+| alley_confrontation | F#dim7 → C7b9 → A#dim7 → F7b9               | 16   |
+| clinic_tension    | Am7    → F#dim7 → A#dim7                      | 24   |
+| cold_open         | Dm7    → Dm(maj7) → Gm9 → D                   | 46   |
+| ship_engine_b     | Dm7    → F#dim7 → G#dim7                      | 24   |
+
+Pattern (4-bar phrase rotation):
+- bar 0/4/8/12: root - fifth - seventh - root
+- bar 1/5/9/13: root - third - fifth - octave
+- bar 2/6/10/14: root - fifth - seventh - octave
+- bar 3/7/11/15: root - third - fifth - seventh - 8th-walk-up
+
+### Bass patch
+
+User A/B'd 11 candidate patches via `tools/bass_patch_sampler.py`.
+Winner: **Fretless Bass (program 35)** — smooth, vocal-like, no
+percussive attack. Picked (34) too punchy, Contrabass (43) too big,
+Voice (87) too eerie. Slap Bass (36,37) and Synth Bass (38,39) rejected
+as too buzzy/twangy. Fingered (33) was the previous default but had
+a residual ring that bothered the user.
+
+All 6 target scenes now use Fretless Bass on ch 1.
+
+### Files changed
+
+- 6x `assets/audio/{scene}.mid` (bassline rewrite + patch swap)
+- 6x `assets/audio/{scene}.mp3` (regenerated)
+- 8 new tools in `tools/`:
+  - `apply_bass_patch.py` — swap ch 1 patch (used in last turn)
+  - `bass_patch_sampler.py` — render A/B of all 11 bass candidates
+  - `compose_walking_bass.py` — the actual composition (chord-aware)
+  - `mix_minus_preview.py` — render with one channel muted
+  - `preview_bass_fix.py` — earlier thinned-pulse preview (obsolete)
+  - `render_walking_bass_preview.py` — bass-only/full-mix preview
+  - `swap_slap_to_fingered.py` — intermediate patch swap (obsolete)
+  - `swap_synth_bass_to_slap.py` — intermediate patch swap (obsolete)
+
+### NOT changed
+
+Other 14 scenes with ch 1 untouched (alf_tv, chase, chase_b, cold_open_b,
+corp_office, corp_office_b, corridor, corridor_b, jailbreak, jailbreak_b,
+kabukicho, kabukicho_b, smoky_club_intro, terminal_lab_b). Some of those
+have walking basslines already; some still have a Synth Bass 2 pattern.
+The user noted the symptom exists across the project but only asked to
+fix the 6 most prominent. Future pass can apply walking bass to the
+others if desired.
