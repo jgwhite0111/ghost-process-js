@@ -277,7 +277,9 @@
             "corp_office": {
               "frames": "assets/sprites/android/corridor/idle_*.png",
               "fps": 4,
-              "loop": true
+              "loop": true,
+              "playOnce": true,
+              "holdFrames": [5, 9]
             }
           },
           "placementY": 1
@@ -311,7 +313,9 @@
             "terminal_lab": {
               "frames": "assets/sprites/android/corridor/idle_*.png",
               "fps": 6,
-              "loop": true
+              "loop": true,
+              "playOnce": true,
+              "holdFrames": [5, 9]
             }
           },
           "placementY": 1
@@ -358,7 +362,9 @@
             "ship_engine": {
               "frames": "assets/sprites/android/corridor/idle_*.png",
               "fps": 4,
-              "loop": true
+              "loop": true,
+              "playOnce": true,
+              "holdFrames": [5, 9]
             }
           },
           "placementY": 1
