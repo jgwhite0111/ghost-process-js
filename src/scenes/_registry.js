@@ -72,34 +72,39 @@ window.SCENE_CLASSES.intro = class extends window.Scene {
             window.Inventory.setVisible(false);
         }
 
-        // Try to start the intro theme at page-load. Most browsers
-        // will block this because there's no user gesture yet — the
-        // play() promise rejects and MusicHandler queues a one-shot
-        // resume-on-pointerdown listener that fires the moment the
-        // player clicks anywhere on the page. Either path lands
-        // music playing in 1 gesture, instead of "click PRESS START,
-        // then wait 1.4s for navigation".
-        try { window.MusicHandler.play('intro_theme.mp3', 0.7, 800); }
-        catch (e) { /* will be retried on first gesture */ }
+        // NOTE: we do NOT call MusicHandler.play() here. Scene.start()
+        // (the base class) already kicked off the intro theme on
+        // scene load (scene-base.js:99-102), which is what triggers
+        // the page-load autoplay attempt. Calling it again from
+        // onReady would duplicate the play() and, in browsers where
+        // autoplay is permitted, stomp audio.volume to 0 mid-ramp
+        // (MusicHandler._playOne unconditionally sets volume=0 at
+        // music.js:233 before the second ramp). Instead, onReady
+        // just overrides _triggerHitbox below — the autoplay-or-
+        // resume-on-first-click path is already wired by the base
+        // class plus MusicHandler._queueResume.
 
         // Override _triggerHitbox so the PRESS START click gives the
         // intro theme time to actually play before navigation kicks
         // off the next scene's track and crossfades the title theme
         // out.
         //
-        // Old behaviour (broken): clicked PRESS START → music
-        // resumed → setTimeout 1.4s → navigate. Player heard at most
-        // ~2.5s of the salientdream intro theme before it was
-        // crossfaded away.
+        // Page-load autoplay: by the time this scene's onReady fires,
+        // Scene.start() has already attempted audio.play() on the
+        // intro theme. If the browser allowed autoplay, music is
+        // playing now (5s listen clock starts on PRESS START click).
+        // If the browser blocked it, MusicHandler._queueResume has
+        // registered a one-shot document-level pointerdown listener
+        // (music.js:281-283) that resumes the audio on the first
+        // click anywhere — so even a click on the title-screen
+        // background or the PRESS START label itself unlocks it.
         //
-        // New behaviour: the music is playing (or queued to resume
-        // on this very click) when PRESS START is hit. On click, hide
-        // PRESS START and start a 5-second timer to navigate. This
-        // gives the intro theme 5 full seconds of clean un-interrupted
-        // playback before the crossfade into the alley music begins.
-        // Attentive listeners hear the theme; impatient players feel
-        // the 5s delay is too long and can hit the music handler's
-        // fast-skip via console (not exposed in the UI yet).
+        // On PRESS START click: set volume to 0.7 (corrects the
+        // volume=0 that the blocked-autoplay path left behind), hide
+        // the PRESS START label, and start a 5s timer to navigate.
+        // This gives the intro theme 5 full seconds of clean
+        // un-interrupted playback before the crossfade into the
+        // alley music begins.
         const origTrigger = this._triggerHitbox.bind(this);
         const music = window.MusicHandler;
         let navigated = false;
