@@ -486,3 +486,12 @@ The 16-second opening silence is gone. Music-box ostinato now plays every
   produce reasonable intros for those scenes.
 - **render pipeline**: the silenceremove fix from c57f709 is still working
   (corridor renders at 101s, matching its WAV length).
+
+## Deferred (not active, just parked for later)
+
+- **SC-55mkII soundfont A/B test** — see `docs/SC55_AB_TEST.md`. Current
+  build uses VintageDreamsWaves-v2 as a stand-in for the SC-55 tone;
+  user is happy with the current sound and wants to defer the
+  font-swap experiment. When the user is ready, drop a real
+  SC-55 soundfont at `assets/audio/sc55.sf2` and re-run
+  `tools/render-midi.sh` to render fresh MP3s for A/B comparison.
