@@ -109,6 +109,21 @@ function loadAudio(src) {
     });
 }
 
+/**
+ * Synchronously read a previously-decoded audio element from cache.
+ * Used by MusicHandler to compute sensible default fadeAt times
+ * (mid-track) once the first loop is already playing. Returns null
+ * if the file hasn't been loaded yet — caller must fall back to a
+ * default in that case.
+ *
+ * @param {string} src - cache key (typically `assets/audio/<file>.mp3`)
+ * @returns {HTMLAudioElement|null}
+ */
+function getCachedAudio(src) {
+    const entry = assets.audio[src];
+    return entry ? entry.audio : null;
+}
+
 // Cover Image given as {image: HTMLImageElement}. Returns the
 // destination rect that scales-and-crops the image to fully fill the
 // canvas while preserving aspect ratio. Letterbox the gaps with
@@ -350,6 +365,7 @@ window.Runtime = {
     createGameCanvas,
     loadImage,
     loadAudio,
+    getCachedAudio,
     coverRect,
     containRect,
     pageToCanvasCoords,

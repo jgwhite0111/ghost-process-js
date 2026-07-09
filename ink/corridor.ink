@@ -1,36 +1,48 @@
-// ink/corridor.ink — ported from ghost-process-98
-// Portrait: android, next: jailbreak
+// ink/corridor.ink — corridor beat.
+//
+// Flow:
+//   1. Player enters. Android is INVISIBLE (no portrait tag yet) and
+//      the energy-ball sprite is not animating.
+//   2. Narration runs first ("The corridor pulses..."), then
+//      `# portrait:android` fades the android in.
+//   3. The android's talking lines render. The energy ball keeps
+//      animating continuously (no speaker:none freeze — see
+//      _ambientAnimateScenes in scene-base).
+//   4. Player picks Ask or PullAway. PullAway auto-transitions to
+//      jailbreak via transition_next(). NO portrait tag at the end —
+//      canvas wipes on transition, no fade-out needed.
+//
+// No "Continue" choice anywhere.
 
 EXTERNAL transition_next()
 
 -> Start
 
 === Start ===
+# speaker:none
+
+The corridor pulses. A glow gathers in the dark ahead of you.
+
 # portrait:android
-
-# speaker:none
-The door clicks shut behind you. The corridor is long and the fluorescent tube at the far end is the only light.
-
-# speaker:none
-At the end of the hall, a shape moves. The kid, scrambling, looking back.
-
 # speaker:android
-ANDROID: You should have stayed with me.
 
-# speaker:none
-You raise your right hand. Your palm opens. The air between your fingers thickens.
+You don't have to do this alone.
 
-# speaker:none
-A point of teal light materializes in the center of your palm. It grows. It hums. It knows what it is for.
+*   [Ask for help] -> Ask
+*   [Pull away] -> PullAway
 
+=== Ask ===
 # speaker:android
-ANDROID: You have a choice. Send it. Or take it back into your own chest.
 
+Then trust me.
+
+-> PullAway
+
+=== PullAway ===
 # speaker:none
-The kid reaches the end of the corridor. There is no door. They turn. They see the light in your hand.
 
-# speaker:android
-ANDROID: Choose.
+You pull away. The glow follows.
 
-* [Continue]
-  ~ transition_next()
+    ~ transition_next()
+
+-> END

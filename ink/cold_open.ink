@@ -12,10 +12,12 @@ EXTERNAL return_to_alley()
 
 The CRT whines as power returns.
 
-*   [Continue] -> Done
+-> Done
 
 === Done ===
 
 // End of cold open. Hands control back to the engine to load the alley scene.
 
 ~ return_to_alley()
+
+-> END

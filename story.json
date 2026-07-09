@@ -47,7 +47,15 @@
       "kind": "ink",
       "bg": "scene_intro_v11",
       "bgPalette": "alley",
-      "music": "intro_theme.mp3",
+      "music": [
+        {
+          "file": "cold_open.mp3"
+        },
+        {
+          "file": "cold_open_b.mp3",
+          "fadeAt": 51.1
+        }
+      ],
       "ink": "ink/cold_open.ink",
       "start_node": "Start",
       "characters": [],
@@ -66,7 +74,7 @@
         {
           "id": "android",
           "speaker": "ANDROID",
-          "placementY": 1,
+          "placementY": 1.0788302951388888,
           "targetH": 0.5,
           "scenes": {
             "alley": {
@@ -75,15 +83,15 @@
               "loop": true
             }
           },
-          "placementX": 0.7246210809475506
+          "placementX": 0.7872339959866131
         }
       ],
       "hitboxes": [
         {
-          "x": 0.4470252403846154,
-          "y": 0.654736328125,
-          "w": 0.1,
-          "h": 0.15,
+          "x": 0.4790931114783654,
+          "y": 0.7646918402777778,
+          "w": 0.047357177734375006,
+          "h": 0.1375271267361111,
           "item": "rusty_key",
           "label": "Search the bins"
         }
@@ -102,7 +110,15 @@
       "kind": "ink",
       "bg": "scene_chase",
       "bgPalette": "alley",
-      "music": "alley_confrontation.mp3",
+      "music": [
+        {
+          "file": "chase.mp3"
+        },
+        {
+          "file": "chase_b.mp3",
+          "fadeAt": 31.6
+        }
+      ],
       "ink": "ink/chase.ink",
       "start_node": "Start",
       "characters": [
@@ -128,7 +144,15 @@
       "kind": "ink",
       "bg": "scene_eidolon_return",
       "bgPalette": "lab_clinic",
-      "music": "clinic_tension.mp3",
+      "music": [
+        {
+          "file": "corridor.mp3"
+        },
+        {
+          "file": "corridor_b.mp3",
+          "fadeAt": 60.5
+        }
+      ],
       "ink": "ink/corridor.ink",
       "start_node": "Start",
       "characters": [
@@ -154,7 +178,15 @@
       "kind": "ink",
       "bg": "scene_jailbreak",
       "bgPalette": "industrial",
-      "music": "clinic_tension.mp3",
+      "music": [
+        {
+          "file": "jailbreak.mp3"
+        },
+        {
+          "file": "jailbreak_b.mp3",
+          "fadeAt": 35.1
+        }
+      ],
       "ink": "ink/jailbreak.ink",
       "start_node": "Start",
       "characters": [
@@ -169,7 +201,7 @@
             }
           },
           "placementY": 1,
-          "placementX": 0.7947566105769232
+          "placementX": 0.9051544189453125
         }
       ],
       "hitboxes": [],
@@ -180,7 +212,15 @@
       "kind": "ink",
       "bg": "scene_kabukicho",
       "bgPalette": "alley",
-      "music": "alley_confrontation.mp3",
+      "music": [
+        {
+          "file": "kabukicho.mp3"
+        },
+        {
+          "file": "kabukicho_b.mp3",
+          "fadeAt": 31.4
+        }
+      ],
       "ink": "ink/kabukicho.ink",
       "start_node": "Start",
       "characters": [
@@ -215,7 +255,15 @@
       "kind": "ink",
       "bg": "scene_corp_office",
       "bgPalette": "lab_clinic",
-      "music": "clinic_tension.mp3",
+      "music": [
+        {
+          "file": "corp_office.mp3"
+        },
+        {
+          "file": "corp_office_b.mp3",
+          "fadeAt": 37.3
+        }
+      ],
       "ink": "ink/corp_office.ink",
       "start_node": "Start",
       "characters": [
@@ -241,7 +289,15 @@
       "kind": "ink",
       "bg": "scene_terminal_lab",
       "bgPalette": "terminal_lab",
-      "music": "clinic_tension.mp3",
+      "music": [
+        {
+          "file": "terminal_lab.mp3"
+        },
+        {
+          "file": "terminal_lab_b.mp3",
+          "fadeAt": 50.6
+        }
+      ],
       "ink": "ink/terminal_lab.ink",
       "start_node": "Start",
       "characters": [
@@ -267,7 +323,15 @@
       "kind": "ink",
       "bg": "scene_ship_engine",
       "bgPalette": "industrial",
-      "music": "alley_confrontation.mp3",
+      "music": [
+        {
+          "file": "ship_engine.mp3"
+        },
+        {
+          "file": "ship_engine_b.mp3",
+          "fadeAt": 51.7
+        }
+      ],
       "ink": "ink/ship_engine.ink",
       "start_node": "Start",
       "characters": [
@@ -282,7 +346,7 @@
             }
           },
           "placementY": 1,
-          "placementX": 0.86552734375
+          "placementX": 0.90484619140625
         },
         {
           "id": "android",
@@ -306,7 +370,7 @@
     "rusty_key": {
       "id": "rusty_key",
       "name": "Rusty Key",
-      "description": "An old iron key, stained with verdigris. The teeth are filed in an unusual pattern — military, maybe, or police. It weighs more than it should.",
+      "description": "An old iron key, stained with verdigris. The teeth are filed in an unusual pattern \u2014 military, maybe, or police. It weighs more than it should.",
       "icon": "assets/items/rusty_key.png",
       "key": true,
       "pickup_message": "You found a rusty key."
@@ -322,7 +386,7 @@
     "battery": {
       "id": "battery",
       "name": "Battery",
-      "description": "A lithium cell still holding a partial charge. The label is in a script you can't read — Cyrillic, maybe, or something older. Smells faintly of ozone.",
+      "description": "A lithium cell still holding a partial charge. The label is in a script you can't read \u2014 Cyrillic, maybe, or something older. Smells faintly of ozone.",
       "icon": "assets/items/battery.png",
       "key": false,
       "pickup_message": "You pocketed a battery."

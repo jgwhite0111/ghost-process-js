@@ -26,6 +26,11 @@ class HitboxLayer {
         this.onTrigger = onTrigger;
         this.hitboxes = sceneConfig.hitboxes || [];
         this._alwaysVisible = (sceneConfig.kind === 'title');
+        // Item-pickup hitboxes (e.g. rusty_key in the alley) need to be
+        // discoverable: their label is always visible because the only
+        // way to advance the scene is to find and click them, and the
+        // player has no other visual cue.
+        this._itemHitboxesAlwaysVisible = (sceneConfig.kind === 'ink');
         this._debugAlwaysVisible = (localStorage.hideHitboxes === '0');
 
         // Pointer-move handler reads canvas-coords and tests hitboxes.
@@ -50,15 +55,32 @@ class HitboxLayer {
 
         this._labels = {};
         for (let i = 0; i < this.hitboxes.length; i++) {
-            this._labels[i] = this._createLabel(this.hitboxes[i]);
+            const lbl = this._createLabel(this.hitboxes[i]);
+            if (this._alwaysVisible) lbl.setAttribute('title-screen', '');
+            this._labels[i] = lbl;
             this._hitboxEls = this._hitboxEls || [];
             this._hitboxEls[i] = this._createHitboxDiv(this.hitboxes[i], i);
         }
         this._hoveredIdx = null;
         if (this._alwaysVisible) {
             for (const idx in this._labels) this._labels[idx].style.opacity = '1';
+        } else if (this._itemHitboxesAlwaysVisible) {
+            // Show item-pickup hitbox labels so the player can find them.
+            // But hide them once the item is in inventory or consumed.
+            for (let i = 0; i < this.hitboxes.length; i++) {
+                this._updateItemLabel(i);
+            }
         }
         this._syncOverlay();
+    }
+
+    _updateItemLabel(i) {
+        const hb = this.hitboxes[i];
+        if (!hb || !hb.item) return;
+        const inv = window.STATE?.inventory || [];
+        const consumed = window.STATE?.consumed || [];
+        const inInv = inv.indexOf(hb.item) !== -1 || consumed.indexOf(hb.item) !== -1;
+        this._labels[i].style.opacity = inInv ? '0' : '1';
     }
 
     _createHitboxDiv(hb, idx) {
@@ -168,24 +190,23 @@ class HitboxLayer {
         const key = this.sceneId + ':' + (hb.label || hb.target || hb.item);
         if (window.STATE.spentHitboxes[key]) return false;
         window.STATE.spentHitboxes[key] = true;
-        this.onTrigger && this.onTrigger(hb, x, y);
+        // Pass page-space coords so callers (e.g. Inventory.addWithFly)
+        // can position UI elements in the same coordinate system as
+        // pointer events.
+        this.onTrigger && this.onTrigger(hb, e.clientX, e.clientY);
         e.stopPropagation();
         return true;
     }
 
     _handleDomDown(e, hb, idx) {
-        // DOM-div path: hitbox is its own clickable node, so we know
-        // exactly which hitbox was clicked without hit-testing. The
-        // canvas-spy path (above) is a fallback if event ordering puts
-        // the canvas first — both go through onTrigger so the scene's
-        // logic only needs one code path.
-        if (!hb) return;
+        if (!hb) return false;
         const key = this.sceneId + ':' + (hb.label || hb.target || hb.item);
-        if (window.STATE.spentHitboxes[key]) return;
+        if (window.STATE.spentHitboxes[key]) return false;
         window.STATE.spentHitboxes[key] = true;
-        this.onTrigger && this.onTrigger(hb, 0, 0);
+        if (this.onTrigger) this.onTrigger(hb, e.clientX, e.clientY);
         e.stopPropagation();
         e.preventDefault();
+        return true;
     }
 
     destroy() {
@@ -193,6 +214,14 @@ class HitboxLayer {
         this.canvas.removeEventListener('pointerdown', this._onPointerDown);
         if (this.overlay) this.overlay.remove();
         this.canvas.style.cursor = '';
+    }
+
+    refresh() {
+        // Re-evaluate which labels should be visible (e.g. an item hitbox
+        // should hide once the item is in inventory). Called by the scene
+        // after _triggerHitbox adds the item.
+        if (!this._itemHitboxesAlwaysVisible) return;
+        for (let i = 0; i < this.hitboxes.length; i++) this._updateItemLabel(i);
     }
 }
 

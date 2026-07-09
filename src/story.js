@@ -52,10 +52,22 @@
             );
         }
         if (scene.music) {
-            preloadPromises.push(
-                window.Runtime.loadAudio(`assets/audio/${scene.music}`)
-                    .catch((e) => console.warn(`audio preload failed: ${scene.music}`, e))
-            );
+            // music can be a string (legacy single track) OR a list of
+            // {file: ..., fadeAt?: ..., volume?: ...} entries — preload
+            // each unique file so the runtime doesn't stall on first play.
+            const tracks = Array.isArray(scene.music)
+                ? scene.music
+                : (typeof scene.music === 'string'
+                    ? [{ file: scene.music }]
+                    : [scene.music]);
+            tracks.forEach((t) => {
+                if (t && t.file) {
+                    preloadPromises.push(
+                        window.Runtime.loadAudio(`assets/audio/${t.file}`)
+                            .catch((e) => console.warn(`audio preload failed: ${t.file}`, e))
+                    );
+                }
+            });
         }
         for (const char of scene.characters || []) {
             const sprites = (char.scenes || {})[sceneId] || {};

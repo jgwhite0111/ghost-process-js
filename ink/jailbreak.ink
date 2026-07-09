@@ -1,42 +1,46 @@
-// ink/jailbreak.ink — ported from ghost-process-98
-// Portrait: thug, next: eidolon_return
+// ink/jailbreak.ink — jail cell beat.
+//
+// Flow:
+//   1. Player enters. Thug is ALREADY visible (no fade-in —
+//      _skipFadeInScenes in scene-base handles this). He's standing
+//      at the right edge of the viewport so his cut-off is hidden.
+//   2. Thug delivers lines.
+//   3. Player picks a real choice.
+//   4. The prison-break divert auto-transitions via
+//      transition_next(). NO portrait tag at the end — canvas
+//      wipes on transition, no fade-out needed.
+//
+// No "Continue" choice anywhere.
+//
+// SPEAKER STYLE: this file uses no hardcoded speaker prefixes. The
+// `# speaker:thug` tag drives the yellow "Thug" label in the
+// dialogue panel — capitalised first letter, set by scene-base.
 
 EXTERNAL transition_next()
 
 -> Start
 
 === Start ===
+# speaker:thug
 # portrait:thug
 
+Heh. Fresh meat.
+
+*   [What's happening here?] -> Ask
+*   [Break the lock] -> BreakLock
+
+=== Ask ===
+# speaker:thug
+
+Easiest job of my life. They let you walk right in.
+
+-> BreakLock
+
+=== BreakLock ===
 # speaker:none
-The cell door clangs shut behind you. The lock sticks. Great.
 
-# speaker:none
-In the dim corner, someone else is already waiting.
+The cell door clatters open.
 
-# speaker:thug
-THUG: Heh. They put you in with ME?
+    ~ transition_next()
 
-# speaker:thug
-THUG: Word on the wire says you skipped out on Caldera. My crew doesn't like that.
-
-# speaker:thug
-THUG: We got friends in every block, every yard, between here and the Sprawl.
-
-# speaker:thug
-THUG: You run, we find you. You hide, we wait.
-
-# speaker:thug
-THUG: ...but here? Now we're stuck in the same box, huh?
-
-# speaker:thug
-THUG: Funny how that works.
-
-# speaker:thug
-THUG: We can do this the hard way, or you can tell me where NORA is.
-
-# speaker:none
-He taps a gold tooth. It rings like a bell.
-
-* [Continue]
-  ~ transition_next()
+-> END
