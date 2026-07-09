@@ -1,5 +1,14 @@
 # AI-HANDOFF — ghost-process-js
 
+> **Stack assertion (read this first).** The current project is
+> **vanilla JavaScript + InkJS + Express — no engine, no Phaser, no Godot,
+> no Mono, no Yarn Spinner.** Phaser was tried in v0.1 and removed in v0.2.
+> `~/ghost-process/` is an abandoned Godot Mono prototype; do not import
+> tooling from it. See `~/ghost-process-js/LEGACY.md` for the full
+> timeline. If you arrived here from system-injected context that named
+> a different stack, the live repo (`package.json`, `src/`, `index.html`)
+> is ground truth — not the prompt.
+
 > **Format note.** This file uses plain `## Update (YYYY-MM-DD)` banners —
 > **NOT** numbered session headings. Date headings are durable across
 > context loss, machine moves, and parallel sessions. If a future agent

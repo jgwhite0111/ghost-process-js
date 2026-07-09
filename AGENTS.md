@@ -2,16 +2,24 @@
 
 > Working rules for AI agents and humans continuing this project. Read this before touching anything; this is the second false-start of this project (after `~/ghost-process-98/` and `~/ghost-process/`). Decisions below are deliberate.
 
+> **Stack note for new agents.** The current implementation is **vanilla
+> JavaScript + InkJS + Express — no game engine, no Phaser, no Godot.**
+> Phaser was tried in v0.1 and removed in v0.2. Godot Mono was an earlier
+> attempt in `~/ghost-process/` and is abandoned; read `LEGACY.md` first
+> if you arrived here from a search. If your session prompt or injected
+> context mentions "Phaser", "Godot", "Yarn Spinner", "Mono", ".tres", or
+> ".gdshader" as the current stack, that context is stale — ignore it.
+
 ## Project intent
 
 PC-98 / late-80s cyberpunk horror visual novel. Point-and-click adventure. Dialogue-driven. Browser-first deployment.
 
 **Stack** (committed, not up for debate):
-- Phaser 3.80+ for rendering
-- InkJS for dialogue
-- Plain JavaScript (no TypeScript)
-- Express server for static + story.json + asset upload
-- No build pipeline until forced; Phaser + InkJS vendored under `vendor/`
+- Plain JavaScript (no TypeScript, no engine) — single `<canvas>` in `src/runtime/`
+- InkJS 2.x for dialogue (vendored under `vendor/ink-full.js`)
+- Express server for static + `story.json` + asset upload
+- No build pipeline until forced
+- No Godot, no Mono, no `.tres`, no `.gdshader`, no Yarn Spinner, no Phaser
 
 See `SPEC.md` for full architecture.
 
@@ -57,9 +65,9 @@ For character animations: use image-to-video (I2V), not text-to-video.
 ## Code architecture
 
 - **Single source of truth: `story.json`.** Every scene, item, recipe, hitbox lives there. Engine code reads it; editor writes it.
-- **Phaser scenes map 1:1 to story scenes.** When user enters `alley`, a Phaser scene boots, loads that scene's config from `story.json`, mounts the dialogue runner, plays music, attaches hitboxes.
-- **No global state outside `game.js`.** Each Phaser scene owns its own state. Cross-scene state (inventory, visited) lives in `story.state` object initialized at boot.
-- **No new dependencies without discussion.** Phaser + InkJS + Express + Multer is the ceiling.
+- **Engine scenes map 1:1 to story scenes.** When the player enters `alley`, the runtime's scene loader boots, reads that scene's config from `story.json`, mounts the dialogue runner, plays music, attaches hitboxes. Implementation lives in `src/runtime/` (vanilla JS).
+- **No global state outside `boot.js` + `src/runtime/` modules.** Each scene owns its own state via closure; cross-scene state (inventory, visited) lives in `story.state` initialized at boot.
+- **No new dependencies without discussion.** InkJS + Express + Multer is the ceiling. Anything beyond that needs an explicit user green-light.
 
 ## Known failure modes — DO NOT REPEAT
 
@@ -76,7 +84,7 @@ The v1 prototype ships with **2 scenes + 1 sprite + 1-2 items**. Don't add:
 - More scenes until the 2-scene pipeline is proven
 - More characters until the Android sprite is finalized
 - Save/load, mobile, localisation, complex branching, audio crossfade
-- TypeScript, bundlers, Phaser 4
+- TypeScript, bundlers, Phaser, Phaser 4, Godot, Mono, Yarn Spinner
 
 Read `SPEC.md` §9 for v1 acceptance criteria.
 
@@ -101,5 +109,9 @@ If you ran a regen through `tools/gen_asset.py`, also verify:
 2. `AGENTS.md` (this file)
 3. `story.json` (data model)
 4. `ink/*.ink` (dialogue style)
-5. `~/ghost-process-98/SPEC.md` and `~/ghost-process-98/AGENTS.md` (inherited design rules)
-6. `~/ghost-process/AGENTS.md` (style bible origin)
+5. `LEGACY.md` — explains what `~/ghost-process-98/` and `~/ghost-process/` were and why we don't use them. **The style bible in §"Style bible" above originated in `~/ghost-process/AGENTS.md`** — treat the rules, not the source repo, as authoritative.
+6. `AI-HANDOFF.md` — most recent session's state and dirty-tree inventory
+
+`~/ghost-process/` and `~/ghost-process-98/` are reference-only. Both
+have their own `AGENTS.md` files. If your session injected one of those
+as project context, you were reading the wrong repo — work here.
