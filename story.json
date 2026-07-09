@@ -164,7 +164,9 @@
             "corridor": {
               "frames": "assets/sprites/android/corridor/idle_*.png",
               "fps": 6,
-              "loop": true
+              "loop": true,
+              "playOnce": true,
+              "holdFrames": [5, 9]
             }
           },
           "placementY": 1

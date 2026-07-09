@@ -42,6 +42,30 @@ class CharacterSprite {
         this.frameRate = cfg.fps || 4;
         this.loop = cfg.loop !== false;
         this._globPrefix = cfg.frames;
+        // One-shot intro: play the full frame range once, then switch
+        // to looping `holdFrames` (inclusive) indefinitely. Used by
+        // the corridor android — the hand-raise plays once, then the
+        // energy ball pulses on a 4-5 frame hold range so the ball
+        // still looks alive while the hand stays up. Without this,
+        // the full 16-frame cycle repeats forever and the hand bobs
+        // up and down under the dialogue box.
+        //
+        // Both fields are optional. playOnce alone (no holdFrames)
+        // freezes on the last frame after the one-shot — a static
+        // finish. holdFrames alone (no playOnce) is treated as a
+        // plain loop range from frame 0.
+        this._playOnce = cfg.playOnce === true;
+        // Store the raw hold range; clamp in update() once frames are
+        // bound (this.frames.length is 0 at construction time because
+        // bindFrames() runs after the constructor returns).
+        if (Array.isArray(cfg.holdFrames) && cfg.holdFrames.length === 2) {
+            this._holdStart = Math.max(0, Math.floor(cfg.holdFrames[0]));
+            this._holdEnd = Math.floor(cfg.holdFrames[1]);
+        }
+        // _hasFiredOneShot gates the transition: only set true once
+        // the play-once playthrough completes. After that, the
+        // frame-advance logic in update() routes to the hold range.
+        this._hasFiredOneShot = false;
     }
 
     // Called by Scene after all preload has resolved. The runtime's
@@ -284,14 +308,51 @@ class CharacterSprite {
 
     update(deltaMs) {
         if (!this.isSpeaking || this.frames.length === 0) return;
+        // Lazy-clamp the hold range against the actual bound frame
+        // count. The constructor stored raw holdStart/holdEnd
+        // because frames.length was 0 at that point; this is the
+        // first tick where we know the real count.
+        if (this._holdEnd === undefined) this._holdEnd = 0;
+        const lastFrame = this.frames.length - 1;
+        const holdStart = this._holdStart !== undefined
+            ? Math.min(this._holdStart, lastFrame) : 0;
+        const holdEnd = this._holdEnd !== undefined
+            ? Math.min(this._holdEnd, lastFrame) : lastFrame;
+        if (holdEnd < holdStart) this._holdEnd = holdStart;
         const frameDurationMs = 1000 / this.frameRate;
         this.elapsed += deltaMs;
         while (this.elapsed >= frameDurationMs) {
             this.elapsed -= frameDurationMs;
+            // Hold-state path: once the one-shot playthrough
+            // completes, route frame-advance to the hold range
+            // instead of the full 0..N sequence. Wraps within the
+            // hold range so the energy ball keeps pulsing.
+            if (this._hasFiredOneShot) {
+                this.currentFrame++;
+                if (this.currentFrame > holdEnd) {
+                    this.currentFrame = holdStart;
+                }
+                continue;
+            }
             this.currentFrame++;
             if (this.currentFrame >= this.frames.length) {
-                if (this.loop) this.currentFrame = 0;
-                else this.currentFrame = this.frames.length - 1;
+                // End-of-playlist transition. Three cases:
+                // 1. playOnce + holdFrames → switch to hold loop
+                // 2. playOnce alone         → freeze on last frame
+                // 3. loop: true             → wrap to 0 (legacy)
+                // 4. loop: false            → freeze on last frame
+                if (this._playOnce) {
+                    if (holdStart !== holdEnd || holdStart !== lastFrame) {
+                        this._hasFiredOneShot = true;
+                        this.currentFrame = holdStart;
+                    } else {
+                        this.currentFrame = lastFrame;
+                    }
+                } else if (this.loop) {
+                    this.currentFrame = 0;
+                } else {
+                    this.currentFrame = this.frames.length - 1;
+                }
             }
         }
     }
