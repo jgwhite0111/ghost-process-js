@@ -166,7 +166,7 @@
               "fps": 6,
               "loop": true,
               "playOnce": true,
-              "holdFrames": [5, 9]
+              "holdFrames": [12, 14]
             }
           },
           "placementY": 1
@@ -279,7 +279,7 @@
               "fps": 4,
               "loop": true,
               "playOnce": true,
-              "holdFrames": [5, 9]
+              "holdFrames": [12, 14]
             }
           },
           "placementY": 1
@@ -315,7 +315,7 @@
               "fps": 6,
               "loop": true,
               "playOnce": true,
-              "holdFrames": [5, 9]
+              "holdFrames": [12, 14]
             }
           },
           "placementY": 1
@@ -364,7 +364,7 @@
               "fps": 4,
               "loop": true,
               "playOnce": true,
-              "holdFrames": [5, 9]
+              "holdFrames": [12, 14]
             }
           },
           "placementY": 1

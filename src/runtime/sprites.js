@@ -119,6 +119,12 @@ class CharacterSprite {
             const r = px[i], g = px[i + 1], b = px[i + 2], a = px[i + 3];
             // Pass 1: low-alpha edges → transparent.
             if (a > 0 && a < 240 && g > r * 1.2 && g > b * 1.2 && g < 220) {
+                // Cyan-side guard: don't kill low-alpha pixels where
+                // B is near or above G — those are the energy-ball
+                // edge, not the green halo. Otherwise the despill
+                // eats the ball's alpha fringe and the ball reads
+                // as a transparent disc that bleeds the background.
+                if (b >= g - 10) continue;
                 px[i + 3] = 0;
             }
         }
@@ -187,6 +193,14 @@ class CharacterSprite {
                     else if (y > 0 && px[(((y - 1) * w) + x) * 4 + 3] < 5) nextToTransparent = true;
                     else if (y < h - 1 && px[(((y + 1) * w) + x) * 4 + 3] < 5) nextToTransparent = true;
                     if (!nextToTransparent) continue;
+                    // Cyan-side guard: pixels where B is at or above G
+                    // are transitioning from the energy-ball cyan into
+                    // the green halo, not solid green halo themselves.
+                    // Killing them leaves a transparent ring around the
+                    // ball that bleeds the background through. Skip
+                    // anything where the blue channel is near or
+                    // above green.
+                    if (b >= g - 10) continue;
                     // Green-dominant? Same threshold as pass 1 (1.15x
                     // each channel) — slightly looser than pass 2's
                     // g-r/g-b threshold so we catch the inner ring.
