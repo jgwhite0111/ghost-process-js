@@ -164,9 +164,9 @@
             "corridor": {
               "frames": "assets/sprites/android/corridor/idle_*.png",
               "fps": 6,
-              "loop": true,
-              "playOnce": true,
-              "holdFrames": [12, 14]
+              "loop": false,
+              "playForward": true,
+              "playReverse": true
             }
           },
           "placementY": 1
@@ -277,9 +277,9 @@
             "corp_office": {
               "frames": "assets/sprites/android/corridor/idle_*.png",
               "fps": 4,
-              "loop": true,
-              "playOnce": true,
-              "holdFrames": [12, 14]
+              "loop": false,
+              "playForward": true,
+              "playReverse": true
             }
           },
           "placementY": 1
@@ -313,9 +313,9 @@
             "terminal_lab": {
               "frames": "assets/sprites/android/corridor/idle_*.png",
               "fps": 6,
-              "loop": true,
-              "playOnce": true,
-              "holdFrames": [12, 14]
+              "loop": false,
+              "playForward": true,
+              "playReverse": true
             }
           },
           "placementY": 1
@@ -362,9 +362,9 @@
             "ship_engine": {
               "frames": "assets/sprites/android/corridor/idle_*.png",
               "fps": 4,
-              "loop": true,
-              "playOnce": true,
-              "holdFrames": [12, 14]
+              "loop": false,
+              "playForward": true,
+              "playReverse": true
             }
           },
           "placementY": 1
@@ -378,7 +378,7 @@
     "rusty_key": {
       "id": "rusty_key",
       "name": "Rusty Key",
-      "description": "An old iron key, stained with verdigris. The teeth are filed in an unusual pattern — military, maybe, or police. It weighs more than it should.",
+      "description": "An old iron key, stained with verdigris. The teeth are filed in an unusual pattern \u2014 military, maybe, or police. It weighs more than it should.",
       "icon": "assets/items/rusty_key.png",
       "key": true,
       "pickup_message": "You found a rusty key."
@@ -394,7 +394,7 @@
     "battery": {
       "id": "battery",
       "name": "Battery",
-      "description": "A lithium cell still holding a partial charge. The label is in a script you can't read — Cyrillic, maybe, or something older. Smells faintly of ozone.",
+      "description": "A lithium cell still holding a partial charge. The label is in a script you can't read \u2014 Cyrillic, maybe, or something older. Smells faintly of ozone.",
       "icon": "assets/items/battery.png",
       "key": false,
       "pickup_message": "You pocketed a battery."

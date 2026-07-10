@@ -487,6 +487,58 @@ The 16-second opening silence is gone. Music-box ostinato now plays every
 - **render pipeline**: the silenceremove fix from c57f709 is still working
   (corridor renders at 101s, matching its WAV length).
 
+## Update (2026-07-10) — corridor android sprite laser taper (HANDOFF ONLY, no fix shipped)
+
+User feedback across this session (truncated): every frame too transparent,
+the laser not actually fading, then I reverted everything.
+
+### State of working tree (as of session end)
+
+**`~/ghost-process-js/assets/sprites/android/corridor/` matches HEAD
+exactly.** All 16 idle frames are at commit `a0edca5` ("pre-phaser-removal
+snapshot").
+
+**HEAD is NOT a usable state.** Visual inspection of HEAD shows every frame
+with cyan-tinted uniform (not dark navy). The user's verdict on HEAD after
+I revert-reverted: *"youll have reverted all the chrome key so now it will
+just be a green block over the scene"*. Treat HEAD as the broken baseline;
+do not assume `git checkout HEAD` is a recovery.
+
+### Where the actually-good sprites live
+
+The most recent user-accepted chroma is **`/tmp/regen/v6/`** (clean chroma,
+60-65% opaque on idle_01-idle_14, hard-cut laser on idle_15/16). See
+`HANDOFF_SPRITES.md` next to this file for the full forensic breakdown and
+fix plan.
+
+The laser taper itself: a linear alpha fade from x=140 to x=180 applied to
+ALL opaque pixels in that region (not just cyan — energy bursts have
+multi-color afterglow). Code + parameters are in `HANDOFF_SPRITES.md`.
+
+### What NOT to do on next session pickup
+
+- Do not assume HEAD is the last good state. HEAD is broken cyan-uniform.
+- Do not re-key idle_01..idle_14 with a different chroma function. v6 is the
+  baseline; copy untouched.
+- Do not apply a cyan-only taper (`is_laser = g > 150 AND r < g + 20`). It
+  misses orange/yellow/white afterglow. Use the all-colors taper.
+- Do not run the taper at source resolution (768×1364). The taper ranges
+  (x=140, x=180) assume final 180×320 size. Apply taper AFTER resize.
+- Do not commit anything until the user has visually verified in-game.
+
+### Files written this session
+
+- **`~/ghost-process-js/HANDOFF_SPRITES.md`** (new, ~12 KB) — the
+  structured handoff with ground-truth transparency table, the v6 baseline
+  ground truth, the taper function, and the verification steps. Read this
+  before doing anything to the sprites.
+
+### Files NOT touched this session
+
+- All sprite PNGs in `assets/sprites/android/corridor/` (16 files, all at HEAD)
+- `story.json` (scene config untouched)
+- `src/runtime/sprites.js` (runtime keyer untouched)
+
 ## Deferred (not active, just parked for later)
 
 - **SC-55mkII soundfont A/B test** — see `docs/SC55_AB_TEST.md`. Current

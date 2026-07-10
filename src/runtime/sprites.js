@@ -55,6 +55,12 @@ class CharacterSprite {
         // finish. holdFrames alone (no playOnce) is treated as a
         // plain loop range from frame 0.
         this._playOnce = cfg.playOnce === true;
+        this._playForward = cfg.playForward === true;
+        this._playReverse = cfg.playReverse === true;
+        // Forward+reverse compose a ping-pong animation:
+        //   forward 0→N-1  (hand raise, ball form)
+        //   reverse N-1→0  (hand lower, ball dissipate)
+        // On loop=false the sprite freezes on frame 0 at the end.
         // Store the raw hold range; clamp in update() once frames are
         // bound (this.frames.length is 0 at construction time because
         // bindFrames() runs after the constructor returns).
@@ -66,6 +72,11 @@ class CharacterSprite {
         // the play-once playthrough completes. After that, the
         // frame-advance logic in update() routes to the hold range.
         this._hasFiredOneShot = false;
+        // _phase tracks the current direction of the ping-pong
+        // animation. 0 = forward (ascending frames), 1 = reverse
+        // (descending frames), 2 = done (frozen on rest). Initialised
+        // to 0; the end-of-playlist logic in update() promotes it.
+        this._phase = 0;
     }
 
     // Called by Scene after all preload has resolved. The runtime's
@@ -348,14 +359,42 @@ class CharacterSprite {
                 }
                 continue;
             }
+            // DONE phase: frozen on frame 0, no further motion.
+            if (this._phase === 2) {
+                this.currentFrame = 0;
+                continue;
+            }
+            // REVERSE phase: frames descend N-1 → 0.
+            if (this._phase === 1) {
+                this.currentFrame--;
+                if (this.currentFrame <= 0) {
+                    // Reached the bottom. Either freeze (loop=false)
+                    // or ping back to forward (loop=true).
+                    if (this.loop) {
+                        this.currentFrame = 0;
+                        this._phase = 0;
+                    } else {
+                        this.currentFrame = 0;
+                        this._phase = 2;
+                    }
+                }
+                continue;
+            }
+            // FORWARD phase: frames ascend 0 → N-1.
             this.currentFrame++;
             if (this.currentFrame >= this.frames.length) {
-                // End-of-playlist transition. Three cases:
-                // 1. playOnce + holdFrames → switch to hold loop
-                // 2. playOnce alone         → freeze on last frame
-                // 3. loop: true             → wrap to 0 (legacy)
-                // 4. loop: false            → freeze on last frame
-                if (this._playOnce) {
+                // End-of-playlist transition. The order matters:
+                // ping-pong (forward+reverse) takes precedence over
+                // legacy playOnce/holdFrames, and playOnce takes
+                // precedence over the simple loop/freeze fallback.
+                if (this._playForward && this._playReverse) {
+                    // Pin at N-1, then reverse back down. When the
+                    // reverse phase reaches 0 the block above takes
+                    // over: loop=true → ping back to forward,
+                    // loop=false → freeze (set phase DONE).
+                    this.currentFrame = this.frames.length - 1;
+                    this._phase = 1;
+                } else if (this._playOnce) {
                     if (holdStart !== holdEnd || holdStart !== lastFrame) {
                         this._hasFiredOneShot = true;
                         this.currentFrame = holdStart;
