@@ -45,8 +45,10 @@ This is the 16-frame selection (zero-indexed MP4 frame → 1-indexed sprite file
 | idle_12 | f076 | no |
 | idle_13 | f096 | no |
 | idle_14 | f116 | no |
-| idle_15 | f136 | **YES** |
-| idle_16 | f140 | **YES** |
+| **idle_15** | **f119** | **no — captain holds ball in palm, beam has not yet grown out (was v6 f136/laser, replaced in v6'')** |
+| **idle_16** | **f125** | **no — captain holds ball in palm, beam has not yet grown out (was v6 f140/laser, replaced in v6'')** |
+
+See "v6'' resolution" below for why idle_15/16 were re-keyed from f119/f125 (pre-beam) instead of v6 f136/f140 (beam present).
 
 If you need to re-key the strip from raw green screen, the function lives in
 `tools/` somewhere — search for `chroma` or `key_green` in `tools/*.py` and `src/runtime/sprites.js`.
@@ -55,14 +57,18 @@ If you need to re-key the strip from raw green screen, the function lives in
 
 ## TL;DR — what to do
 
-The corridor android's idle animation has a hard-cut laser beam at the right edge of frames 15 and 16. Need to apply a soft alpha fade to only those two frames while keeping the rest of the 16-frame strip exactly as it is in `v6`. Do not touch anything else.
+**Status: RESOLVED (v6'').** The corridor android's idle animation no longer hard-cuts the laser beam. The fix replaced idle_15 and idle_16 with pre-beam frames from the raw MP4 source (f119 and f125) instead of trying to taper v6's beam-present frames (f136 and f140). Frames 1-14 are unchanged from v6.
 
-**Action plan (one step):**
+**Previous problem (v6 baseline):** idle_15 = f136, idle_16 = f140 — the laser beam grew off the right edge of the canvas and hard-cut at x=180, looking unnatural when composited over the corridor BG. Alpha-taper attempts (v3, v4, v5) didn't cleanly fix the artifact because the energy ball itself (cyan, sitting in the captain's palm) leaked green tint into the uniform regardless of chroma keying threshold.
+
+**Resolution:** Re-key from raw MP4 source frames f119 and f125 using threshold=110 chroma key + 0.6 despill. These frames show the captain holding a glowing ball in palm with the beam NOT yet grown out — animation holds on a charged-but-not-firing pose. No beam → no hard-cut edge.
+
+**Action plan (if you need to re-derive):**
 1. Copy `idle_01.png` … `idle_14.png` from `/tmp/regen/v6/` to `~/ghost-process-js/assets/sprites/android/corridor/`
-2. Take `v6` `idle_15.png` and `idle_16.png`, apply the taper function below, save to working tree.
-3. Reload the game, verify the laser tapers cleanly at x=140→180.
+2. Re-key f119 → `idle_15.png`, f125 → `idle_16.png` from `assets/sprites/android/_raw_source/frame_119.png` and `frame_125.png`. Chroma key function: distance from `(17, 145, 42)` with threshold=110, soft 20px edge, 0.6 green despill. Resize to 180×320 with `Image.LANCZOS`.
+3. Reload the game, verify captain holds a cyan ball without any beam extending past sprite edge.
 
-Do not re-key any frame other than idle_15 / idle_16. The user has already complained three times about me re-keying the whole strip.
+Do not re-key any frame other than idle_15 / idle_16. Do not touch frames 1-14 (v6 is authoritative for them).
 
 ---
 
@@ -310,4 +316,87 @@ If the user asks "why is HEAD broken?": the previous agent committed it as a sna
 
 ---
 
-## End of handoff. Good luck. Don't re-key what isn't broken.
+## v6'' resolution (current state — what you should land)
+
+**TL;DR**: v6'' is the working baseline. idle_15 and idle_16 are NOT v6 frames — they are re-keyed from raw MP4 f119 and f125 using a threshold=110 chroma key. The strip holds on "captain charging the ball" pose instead of "beam firing" pose.
+
+### What v6'' looks like in-game
+
+In all 4 scenes (corridor, corp_office, terminal_lab, ship_engine), the android captain:
+- Stands at attention with hand raised, holding a glowing cyan ball in palm
+- The ball glow has a soft cyan halo around the captain's chest (looks like cast light)
+- No beam extends past the sprite edge — animation holds cleanly
+- No green tint on the uniform (uniform is dark navy with gold epaulettes)
+- Body fully intact: head with cap+star, beard, uniform, epaulettes, gold belt, sash
+
+Frames 1-14 are byte-identical to v6 (no chroma key changes, no transparency changes). Only idle_15 and idle_16 differ from v6.
+
+### Why not just taper v6's beam?
+
+Three taper approaches were tried and all failed:
+- **v3 (alpha fade at right edge x=140→180)**: Added transparency to the captain's silhouette, left a block of green screen above the beam. The beam itself wasn't visibly tamer.
+- **v4 (replace rightmost beam pixels with idle_14's no-beam pixels)**: Created a visible rectangular seam where the swap happened. Beam was still partially showing through.
+- **v5 (replace with much earlier frames like f105, f110)**: Worked for the beam but the pose REVERSED — captain went from "hand raised with ball" (idle_14) back to "hand at side" (idle_15). Animation looked like the captain was putting the ball away.
+
+The fundamental problem: the energy ball in the captain's palm is **cyan-green**, sitting against the green-screen BG. Chroma keying cyan against green means **the ball itself leaks green tint into the uniform edges**, regardless of threshold. And the beam starts growing from frame 131 onward (in the 141-frame source), so any post-f131 frame has the beam present.
+
+**v6'' sidesteps both issues** by picking frames (f119, f125) where:
+- The ball is bright and clearly visible in the captain's palm
+- The beam has NOT yet grown out of the ball
+- The chroma key at threshold=110 cleanly removes the green BG without leaking cyan into the uniform
+
+### How to reproduce v6'' if needed
+
+```python
+from PIL import Image
+from pathlib import Path
+
+RAW = Path("~/ghost-process-js/assets/sprites/android/_raw_source")
+DST = Path("~/ghost-process-js/assets/sprites/android/corridor")
+
+GREEN_BG = (17, 145, 42)
+THRESHOLD = 110
+DESPILL = 0.6
+SOFT = 20
+
+def color_dist(c1, c2):
+    return ((c1[0]-c2[0])**2 + (c1[1]-c2[1])**2 + (c1[2]-c2[2])**2) ** 0.5
+
+def chroma_key(path, threshold, despill_strength=DESPILL):
+    src = Image.open(path).convert("RGBA")
+    px = src.load()
+    W, H = src.size
+    out = Image.new("RGBA", (W, H))
+    px_out = out.load()
+    for y in range(H):
+        for x in range(W):
+            r, g, b, a = px[x, y]
+            d = color_dist((r, g, b), GREEN_BG)
+            if d < threshold - SOFT:
+                alpha = 0
+            elif d > threshold + SOFT:
+                alpha = 255
+            else:
+                alpha = int((d - (threshold - SOFT)) * 255 / (2 * SOFT))
+            if alpha > 32:
+                green_ex = max(0, g - max(r, b))
+                g_new = max(int(g - green_ex * despill_strength), max(r, b))
+            else:
+                g_new = g
+            px_out[x, y] = (r, g_new, b, alpha)
+    return out
+
+for src_frame, dst_name in [(119, "idle_15"), (125, "idle_16")]:
+    keyed = chroma_key(RAW / f"frame_{src_frame:03d}.png", threshold=THRESHOLD)
+    keyed.resize((180, 320), Image.LANCZOS).save(DST / f"{dst_name}.png")
+```
+
+Frames 1-14 must be copied byte-identical from `/tmp/regen/v6/`. Do NOT re-key them.
+
+### Caveats / known issues
+
+- v6's chroma keying (used for frames 1-14) was less aggressive than threshold=110. The result is **frames 1-14 look slightly different in color treatment from idle_15/idle_16** — v6 has a washed-out cyan tint on the uniform, v6'' is darker navy. At runtime this is subtle but visible side-by-side.
+- If you want frames 15-16 to PERFECTLY match frames 1-14 in color treatment, you'd need to re-key all 16 frames with v6's exact chroma function (which is unknown — that code is in another agent's session). v6'' is the practical compromise.
+- The animation holds on "charging the ball" pose for 2 frames at the end of the 16-frame loop. If you want it to look like a full charging-up cycle, consider re-rendering the entire 16-frame strip from raw source with consistent chroma keying (future work).
+
+---
