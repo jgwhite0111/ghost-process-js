@@ -134,21 +134,48 @@ def indices_search(indices, cur):
 def write_rgba(rgba_array, dst_path, size=None):
     """Save RGBA numpy array as PNG, optionally resizing first.
 
-    When --size is set, uses ASPECT-PRESERVING shrink + paste-centred on a
-    transparent canvas. The figure keeps its source proportions; no edge
-    pixels are lost. Without --size, writes at source resolution.
+    When --size is set, target is treated as a *target height + max width hint*,
+    not an absolute canvas:
+
+      1. Trim transparent padding → tight figure bbox.
+      2. Scale so figure height == size[1] (target height).
+      3. Figure width is derived from its own aspect.
+      4. Canvas auto-grows horizontally to fit figure + pad; the canvas
+         height matches the target height (or grows if the figure is
+         wider-aspect and overflows the target width — in that case the
+         canvas grows wider so the arms are never chopped off).
+      5. Figure is centred with 8px (or 4%-of-width, whichever is larger)
+         transparent padding on left/right so no edge pixel touches the
+         canvas border.
+
+    The runtime uses img.width for placement, so per-frame canvas widths
+    are fine.
     """
     if size:
         tw, th = size
         h, w = rgba_array.shape[:2]
         if (w, h) != (tw, th):
-            # Aspect-preserving: scale to fit, paste-centred on transparent canvas.
-            scale = min(tw / w, th / h)
-            nw, nh = max(1, int(round(w * scale))), max(1, int(round(h * scale)))
-            resized = cv2.resize(rgba_array, (nw, nh), interpolation=cv2.INTER_LANCZOS4)
-            canvas = np.zeros((th, tw, 4), dtype=rgba_array.dtype)
-            ox, oy = (tw - nw) // 2, (th - nh) // 2
-            canvas[oy:oy + nh, ox:ox + nw] = resized
+            # 1. Trim transparent padding → tight figure bbox.
+            a = rgba_array[..., 3]
+            ys, xs = np.where(a > 8)
+            if len(ys) > 0:
+                x0, x1 = int(xs.min()), int(xs.max())
+                y0, y1 = int(ys.min()), int(ys.max())
+                tight = rgba_array[y0:y1 + 1, x0:x1 + 1]
+                tw_h, tw_w = tight.shape[:2]
+            else:
+                tight = rgba_array
+                tw_h, tw_w = h, w
+            # 2. Scale so figure height == target height.
+            scale = th / tw_h
+            figure_w = max(1, int(round(tw_w * scale)))
+            figure_h = th
+            resized = cv2.resize(tight, (figure_w, figure_h), interpolation=cv2.INTER_LANCZOS4)
+            # 3. Pad horizontally so figure never touches canvas border.
+            pad = max(8, int(round(figure_w * 0.04)))
+            new_w = figure_w + 2 * pad
+            canvas = np.zeros((figure_h, new_w, 4), dtype=rgba_array.dtype)
+            canvas[:, pad:pad + figure_w] = resized
             rgba_array = canvas
     # PIL handles RGBA → PNG cleanly; cv2.imwrite drops the alpha on some builds.
     Image.fromarray(rgba_array, mode="RGBA").save(str(dst_path))
