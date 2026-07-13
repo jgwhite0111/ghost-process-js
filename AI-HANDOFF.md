@@ -152,27 +152,22 @@ runtime draw) all trust the saved value directly.
 **v0.2.31 (cf162c4)** — Now superseded by v0.2.32. Don't read its
 commit body as ground truth; it's the wrong design.
 
-### Working tree state (run `git status -s` to confirm, as of 2026-07-13)
+### Working tree state (run `git status -s` to confirm, as of 2026-07-13 post-resolution)
 
 ```
-19 entries: 2 untracked (??), 17 modified (M)
+18 entries: 0 untracked (??), 18 modified (M)
 ```
 
-**Untracked (new files, not yet committed):**
-
-- `assets/sprites/android/corridor/README.md` — documents the
-  `corridor/raw/` + `corridor/processed/` contract. New since last
-  handoff. **Commit it** (or treat it as a WIP note alongside
-  `HANDOFF_SPRITES.md`).
-- `assets/sprites/android/corridor/raw/` — 141 PNGs + `i2v_clip_*.mp4`
-  + `sprite_extractor.py` + `transparent_sprites/`. New canonical source
-  location per the untracked README. See the 2026-07-13 banner for the
-  duplicate-path decision the user needs to make before this can land.
+**Untracked: none.** Both `corridor/README.md` and `corridor/raw/`
+landed in the cleanup resolution (commits d40f9d1, 0148947).
 
 **Modified (M):**
 
 - 16× `assets/sprites/android/corridor/idle_*.png` — v17 cyan-restored
-  strip + v19 sleeve animation. Active WIP per `HANDOFF_SPRITES.md`.
+  strip + v19 sleeve animation. Active WIP per the archived
+  `HANDOFF_SPRITES.md` history (now deleted; see commit 5bac1ba).
+  The chroma/replacement recipe for v6'' is in the git history
+  of `HANDOFF_SPRITES.md` if a future session needs it.
 - `src/runtime/sprites.js` — likely v0.2.41 hold-range +
   cyan-ball despill guard (commit 617249f). Uncommitted from the
   parallel session that landed v0.2.41.
@@ -181,9 +176,8 @@ commit body as ground truth; it's the wrong design.
 2026-07-08 banner (`scene_corridor.png`, 16× `eidolon_return/idle_*`,
 `eidolon_return.ink`) were either committed in the intervening 14
 commits or moved to `_deleted/` archives. The 142 staged
-`_raw_source/frame_*` deletes were rolled back during the 2026-07-13
-cleanup session because `HANDOFF_SPRITES.md` and
-`_diagnostics/README.md` still reference the old path.
+`_raw_source/frame_*` deletes landed cleanly in commit e7f9f3b
+after the duplicate-path decision was resolved in the same session.
 
 ### Verification
 
@@ -364,6 +358,81 @@ sitting unused, `rm` them or move to `ink/_drafts/`.
 
 ---
 
+## Update (2026-07-13) — dead-asset cleanup session (continued)
+
+The 2026-07-13 banner above said a user decision was needed on
+the corridor sprite source path. **The user has made that decision.**
+
+### Resolution (commits e7f9f3b, d40f9d1, 5bac1ba, 0148947)
+
+User reasoning: *"we have the original mp4 which there are derided
+from, correct? and the sprite_extractor script already does the
+green screen correct? so we dont need those 141 pngs."*
+
+Verified true:
+- `_raw_source/frame_001..141.png` and `corridor/raw/frame_001..141.png`
+  are byte-identical (MD5 verified on frame_001, 050, 141).
+- `corridor/raw/sprite_extractor.py` documents the full pipeline:
+  MP4 → 141 decomposed frames → 16 chroma-keyed PNGs → 180×320
+  RGBA sprite strip.
+- Both `_raw_source/i2v_clip_android_corridor.mp4` and
+  `corridor/raw/i2v_clip_android_corridor.mp4` are byte-identical.
+
+### What landed
+
+| Commit | What | Net |
+|---|---|---|
+| `e7f9f3b` | `git rm -r assets/sprites/android/_raw_source/` (the duplicate copy) | -120 MB |
+| `d40f9d1` | Commit `corridor/raw/` as the canonical source, **after stripping the 141 redundant `frame_001..141.png` files** (kept only MP4 + extractor + 16 `transparent_sprites/frame_00..15.png`) | 140 MB → 21 MB |
+| `5bac1ba` | Delete `HANDOFF_SPRITES.md` (laser-taper debug parking lot, parked per user) and update `_diagnostics/README.md` to point at `corridor/raw/` | -19 KB doc |
+| `0148947` | Commit `corridor/README.md` (was untracked) with the new source-of-truth layout description | +1 doc |
+
+### On-disk impact
+
+Before this resolution: 260 MB of redundant sprite raw material.
+After: 21 MB (just the 819 KB MP4 + 20 MB of 16 chroma-keyed
+intermediates + 6 KB extractor script).
+
+### Final reference state
+
+```
+$ grep -rn '_raw_source' . --include='*.{js,json,py,md,ink,sh}' \
+    | grep -v node_modules
+# (no hits)
+$ grep -rn 'HANDOFF_SPRITES' . --include='*.{js,json,py,md,ink,sh}' \
+    | grep -v node_modules
+# (no hits)
+```
+
+The `_raw_source/` path and `HANDOFF_SPRITES.md` are gone from
+the repo. All references have been retargeted to
+`corridor/raw/i2v_clip_android_corridor.mp4`.
+
+### Verification
+
+```
+$ python3 tools/test_full_chain.py
+VISITED: ['intro', 'alley', 'chase', 'kabukicho', 'corp_office', 'corridor',
+         'jailbreak', 'terminal_lab', 'ship_engine', 'alley']
+ERRORS: []
+```
+
+10 scenes, 0 errors. No runtime code was touched — only
+`assets/sprites/android/` and `HANDOFF_SPRITES.md`.
+
+### State after this session (post-resolution)
+
+```
+HEAD = 0148947 (sprites: commit corridor/README.md)
+Branch: main
+Sync: ahead of origin/main by 19 commits (was 10 at start of session, +5 from the first cleanup batch, +4 from the resolution)
+Working tree: 18 dirty, 0 untracked (16 corridor sprite WIP + src/runtime/sprites.js + corridor/raw/transparent_sprites/ count drift as the v17/v19 work lands).
+  All transparent_sprites/ PNGs and the MP4/extractor are now tracked.
+  Cleaned up via the resolution commits above.
+```
+
+---
+
 ## Update (2026-07-13) — dead-asset cleanup session
 
 User directive: *"get rid of any useless shit in the project, im fed up
@@ -389,24 +458,27 @@ dded4b9  sprites: commit android_scene_sprite_sources_20260711 diagnostic refere
 | `assets/audio/smoky_club_intro.mp3` (2.7 MB) | **DELETED (4b2b3e2)** | Generated but never wired. Grep across `story.json`, `ink/`, `src/`, `tools/` returns zero references. The `.mid` source is still committed (07ee831) so re-render is trivial. |
 | `ink/corp_office.ink`, `kabukicho.ink`, `ship_engine.ink`, `terminal_lab.ink` | **NOT TOUCHED — already committed in 2d5d641** | Old handoff §"Untracked" was stale info; verified with a script that walks `story.json` and confirms all four are referenced by scene definitions. |
 
-### Skipped on purpose — surfaces for next session
-
-| Item | Why skipped | What next session should do |
+### | Item | Why skipped | What next session should do |
 |---|---|---|
-| 16× `assets/sprites/android/corridor/idle_*.png` modified | Active WIP — v17 cyan-restored strip + v19 sleeve animation per HANDOFF_SPRITES.md | Read `git diff` on each; v6 baseline + v17/v19 work is in flight |
+| 16× `assets/sprites/android/corridor/idle_*.png` modified | Active WIP — v17 cyan-restored strip + v19 sleeve animation. Originally documented in the now-deleted `HANDOFF_SPRITES.md` (5bac1ba); recipe recoverable from git history. | Read `git diff` on each; v6 baseline + v17/v19 work is in flight |
 | `src/runtime/sprites.js` modified | Likely v0.2.41 hold-range + cyan-ball despill guard per 617249f | Verify intent against current sprite playback |
-| `assets/sprites/android/corridor/README.md` untracked | Documents the `raw/` + `processed/` contract; new since last handoff update | **Commit it** once the next agent decides if `raw/` is the new canonical path (it duplicates content of `_raw_source/`) |
-| `assets/sprites/android/corridor/raw/` (141 frames + MP4 + sprite_extractor.py + transparent_sprites/) | Untracked but documented as canonical source by the untracked README | **Decide**: (a) commit it as the new canonical path and migrate HANDOFF_SPRITES.md references, or (b) `git rm` the staged `_raw_source/` deletes and update HANDOFF_SPRITES.md to point at `corridor/raw/` |
-| `_raw_source/` (142 staged deletes, restored during this session) | **WAS rolled back** when I found HANDOFF_SPRITES.md:16,26,68,354 and _diagnostics/README.md:24 still reference `assets/sprites/android/_raw_source/`. Committing the deletes would orphan those doc paths. | See above — this is a 3-way mess between two locations and two docs. User decision needed before any commit. |
+
+(The original banner also listed `corridor/README.md`, `corridor/raw/`,
+and `_raw_source/` as "skipped — user decision needed." All three were
+resolved in the same session — see the "Update (2026-07-13) — dead-asset
+cleanup session (continued)" banner above for the resolution log.)
 
 ### Headline decision the next session needs from the user
 
-**The corridor sprite source path is duplicated and the docs disagree:**
+**Resolved in the same session.** The corridor sprite source path was
+duplicated and the docs disagreed. The user picked: keep `corridor/raw/`
+as canonical, drop `_raw_source/` as a duplicate, drop the 141 redundant
+`frame_001..141.png` PNGs as regenerable from the MP4 + extractor, and
+delete `HANDOFF_SPRITES.md` as a parked debug doc.
 
-- `assets/sprites/android/_raw_source/frame_001..141.png` — tracked in git, referenced by HANDOFF_SPRITES.md as canonical
-- `assets/sprites/android/corridor/raw/frame_001..141.png` — untracked, referenced by `corridor/README.md` (untracked) as canonical
-
-These are likely **duplicates** (both have `frame_001..141`, both have the MP4 or its equivalent, both have a `transparent_sprites/` subdir). Before any commit on either side, the user needs to pick one path and the agent updates both docs to match. Until then, both copies stay on disk + the 141 staged deletes stay staged.
+Net result: `_raw_source/` removed, `HANDOFF_SPRITES.md` deleted,
+`corridor/raw/` trimmed from 140 MB to 21 MB and committed. The 141
+staged deletes landed cleanly in commit e7f9f3b.
 
 ### Verification
 
