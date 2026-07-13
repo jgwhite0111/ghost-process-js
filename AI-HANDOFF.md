@@ -44,6 +44,22 @@ tree right now: status, what shipped, what's dirty, what's open.
 This banner tells the next session how to start clean for a fresh
 music-design attempt. The previous shape (A+B medleys) is restored.
 
+### Hard constraint — do not introduce or reference skills
+
+The user has explicitly rejected any involvement with the Hermes
+skills system. Do **not**:
+
+- Create a new skill under `~/.hermes/skills/` (or anywhere else).
+- Load `~/.hermes/skills/<anything>/SKILL.md` via `skill_view`.
+- Reference a skill by name as a way of saying "see X for details".
+- Save the next session's learnings as a skill (write them into
+  this AI-HANDOFF.md instead, or commit them as code/docs).
+- Suggest a skill-based workflow to the user as a solution.
+
+If a future session is tempted to "use a skill" or "save this as
+a skill", stop and ask the user first. The skills system is off
+the table for this project.
+
 ### What happened this session
 
 User rejected the long-track rewrite as a failed experiment:
@@ -476,10 +492,6 @@ sitting unused, `rm` them or move to `ink/_drafts/`.
 7. Run `python3 tools/test_full_chain.py` — confirm smoke test
    passes (this catches drift between the runtime contract and
    what the test exercises).
-8. Read `~/.hermes/skills/ghost-process-js-rebuild/SKILL.md`
-   for the procedural TL;DR of the latest 8 versions.
-
-### External setup (machines that need this)
 
 - Node + npm (`npm start` boots Express on :8765).
 - Python 3.11 (no pip module; use `pip→python3.11` or `uv`).
@@ -487,8 +499,10 @@ sitting unused, `rm` them or move to `ink/_drafts/`.
   scripts assume it does).
 - `~/.hermes/state.db` — FTS5 corruption has hit past sessions.
   If `session_search` returns "database disk image is malformed",
-  see `references/state-db-recovery.md` in the handoff-carryover-
-  cleanup skill.
+  exit Hermes and rebuild the FTS5 index by running:
+  `sqlite3 ~/.hermes/state.db "REINDEX messages_fts"` then
+  restart. (User does not want to maintain a separate
+  recovery-doc reference; inline the fix here.)
 
 ---
 
