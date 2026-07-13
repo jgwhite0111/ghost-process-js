@@ -25,12 +25,13 @@
     <!-- Vendored deps (no CDN; offline-first). See tools/vendor-deps.js to fetch. -->
     <script src="vendor/ink-full.js"></script>
 
-    <!-- Runtime (no Phaser). The whole 16-color dither / sprite / dialogue
-         pipeline is plain JS, ~700 LOC. See src/runtime/engine.js. -->
+    <!-- Runtime. The whole 16-color dither / sprite / dialogue
+         pipeline is plain JS, ~2150 LOC across src/runtime/. See
+         src/runtime/engine.js. -->
     <!-- Scene palettes (loaded first so Runtime.resolvePalette can find them
          on first scene start). Each is a window.PALETTES[name] = 16-entry
-         [r,g,b] table; the slot map (6 lighting + 8 identity + 2 accent)
-         is defined in tools/palettes.py in this repo. -->
+         [r,g,b] table; the slot map is [0..5] lighting, [6..10] identity,
+         [11..13] accent, [14] dark, [15] light. See SPEC.md §5.2. -->
     <script src="assets/palettes/alley.js"></script>
     <script src="assets/palettes/indoor.js"></script>
     <script src="assets/palettes/lab_clinic.js"></script>
