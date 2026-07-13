@@ -1,15 +1,13 @@
 // src/runtime/canvas.js — the canvas itself, plus an asset cache.
 //
-// The Phaser version used a 640x480 internal resolution with FIT scale.
-// We keep that 4:3 contract: a fixed-resolution backbuffer that the
-// browser scales to fit the viewport via CSS. This makes the pixel-
-// art + dither aesthetic crisper than fluid-rendering, and it matches
-// the dialogue box dimensions that were tuned in styles.css.
+// Internal canvas resolution tracks the viewport (not a fixed 640x480
+// backbuffer). Sprite coords land exactly where they're drawn — no CSS
+// scaling gap, no letterbox bars on portrait mobile. The canvas uses
+// `image-rendering: pixelated` so the dither stays crisp at any size.
 //
 // Asset preload is one big Promise.all of Image() objects keyed by
-// filename. We don't need Phaser's loader API for v1 — every asset is
-// triggered by an `src=` assignment + onload handler, exactly the
-// pattern used by the v0.98 prototype.
+// filename. Each asset is loaded with an `src=` assignment + onload
+// handler.
 
 const INTERNAL_W = 640;
 const INTERNAL_H = 480;

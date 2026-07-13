@@ -1,8 +1,6 @@
-// src/runtime/engine.js — owns the canvas, scene stack, and transitions.
+// src/runtime/engine.js — owns the canvas, scene transitions, and the
+// active Scene instance.
 //
-// The Engine is what the previous Phaser `game.js` + `boot.js` + scene-
-// stack did, but expressed as one vanilla-JS object. It has no scene
-// lifecycle events to fight — just:
 //   - boot() once at startup (loads story.json, opens canvas, starts intro)
 //   - goTo(sceneId) to transition (shuts down old scene, starts new one)
 //   - the canvas + ctx live on the engine as static fields so any

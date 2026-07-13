@@ -9,7 +9,7 @@
 //   - src/runtime/sprites.js    — character sprite animation
 //   - src/runtime/hitbox.js     — clickable regions on the canvas
 //   - src/runtime/scene-base.js — Scene class (bg + characters + dialogue)
-//   - src/runtime/engine.js     — scene stack + transitions
+//   - src/runtime/engine.js     — scene transitions
 //   - src/scenes/_registry.js   — Scene subclasses for each scene id
 //   - src/dialogue.js           — InkJS walker + typewriter
 //   - src/dialogue-panel.js     — DOM dialogue box + choice buttons
@@ -17,9 +17,9 @@
 //   - src/toast.js              — transient status messages
 //   - src/story.js              — story.json fetch + asset preload
 //
-// Phaser is not used. The 16-color palette / Bayer dither / scanlines
-// look is applied as a DOM CSS overlay (.scanlines) and the canvas
-// uses image-rendering: pixelated for crispness at any size.
+// The 16-color palette / Bayer dither / scanlines look is applied as a
+// DOM CSS overlay (.scanlines) and the canvas uses image-rendering:
+// pixelated for crispness at any size.
 
 (async () => {
     // STORY arrives via story-ready event; boot() waits for it.

@@ -1,25 +1,23 @@
 // src/runtime/music.js — crossfading bgm with medley support.
 //
-// The Phaser version used a window.MUSIC_HANDLER singleton that owned
-// the currently-playing track so crossfades could span scene
-// boundaries (intro's track fades out while the next scene's track
-// fades in). The same pattern works with HTMLAudioElement + a
-// requestAnimationFrame volume ramp; we don't need Phaser's sound
-// plugin for that.
+// MusicHandler is the window.MUSIC_HANDLER singleton. It owns the
+// currently-playing track so crossfades can span scene boundaries
+// (intro's track fades out while the next scene's track fades in).
+// Volume ramps use requestAnimationFrame over an HTMLAudioElement —
+// no audio framework needed.
 //
 // Autoplay handling: most browsers block audio.play() before a user
 // gesture. When that happens we register a one-shot global listener
 // for the first click/keydown anywhere on the page and resume the
-// audio then. This is what lets the intro screen actually have music
-// without a "click to enable audio" splash — clicking the PRESS
-// START hitbox counts as the gesture, and the music has already been
-// preloaded by the time that click arrives.
+// audio then. The intro screen therefore has music the moment the
+// player hits PRESS START — that click counts as the gesture, and
+// the music has already been preloaded by the time it arrives.
 //
 // MEDLEY support: scenes can declare a `music` field as either a
-// string (legacy single track) or a list of track objects with
-// optional `fadeAt` overrides:
+// string (single track) or a list of track objects with optional
+// `fadeAt` overrides:
 //
-//   "music": "chase.mp3"          ← single track, legacy
+//   "music": "chase.mp3"          ← single track
 //   "music": [                    ← medley, A → B with default fade
 //     { "file": "chase.mp3" },
 //     { "file": "chase_b.mp3" }
@@ -55,7 +53,7 @@ class MusicHandler {
 
     /**
      * Play music for a scene. Accepts either:
-     *   - a string filename (legacy single-track mode)
+     *   - a string filename (single-track mode)
      *   - a list of track objects with `file` keys (medley mode)
      *
      * The two modes share the same first-track fade-in behaviour; medley
@@ -67,14 +65,14 @@ class MusicHandler {
      * @param {number} fadeMs - crossfade overlap duration in ms
      */
     async play(musicArg, baseVolume = 0.7, fadeMs = 1200) {
-        // Normalise to a list — legacy string input becomes a one-element
+        // Normalise to a list — a string input becomes a one-element
         // list so the rest of the code can stay simple.
         const tracks = this._normaliseMusicArg(musicArg);
         // Cancel any pending medley crossfade from the previous scene —
         // a scene transition supersedes the schedule.
         this._cancelMedley();
-        // Cancel any in-flight resume listener — same logic as before,
-        // but now also flush any pending medley timer.
+        // Cancel any in-flight resume listener — flush any pending
+        // medley timer.
         if (this._pendingResume) {
             this._pendingResume = null;
             this._clearResumeListeners();
@@ -92,7 +90,7 @@ class MusicHandler {
     }
 
     /**
-     * Convert legacy string or single-object input to a normalised list.
+     * Convert string or single-object input to a normalised list.
      * Accepts: "chase.mp3", {file: "chase.mp3"}, [{file: ...}, ...]
      */
     _normaliseMusicArg(musicArg) {
@@ -207,8 +205,8 @@ class MusicHandler {
     }
 
     /**
-     * Internal: play a single track with the legacy fade-in path. Used
-     * for both the first track of a medley and the legacy single-string
+     * Internal: play a single track with the standard fade-in path. Used
+     * for both the first track of a medley and the single-string
      * API.
      */
     async _playOne(filename, baseVolume = 0.7, fadeMs = 1200) {

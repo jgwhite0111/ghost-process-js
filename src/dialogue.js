@@ -4,8 +4,8 @@
 // handles tags (# speaker:NAME, # portrait:NAME, # give:ITEM, etc.),
 // and renders text with typewriter effect.
 //
-// In v2 (no Phaser) the runner is purely JS — DOM dialogue box, no
-// scene plugin involved. The runner fires events for scene listeners:
+// The runner is purely JS — DOM dialogue box, no game framework
+// involved. The runner fires events for scene listeners:
 //   - onLine(text, tags, typed-so-far, total) — typewriter ticks
 //   - onChoices(choices) — choice buttons appeared
 //   - onCommand(key, args) — Ink-level commands (tags + EXTERNAL calls)

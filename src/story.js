@@ -2,9 +2,9 @@
 // preload, then fire `story-ready` so the Engine can boot.
 //
 // story-ready fires only after EVERY asset referenced by story.json
-// has been preloaded. This is what replaces Phaser's preload() phase.
-// Each scene's bg image, audio, and 16-frame sprite sheets is added
-// to the preload batch up-front. Total preload is bounded by the
+// has been preloaded. Each scene's bg image, audio, and 16-frame
+// sprite sheets are added to the preload batch up-front. Total preload
+// is bounded by the
 // number of scenes x assets; with ~7 scenes it's a few seconds.
 
 (async () => {
@@ -52,7 +52,7 @@
             );
         }
         if (scene.music) {
-            // music can be a string (legacy single track) OR a list of
+            // music can be a string (single track) OR a list of
             // {file: ..., fadeAt?: ..., volume?: ...} entries — preload
             // each unique file so the runtime doesn't stall on first play.
             const tracks = Array.isArray(scene.music)

@@ -3,9 +3,8 @@
 // Each hitbox is a normalized rectangle (x, y, w, h ∈ [0,1]) on the
 // scene canvas. The cursor changes to an eye icon when hovering a
 // region and a yellow debug rectangle + label fades in transiently.
-// This mirrors the behaviour that was previously implemented via a
-// Phaser Graphics overlay + a sibling DOM layer for labels — both
-// roles are now consolidated in CSS+JS without the Phaser middleman.
+// Both the cursor swap and the debug overlay are pure CSS — no
+// graphics library involved.
 //
 // Coordinates are tested in canvas-space (pageToCanvasCoords converts
 // pointer events on the way in), then matched against the hitbox rect.

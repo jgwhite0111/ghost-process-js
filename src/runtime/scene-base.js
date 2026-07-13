@@ -179,19 +179,14 @@ class Scene {
         try {
         const runner = new window.DialogueRunner(inkSource, {
             onLine: (text) => this._handleDialogueLine(text),
-            onSpeaker: (sp) => this._handleSpeaker(sp),
-            onAction: (act) => this._handleAction(act),
-            onGive: (itemId) => this._handleGive(itemId),
-            onPortrait: (portrait) => this._handlePortrait(portrait),
-            onTags: (tags) => this._handleTags(tags),
             onCommand: (cmd) => this._handleCommand(cmd)
         });
         runner._sceneId = this.sceneId;
         // EXTERNAL bindings are set up by the DialogueRunner constructor;
-        // their callbacks fire onCommand hooks that this scene's
-        // onCommand router (below) turns into Engine.goTo() calls.
-        // Panel handles text/speaker/choices; scene handles sprite
-        // visibility/portrait/speaker-action via its own onXxx hooks.
+        // their callbacks fire the runner's onCommand hook, which the
+        // overrides below route into the scene's _handle* methods
+        // (speaker, portrait, give, take, transition_next,
+        // return_to_alley) plus the DialoguePanel.
         runner.onLine = (text, tags, typed, total) => {
             // Scene hook (custom per-scene behaviour).
             this._handleDialogueLine(text);
@@ -388,8 +383,9 @@ class Scene {
 
     _transition(targetScene) {
         // Mark dialog runner dirty so its pending _step() (if any) gets
-        // skipped when the next scene spins up. This mirrors the
-        // _suppressStep pattern that the Phaser version needed.
+        // skipped when the next scene spins up. The scene's `_suppressStep`
+        // flag prevents the old runner from claiming a "ran out of
+        // content" warning mid-transition.
         if (this.dialogueRunner) this.dialogueRunner._suppressStep = true;
         window.Engine.goTo(targetScene);
     }
@@ -452,7 +448,6 @@ class Scene {
         }
     }
 
-    _handleAction(action) { /* no-op in v1 */ }
     _handleGive(itemId) { window.Inventory.add(itemId); }
     _handlePortrait(portrait) {
         // Find the character whose portrait name matches; fade that
@@ -474,7 +469,6 @@ class Scene {
             }
         }
     }
-    _handleTags(tags) { /* no-op in v1 */ }
     _handleCommand(cmd) {
         if (cmd.name === 'goto' && cmd.target) {
             const r = this.dialogueRunner;
