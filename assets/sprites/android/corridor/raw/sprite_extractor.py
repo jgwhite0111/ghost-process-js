@@ -213,21 +213,23 @@ def install_to_runtime():
         # width at that height + padding so the arms never touch the
         # canvas edge. Padding H_SCALE_X handles wide figures with
         # outstretched arms (ball-frames).
-        scale = target_h / tight_h
-        new_h = target_h
+        # 2. Scale figure to fit target_h MINUS vertical padding on
+        # both top and bottom. The figure must NEVER touch the top or
+        # bottom edge — feet/sash/coat bottom were being chopped at
+        # the bottom in earlier revisions.
+        v_pad = max(12, int(round(target_h * 0.04)))  # at least 12px, or 4% of height
+        usable_h = target_h - 2 * v_pad
+        scale = usable_h / tight_h
+        figure_h = usable_h
         figure_w = max(1, int(round(tight_w * scale)))
-        # Pad figure width so figure doesn't touch horizontal edges.
-        # If figure is already wider than target_w, give it some
-        # canvas breathing room by adding margin on the sides via
-        # a wider target canvas (the runtime uses img.width).
+        # 3. Pad horizontally so figure never touches canvas border.
         pad = max(12, int(round(figure_w * 0.06)))  # at least 12px, or 6% of width
         new_w = figure_w + 2 * pad
-        # Centre the figure horizontally with pad of transparent pixels
-        # on each side — arms can never spill off canvas because we
-        # sized the canvas to fit.
-        shrunk = tight.resize((figure_w, new_h), Image.Resampling.LANCZOS)
-        canvas = Image.new("RGBA", (new_w, new_h), (0, 0, 0, 0))
-        canvas.paste(shrunk, (pad, 0), shrunk)
+        # 4. Build canvas; paste figure centred horizontally AND
+        # vertically (with v_pad transparent margin on top + bottom).
+        shrunk = tight.resize((figure_w, figure_h), Image.Resampling.LANCZOS)
+        canvas = Image.new("RGBA", (new_w, target_h), (0, 0, 0, 0))
+        canvas.paste(shrunk, (pad, v_pad), shrunk)
         dst = corridor_dir / f"frame_{frame_n:02d}.png"
         canvas.save(dst)
         installed += 1
