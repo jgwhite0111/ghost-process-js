@@ -43,7 +43,7 @@ As of 2026-07-13, **the standard layout is not yet enforced**. Reality:
 
 | Scene | Status | Notes |
 |---|---|---|
-| `corridor/` | **Half-built.** Has `raw/` (MP4 + extractor + transparent_sprites), but the `processed/` subdir is empty — the v17/v19 WIP strip lives at the scene root as `frame_*.png`. The README describes a layout that doesn't match reality. |
+| `corridor/` | **Working.** `raw/` (MP4 + extractor + transparent_sprites) + `frame_*.png` at root (the runtime strip). `sprite_extractor.py` installs directly into `corridor/` (no `processed/` subdir); uses aspect-preserving shrink + paste-centred so the ball-frames keep their arm. |
 | `chase/` | **Historical reference.** Has `frame_*.png` at root + `raw/` containing the v0.14-era MP4 (black BG) + `transparent_sprites/`. The current chase animation is a different generation; no source for it. |
 | `alley/` | **No source.** 16 idle PNGs at root, all no provenance. |
 | `jailbreak/` | **No source.** 16 idle PNGs at root, all no provenance. |

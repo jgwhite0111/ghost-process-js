@@ -12,8 +12,8 @@ Layout (this file lives in `corridor/raw/`):
         sprite_extractor.py         # (this file)
         frame_001.png .. frame_141.png   # intermediate frames from MP4
         transparent_sprites/        # 16 keyed PNGs (intermediate output)
-      processed/                    # OUTPUTS — runtime-loaded sprite strip
-        frame_01.png .. frame_16.png  # 180x320 RGBA, what the runtime reads
+      frame_01.png .. frame_16.png  # OUTPUTS — runtime-loaded sprite strip
+                                    # (180x320 RGBA, written to corridor/ root)
 
 Run from this directory:
     cd assets/sprites/android/corridor/raw
@@ -27,7 +27,7 @@ Pipeline contract:
   - Rename: extracted frame_NN.png -> frame_{NN+1:02d}.png
             (frame_00 -> frame_01, frame_15 -> frame_16).
   - Resize to 180x320 with LANCZOS.
-  - Backup any existing processed/ strip to /private/tmp/WT_pre_corridor_install_<ts>/
+  - Backup any existing corridor/ strip to /private/tmp/WT_pre_corridor_install_<ts>/
     before overwriting, so a bad install can be reverted with `cp -a`.
 
 Deps: opencv-python (cv2), numpy, Pillow.
@@ -119,12 +119,13 @@ def install_into_corridor(transparent_dir):
     from PIL import Image
     import shutil, datetime
 
-    transparent_dir = Path(transparent_dir)
-    # Script lives in <sprite>/raw/, runtime strip sits at <sprite>/processed/
-    # (i.e. ../processed relative to the transparent_sprites/ folder).
-    processed_dir = transparent_dir.parent / "processed"
-    processed_dir.mkdir(parents=True, exist_ok=True)
-    corridor_dir = processed_dir  # local alias used below
+    transparent_dir = Path(transparent_dir).resolve()
+    # Script lives in <sprite>/raw/, transparent_dir is <sprite>/raw/transparent_sprites/.
+    # The runtime strip is at <sprite>/, i.e. two parents up from transparent_dir.
+    # (Previously this computed parent / "processed" which landed in raw/processed/ —
+    # the wrong place; the runtime reads from the sibling of raw/, not from raw/processed/.)
+    corridor_dir = transparent_dir.parent.parent
+    corridor_dir.mkdir(parents=True, exist_ok=True)
 
     # Backup current corridor strip (overwriting any prior backup of the same
     # day so we don't fill /tmp; older backups in the same dir are preserved).
@@ -146,7 +147,21 @@ def install_into_corridor(transparent_dir):
         dst = corridor_dir / f"frame_{frame_n:02d}.png"
         im = Image.open(src_path).convert("RGBA")
         if im.size != target_size:
-            im = im.resize(target_size, Image.Resampling.LANCZOS)
+            # Aspect-preserving shrink + paste-centred on a transparent canvas.
+            # Previous behaviour was im.resize((180, 320), LANCZOS) — a non-aspect-
+            # preserving stretch that cropped/shrank horizontally and vertically
+            # at different rates, distorting figure proportions and (worse) losing
+            # the outstretched arm when the source bbox spanned the full source
+            # width (the ball-frames touch x=0 in the MP4). This fit-and-paste
+            # shrinks to the smaller of (180/src_w, 320/src_h) so nothing is
+            # cropped and the figure stays centred.
+            src_w, src_h = im.size
+            scale = min(target_size[0] / src_w, target_size[1] / src_h)
+            new_w, new_h = max(1, int(round(src_w * scale))), max(1, int(round(src_h * scale)))
+            shrunk = im.resize((new_w, new_h), Image.Resampling.LANCZOS)
+            canvas = Image.new("RGBA", target_size, (0, 0, 0, 0))
+            canvas.paste(shrunk, ((target_size[0] - new_w) // 2, (target_size[1] - new_h) // 2), shrunk)
+            im = canvas
         im.save(dst)
         installed += 1
 
