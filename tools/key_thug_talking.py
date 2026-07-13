@@ -44,7 +44,7 @@ SRC = "assets/sprites/thug/raw/i2v_clip_thug_talking.webp"
 OUT_DIR = "assets/sprites/thug/jailbreak"
 FRAME_W, FRAME_H = 180, 320
 N_FRAMES = 16
-HALO_RADIUS = 5  # pixels — erode the brown halo within this distance
+HALO_RADIUS = 3  # pixels — erode the brown halo within this distance
                    # of any transparent neighbour
 
 
