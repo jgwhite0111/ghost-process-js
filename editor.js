@@ -258,6 +258,14 @@ async function togglePlay(charConfig) {
   const anim = state.spriteAnim[key];
   if (!anim) return;
   anim.playing = !anim.playing;
+  if (anim.playing) {
+    // Always restart from the rest pose when starting playback — the
+    // user's expectation is "press play, see the rest pose, then
+    // animate". If we'd just paused mid-animation, the resume point
+    // is irrelevant: from the user's POV they wanted a fresh preview.
+    anim.idx = 0;
+    anim._phase = 0;
+  }
   anim.lastT = performance.now();
   // Update spriteFrames cache to current frame immediately.
   const frames = state.spriteFrameLists[key];
@@ -265,6 +273,7 @@ async function togglePlay(charConfig) {
     state.spriteFrames[key] = frames[anim.idx % frames.length];
   }
   if (anim.playing) startAnimTick();
+  renderPreview();
   renderOverlay(); // refresh play/pause icon
 }
 
@@ -287,12 +296,53 @@ function startAnimTick() {
       const dt = t - anim.lastT;
       const step = Math.floor(dt / (1000 / fps));
       if (step > 0) {
-        anim.idx = (anim.idx + step) % frames.length;
         anim.lastT = t;
+        // Drive the sprite's frame index according to the same
+        // playForward / playReverse / loop logic as the in-game
+        // runtime (src/runtime/sprites.js). Mirrors _phase 0/1/2.
+        const playForward = scfg?.playForward === true;
+        const playReverse = scfg?.playReverse === true;
+        const loop = scfg?.loop !== false;  // default true
+        const N = frames.length;
+        if (playForward && playReverse) {
+          // Ping-pong: 0→N-1→0. Loop=true keeps bouncing; loop=false
+          // freezes on frame 0 after the first full cycle.
+          for (let i = 0; i < step; i++) {
+            if (anim._phase === undefined) anim._phase = 0;
+            if (anim._phase === 0) {
+              anim.idx++;
+              if (anim.idx >= N) {
+                if (!loop) { anim.idx = 0; anim._phase = 2; anim.playing = false; break; }
+                anim.idx = N - 2; anim._phase = 1;
+              }
+            } else if (anim._phase === 1) {
+              anim.idx--;
+              if (anim.idx < 0) {
+                if (!loop) { anim.idx = 0; anim._phase = 2; anim.playing = false; break; }
+                anim.idx = 1; anim._phase = 0;
+              }
+            }
+          }
+        } else if (playForward) {
+          anim.idx = (anim.idx + step) % N;
+          if (!loop && anim.idx === 0 && step > 0) { anim.playing = false; }
+        } else if (playReverse) {
+          anim.idx = (anim.idx - step + N * Math.ceil(step / N)) % N;
+          if (!loop && anim.idx === 0 && step > 0) { anim.playing = false; }
+        } else {
+          // No direction set: behave like simple loop forward (matches
+          // runtime default when neither flag is set).
+          anim.idx = (anim.idx + step) % N;
+        }
         state.spriteFrames[key] = frames[anim.idx];
       }
     }
-    if (anyPlaying) renderPreview();
+    if (anyPlaying) {
+      renderPreview();
+      // Re-render the overlay too so the play/pause icon stays in sync
+      // if the sprite's bounding box needs to refresh.
+      renderOverlay();
+    }
     else state._animTickHandle = null;
   };
   state._animTickHandle = requestAnimationFrame(tick);
