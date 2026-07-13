@@ -155,7 +155,7 @@ commit body as ground truth; it's the wrong design.
 ### Working tree state (run `git status -s` to confirm, as of 2026-07-13 post-resolution)
 
 ```
-18 entries: 0 untracked (??), 18 modified (M)
+17 entries: 0 untracked (??), 17 modified (M)
 ```
 
 **Untracked: none.** Both `corridor/README.md` and `corridor/raw/`
@@ -171,10 +171,10 @@ landed in the cleanup resolution (commits d40f9d1, 0148947).
 - `src/runtime/sprites.js` — likely v0.2.41 hold-range +
   cyan-ball despill guard (commit 617249f). Uncommitted from the
   parallel session that landed v0.2.41.
-- `assets/sprites/android/_diagnostics/README.md` — Source MP4 path
-  retargeted to `corridor/raw/i2v_clip_android_corridor.mp4` as part of
-  this session's resolution. Lands in the next handoff commit alongside
-  this banner.
+
+**Note:** `_diagnostics/README.md` was modified during the resolution
+to retarget its Source MP4 path and landed in commit 2ccf338 alongside
+this handoff update.
 
 **No more deleted files.** The 18 staged deletes listed in the
 2026-07-08 banner (`scene_corridor.png`, 16× `eidolon_return/idle_*`,
@@ -429,8 +429,8 @@ ERRORS: []
 ```
 HEAD = 0148947 (sprites: commit corridor/README.md)
 Branch: main
-Sync: ahead of origin/main by 16 commits (was 7 pre-session: 22273d6, bb794b2, 53203c0, ca27844, f80a2a2, 244eed9; +9 this session: 5 from the first cleanup batch, 4 from the resolution). origin/main is at 617249f (v0.2.41).
-Working tree: 18 dirty, 0 untracked
+Sync: ahead of origin/main by 17 commits (was 7 pre-session: 22273d6, bb794b2, 53203c0, ca27844, f80a2a2, 244eed9; +10 this session: 5 first-batch + 4 resolution + 1 handoff-count-fixup). origin/main is at 617249f (v0.2.41).
+Working tree: 17 dirty, 0 untracked
   - 16× corridor/idle_*.png — v17/v19 WIP
   - src/runtime/sprites.js — v0.2.41 hold-range + despill (617249f)
   - _diagnostics/README.md — modified during the resolution to retarget
