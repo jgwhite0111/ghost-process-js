@@ -753,206 +753,29 @@ _build_chase_patterns()
 # melodic line instead of a stuttering ostinato.
 SCENES["corridor"] = {
     "name": "corridor",
-    "bars": 24,                              # ~96s at 60 BPM (slow dread)
+    "bars": 16,
     "bpm": 60,
-    "lead": {"prog": 11, "vol": 75, "pan": 64, "reverb": 70, "mod_init": 0},  # Music Box
-    "bass": {"prog": 39, "vol": 70, "reverb": 30},
-    "pad":  {"prog": 100, "vol": 30, "pan": 64, "reverb": 100},  # vol=30 = quiet entry
-    "drums": {"vol": 0, "reverb": 0},        # no percussion
+    # NEW A: cut from OLD corridor_b bars 8-23 — the cinematic Fm→Ab section
+    # the user liked. Music Box 11 + Warm Pad 100 + Synth Bass 39, no percussion
+    # (laid-back scene). 16 bars @ 60 BPM ≈ 64s raw.
+    "lead": {"prog": 11, "vol": 75, "pan": 64, "reverb": 90, "mod_init": 0},  # Music Box
+    "bass": {"prog": 39, "vol": 70, "reverb": 30},   # Synth Bass
+    "pad":  {"prog": 100, "vol": 95, "pan": 64, "reverb": 100},   # Warm Pad
+    "drums": {"vol": 0, "reverb": 0},
     "key_intervals": MINOR,
-    "root": 0,                               # C minor
-    "lead_mod_ramp": (0, 30),                # music box gets breath
-    # Pad chords: chord 1 (Cm) enters at bar 0 quietly. chord 2 (Fm)
-    # enters at bar 8 for subdominant lift. chord 3 (Ab) enters at bar 12
-    # for the climax section. pad_breakdowns create the silence at bar 12
-    # (expression=0 mid-bar-12) and decay bars 18-23.
+    "root": 0,
+    "lead_mod_ramp": (0, 50),
+    # A chords: Fm (bars 0-7) → Ab (bars 8-15). The cinematic middle the user liked.
     "pad_chords": [
-        (0,  [N(0,3), N(3,3), N(7,3), N(10,3)]),       # Cm   (bars 0-7)
-        (8,  [N(5,3), N(8,3), N(0,4), N(3,4)]),        # Fm   (bars 8-11)
-        (12, [N(8,3), N(0,4), N(3,4), N(7,4)]),        # Ab   (bars 12-19)
+        (0,  [N(5,3), N(8,3), N(0,4), N(3,4)]),       # Fm  (bars 0-7)
+        (8,  [N(8,3), N(0,4), N(3,4), N(7,4)]),       # Ab  (bars 8-15)
     ],
-    # Pad expression ramp: 0->110 across the loop. Breakdown at bar 12
-    # zeros it for the silence, restores at bar 13 for the re-entry (with
-    # single peak arpeggio note), then breakdown at bars 18-23 zeros it
-    # for the final decay.
-    "pad_vel_ramp": (0, 110, 24),
-    "pad_breakdowns": [(12, 13), (18, 23)],
-    # Lead: music box plays a MELODIC PHRASE - not a repeated motif.
-    # bars 0-3: opening phrase. bars 4-7: counter-melody joins. bars 8-11:
-    # arpeggio motion over Fm, 3 voices. bars 12-23 unchanged (scare+climax).
-    "lead_pattern": [
-        # ===== BARS 0-3 - opening phrase (was: single motif every bar) ===
-        # bar 0: ascending Cm arpeggio
-        (0, [
-            (N(0,5),  PPQ, 0),
-            (N(3,5),  PPQ, 0),
-            (N(7,5),  PPQ, 0),
-            (N(10,5), PPQ, 0),
-        ]),
-        # bar 1: descending phrase with passing tones (8th notes)
-        (PPQ*4, [
-            (N(10,5), PPQ//2, 0),
-            (N(7,5),  PPQ//2, 0),
-            (N(5,5),  PPQ//2, 0),
-            (N(3,5),  PPQ//2, 0),
-            (N(2,5),  PPQ//2, 0),
-            (N(3,5),  PPQ//2, 0),
-            (N(0,5),  PPQ//2, 0),
-            (N(0,5),  PPQ//2, 0),
-        ]),
-        # bar 2: ascending run
-        (PPQ*8, [
-            (N(0,5),  PPQ//2, 0),
-            (N(3,5),  PPQ//2, 0),
-            (N(7,5),  PPQ//2, 0),
-            (N(10,5), PPQ//2, 0),
-            (N(0,6),  PPQ//2, 0),
-            (N(10,5), PPQ//2, 0),
-            (N(7,5),  PPQ//2, 0),
-            (N(3,5),  PPQ//2, 0),
-        ]),
-        # bar 3: descent with low octave anchor
-        (PPQ*12, [
-            (N(3,5),  PPQ//2, 0),
-            (N(0,5),  PPQ//2, 0),
-            (N(3,4),  PPQ//2, 0),
-            (N(0,4),  PPQ,    0),
-            (N(0,4),  PPQ,    0),
-        ]),
-        # ===== BARS 4-7 - counter-melody joins octave below ============
-        # bar 4: main melody continues, counter-melody plays below
-        (PPQ*16, [
-            (N(0,5),  PPQ//2, 0),
-            (N(3,5),  PPQ//2, 0),
-            (N(0,4),  PPQ//2, 0),
-            (N(7,5),  PPQ//2, 0),
-            (N(3,4),  PPQ//2, 0),
-            (N(10,5), PPQ//2, 0),
-            (N(0,4),  PPQ//2, 0),
-            (N(7,5),  PPQ//2, 0),
-        ]),
-        # bar 5: counter-melody plays arpeggio below
-        (PPQ*20, [
-            (N(7,5),  PPQ//2, 0),
-            (N(10,4), PPQ//2, 0),
-            (N(3,5),  PPQ//2, 0),
-            (N(7,4),  PPQ//2, 0),
-            (N(0,5),  PPQ//2, 0),
-            (N(3,4),  PPQ//2, 0),
-            (N(3,5),  PPQ//2, 0),
-            (N(0,4),  PPQ//2, 0),
-        ]),
-        # bar 6: counter-melody rises, tension builds
-        (PPQ*24, [
-            (N(0,5),  PPQ//2, 0),
-            (N(3,5),  PPQ//2, 0),
-            (N(0,5),  PPQ//2, 0),
-            (N(7,4),  PPQ//2, 0),
-            (N(7,5),  PPQ//2, 0),
-            (N(10,4), PPQ//2, 0),
-            (N(10,5), PPQ//2, 0),
-            (N(0,5),  PPQ//2, 0),
-        ]),
-        # bar 7: phrase peaks, descends to bar 12 silence
-        (PPQ*28, [
-            (N(10,5), PPQ//2, 0),
-            (N(7,5),  PPQ//2, 0),
-            (N(3,5),  PPQ//2, 0),
-            (N(0,5),  PPQ//2, 0),
-            (N(3,5),  PPQ,    0),
-            (N(0,5),  PPQ,    0),
-        ]),
-        # ===== BARS 8-11 - third voice, arpeggio motion over Fm =======
-        # bar 8: 3-voice arpeggio over Fm (pad chord switch)
-        (PPQ*32, [
-            (N(5,4),  PPQ//2, 0),
-            (N(0,5),  PPQ//2, 0),
-            (N(8,5),  PPQ//2, 0),
-            (N(5,4),  PPQ//2, 0),
-            (N(3,5),  PPQ//2, 0),
-            (N(8,4),  PPQ//2, 0),
-            (N(0,5),  PPQ//2, 0),
-            (N(5,4),  PPQ//2, 0),
-        ]),
-        # bar 9: descending arpeggio
-        (PPQ*36, [
-            (N(5,4),  PPQ//2, 0),
-            (N(3,4),  PPQ//2, 0),
-            (N(0,4),  PPQ//2, 0),
-            (N(8,4),  PPQ//2, 0),
-            (N(5,4),  PPQ//2, 0),
-            (N(3,4),  PPQ//2, 0),
-            (N(0,4),  PPQ//2, 0),
-            (N(3,4),  PPQ//2, 0),
-        ]),
-        # bar 10: ascending run, peaks at C6
-        (PPQ*40, [
-            (N(3,4),  PPQ//2, 0),
-            (N(5,4),  PPQ//2, 0),
-            (N(8,4),  PPQ//2, 0),
-            (N(0,5),  PPQ//2, 0),
-            (N(3,5),  PPQ//2, 0),
-            (N(5,5),  PPQ//2, 0),
-            (N(8,5),  PPQ//2, 0),
-            (N(0,6),  PPQ//2, 0),
-        ]),
-        # bar 11: settling - long notes with decay
-        (PPQ*44, [
-            (N(0,6),  PPQ*2,   0),
-            (N(3,6),  PPQ*2,   -5),
-        ]),
-        # ===== BAR 12 — SILENCE (the scare beat — KEEP UNCHANGED) =====
-        # ===== BAR 13 — single peak note (KEEP UNCHANGED) =============
-        (PPQ*52, [
-            (N(3,6), PPQ*4, 15),                       # Eb6 peak, accent +15
-        ]),
-        # ===== BARS 14-19 — climax arpeggios with Ab (KEEP UNCHANGED) ==
-        (PPQ*56, [                                     # bar 14
-            (N(8,5), PPQ, 0), (N(7,5), PPQ, 0),
-            (N(3,6), PPQ, 0), (N(0,6), PPQ, 0),
-            (N(7,6), PPQ, 0), (N(3,6), PPQ, 0),
-            (N(0,6), PPQ, 0), (N(8,5), PPQ, 0),
-        ]),
-        (PPQ*64, [                                     # bar 16 — peak
-            (N(0,7), PPQ, 0), (N(3,7), PPQ, 0),
-            (N(7,7), PPQ, 0), (N(3,7), PPQ, 0),
-            (N(0,7), PPQ*2, 5), (N(7,7), PPQ*2, 5),
-        ]),
-        # bars 18-23 — decay: arpeggios slow, final held note fades
-        (PPQ*72, [                                     # bar 18 — slowing
-            (N(3,6), PPQ*2, -5), (N(0,6), PPQ*2, -8),
-            (None, PPQ*8, 0),
-        ]),
-        (PPQ*88, [                                     # bar 22 — single held note
-            (N(0,6), PPQ*8, -10),                      # C6 fading to wrap
-        ]),
-        # bar 23 — silence
-    ],
-    "bass_pattern": [
-        # Rewrite 2026-07-13: previous bass was a C2 drone for 4 bars,
-        # then jumpy 4ths - too static. New: 8va walking bass with chord
-        # motion from bar 0, gives A a harmonic foundation throughout.
-        # bars 0-3: Cm walking (8va, 8th notes)
-        (0, [(N(0,2), PPQ//2, 0), (N(3,2), PPQ//2, 0),
-             (N(7,2), PPQ//2, 0), (N(0,3), PPQ//2, 0),
-             (N(10,2), PPQ//2, 0), (N(7,2), PPQ//2, 0),
-             (N(3,2), PPQ//2, 0), (N(0,2), PPQ//2, 0)]),
-        # bars 4-7: Cm with chromatic motion (the "restless bass")
-        (PPQ*16, [(N(0,2), PPQ//2, 0), (N(3,2), PPQ//2, 0),
-                  (N(5,2), PPQ//2, 0), (N(7,2), PPQ//2, 0),
-                  (N(0,3), PPQ//2, 0), (N(10,2), PPQ//2, 0),
-                  (N(7,2), PPQ//2, 0), (N(5,2), PPQ//2, 0)]),
-        # bars 8-11: Fm walking
-        (PPQ*32, [(N(5,2), PPQ//2, 0), (N(8,2), PPQ//2, 0),
-                  (N(0,3), PPQ//2, 0), (N(5,3), PPQ//2, 0),
-                  (N(3,3), PPQ//2, 0), (N(0,3), PPQ//2, 0),
-                  (N(8,2), PPQ//2, 0), (N(5,2), PPQ//2, 0)]),
-        # bars 12-19: Ab
-        (PPQ*48, [(N(8,2), PPQ*8, 0), (N(3,2), PPQ*8, 0),
-                  (N(8,2), PPQ*8, 0), (N(3,2), PPQ*8, 0)]),
-        # bars 20-23: rest
-        (PPQ*80, [(None, PPQ*8, 0)]),
-    ],
+    # Pad climbs slightly through the Ab climax.
+    "pad_vel_ramp": (88, 100, 16),
+    # Lead vel climbs across the piece — gives it the "instruments coming in" energy.
+    "lead_vel_ramp": (75, 95),
+    "lead_pattern": [],
+    "bass_pattern": [],
     "drum_pattern": [],
     "cross_boundary_crash": False,
 }
@@ -2440,125 +2263,95 @@ def _build_chase_e_patterns():
     cfg["drum_pattern"] = drum_ev
 _build_chase_e_patterns()
 
+def _build_corridor_patterns():
+    """Populate SCENES['corridor'] lead_pattern + bass_pattern from the OLD
+    corridor_b bars 8-23 (the cinematic Fm→Ab section the user liked).
+    Called at module load time, mutates SCENES['corridor'] in-place.
+    """
+    cfg = SCENES["corridor"]
+    bar = PPQ * BEATS_PER_BAR
+    eighth = PPQ // 2
+    # Lead pattern: music box motif [G4, C5, Eb5, C5] every 2 bars,
+    # 8th notes. Vel climbs 75→95 across the 16 bars (matches
+    # lead_vel_ramp target).
+    # Fm section (bars 0-7): motif_a = [G4, C5, Eb5, C5]
+    # Ab section (bars 8-15): motif_a' = [Eb5, G5, Bb5, G5] (shifted up a 4th)
+    motif_fm = [N(7,4), N(0,5), N(3,5), N(0,5)]   # G4, C5, Eb5, C5
+    motif_ab = [N(3,5), N(7,5), N(10,5), N(7,5)]  # Eb5, G5, Bb5, G5
+    lead_ev = []
+    for b in range(0, cfg["bars"], 2):
+        t = b * bar
+        motif = motif_fm if b < 8 else motif_ab
+        # Velocity ramp 75→95 across 16 bars
+        vel = int(75 + (95 - 75) * (b / max(1, cfg["bars"] - 1)))
+        for i, n in enumerate(motif):
+            lead_ev.append((t + i * eighth, [(n, eighth, vel - 5)]))
+    cfg["lead_pattern"] = lead_ev
+    # Bass pattern: F2/C3 alternating in Fm section, Ab2/C3 in Ab section,
+    # 4 hits per bar (every 2 beats).
+    bass_ev = [
+        # Fm (bars 0-7): pulse F2 / C3
+        (0, [(N(5,2), PPQ*2, 70), (N(0,3), PPQ*2, 70),
+             (N(5,2), PPQ*2, 70), (N(0,3), PPQ*2, 70)]),
+        # Ab (bars 8-15): pulse Ab2 / C3
+        (PPQ*32, [(N(8,2), PPQ*2, 70), (N(0,3), PPQ*2, 70),
+                  (N(8,2), PPQ*2, 70), (N(0,3), PPQ*2, 70)]),
+    ]
+    cfg["bass_pattern"] = bass_ev
+    cfg["drum_pattern"] = []
+_build_corridor_patterns()
+
 # ---------- 3. corridor_b — second motif, music box becomes detuned -----
 SCENES_B["corridor_b"] = {
     "name": "corridor_b",
     "bars": 24,
     "bpm": 60,
-    # B-side uses slightly different patch — detuned celesta (Celesta 8)
-    # same family as Music Box 11 but with different timbre — adds unease
-    "lead": {"prog": 8, "vol": 75, "pan": 64, "reverb": 80, "mod_init": 0},  # Celesta
-    "bass": {"prog": 39, "vol": 70, "reverb": 30},   # same
-    "pad":  {"prog": 100, "vol": 95, "pan": 64, "reverb": 100},   # same
-    "drums": {"vol": 0, "reverb": 0},         # same — no percussion
+    # B continues A's cinematic feel but adds fullness via octave doubling on the
+    # celesta. Same instrument palette as A — laid-back scene, no percussion.
+    "lead": {"prog": 8, "vol": 78, "pan": 64, "reverb": 80, "mod_init": 0},  # Celesta
+    "bass": {"prog": 39, "vol": 75, "reverb": 30},
+    "pad":  {"prog": 100, "vol": 95, "pan": 64, "reverb": 100},
+    "drums": {"vol": 0, "reverb": 0},
     "key_intervals": MINOR,
-    "root": 0,                               # C minor (same)
-    "lead_mod_ramp": (0, 45),                # celesta breath builds
-    # B-side chords: Cm → Fm → Ab (descending bass lift — heavier feel)
+    "root": 0,
+    "lead_mod_ramp": (10, 55),
+    # B stays in Cm throughout — gives the medley a stable middle before C lifts off.
     "pad_chords": [
-        (0,  [N(0,3), N(3,3), N(7,3), N(10,3)]),      # Cm  (bars 0-7)
-        (8,  [N(5,3), N(8,3), N(0,4), N(3,4)]),       # Fm  (bars 8-15)
-        (16, [N(8,3), N(0,4), N(3,4), N(7,4)]),       # Ab  (bars 16-23)
+        (0, [N(0,3), N(3,3), N(7,3), N(10,3)]),       # Cm all bars
     ],
-    # Pad starts ALREADY AT PEAK (A's quiet intro is over by now, but B is
-    # the sustain phase). Gentle droop at end so the loop wrap breathes
-    # before A returns. Mostly flat because the music is already cinematic.
-    "pad_vel_ramp": (95, 70, 24),
-    # Lead energy climbs through the climax bars 16-19, sustains to wrap.
-    "lead_vel_ramp": (70, 95),
+    "pad_vel_ramp": (95, 90, 24),
+    "lead_vel_ramp": (78, 92),
     "lead_pattern": [],
     "bass_pattern": [],
     "drum_pattern": [],
     "cross_boundary_crash": False,
 }
 def _build_corridor_b_patterns():
-    """corridor_b - REWRITTEN bars 0-7 for denser melodic line.
-
-    Old: celesta played a 4-note motif every 2 bars for bars 0-7 (8s gaps,
-    very sparse). New: celesta plays a melodic phrase (8th notes) with
-    counter-voice for bars 4-7; bass becomes walking 4ths.
-    bars 8-23 KEEP existing Fm/Ab/Cm material verbatim.
+    """B-side: cinematic continuation of A in Cm. Same motif structure as
+    A but with octave doubling on the celesta from bar 8 onwards so it
+    sounds fuller. Returns to Cm at the end. 24 bars @ 60 BPM.
     """
     cfg = SCENES_B["corridor_b"]
     bar = PPQ * BEATS_PER_BAR
-    # Bass: bars 0-7 REWRITTEN, bars 8-23 UNCHANGED.
+    eighth = PPQ // 2
     bass_ev = [
-        (0, [(N(0,2), PPQ//2, 0), (N(5,2), PPQ//2, 0),
-             (N(0,3), PPQ//2, 0), (N(5,2), PPQ//2, 0),
-             (N(7,2), PPQ//2, 0), (N(0,3), PPQ//2, 0),
-             (N(3,2), PPQ//2, 0), (N(0,2), PPQ//2, 0)]),
-        (PPQ*16, [(N(0,2), PPQ//2, 0), (N(3,2), PPQ//2, 0),
-                  (N(5,2), PPQ//2, 0), (N(8,2), PPQ//2, 0),
-                  (N(0,3), PPQ//2, 0), (N(5,2), PPQ//2, 0),
-                  (N(8,2), PPQ//2, 0), (N(5,2), PPQ//2, 0)]),
-        # bars 8-15: Fm pulsing 4ths (UNCHANGED)
-        (PPQ*32, [(N(5,2), PPQ*2, 0), (N(0,3), PPQ*2, 0),
-                  (N(5,2), PPQ*2, 0), (N(0,3), PPQ*2, 0)]),
-        # bars 16-23: Ab pulsing 4ths (UNCHANGED)
-        (PPQ*64, [(N(8,2), PPQ*2, 0), (N(0,3), PPQ*2, 0),
-                  (N(8,2), PPQ*2, 0), (N(0,3), PPQ*2, 0)]),
+        (0, [(N(0,2), PPQ*2, 0), (N(5,2), PPQ*2, 0),
+             (N(0,2), PPQ*2, 0), (N(5,2), PPQ*2, 0)]),
+        (PPQ*32, [(N(0,2), PPQ*2, 0), (N(5,2), PPQ*2, 0),
+                  (N(0,2), PPQ*2, 0), (N(5,2), PPQ*2, 0)]),
     ]
-    # Lead: bars 0-7 REWRITTEN with melodic phrase (celesta).
-    # bars 8-23 KEEP existing Fm/Ab/Cm motif loop verbatim.
+    motif_a = [N(3,5), N(7,5), N(10,5), N(7,5)]   # Eb-G-Bb-G (Cm)
     lead_ev = []
-    # bars 0-1: celesta Cm arpeggio phrase (8th notes)
-    lead_ev.append((0, [
-        (N(0,5),  PPQ//2, 0),  (N(3,5),  PPQ//2, 0),
-        (N(7,5),  PPQ//2, 0),  (N(10,5), PPQ//2, 0),
-        (N(7,5),  PPQ//2, 0),  (N(3,5),  PPQ//2, 0),
-        (N(5,5),  PPQ//2, 0),  (N(3,5),  PPQ//2, 0),
-    ]))
-    lead_ev.append((PPQ*4, [
-        (N(2,5),  PPQ//2, 0),  (N(0,5),  PPQ//2, 0),
-        (N(3,5),  PPQ//2, 0),  (N(5,5),  PPQ//2, 0),
-        (N(7,5),  PPQ//2, 0),  (N(5,5),  PPQ//2, 0),
-        (N(3,5),  PPQ//2, 0),  (N(0,5),  PPQ//2, 0),
-    ]))
-    lead_ev.append((PPQ*8, [
-        (N(0,5),  PPQ//2, 0),  (N(3,5),  PPQ//2, 0),
-        (N(7,5),  PPQ//2, 0),  (N(10,5), PPQ//2, 0),
-        (N(0,6),  PPQ//2, 0),  (N(10,5), PPQ//2, 0),
-        (N(7,5),  PPQ//2, 0),  (N(3,5),  PPQ//2, 0),
-    ]))
-    lead_ev.append((PPQ*12, [
-        (N(3,5),  PPQ//2, 0),  (N(0,5),  PPQ//2, 0),
-        (N(3,4),  PPQ//2, 0),  (N(0,4),  PPQ,    0),
-        (N(0,4),  PPQ,    0),
-    ]))
-    # bars 4-5: counter-melody voice joins octave below
-    lead_ev.append((PPQ*16, [
-        (N(0,5),  PPQ//2, 0),  (N(3,5),  PPQ//2, 0),
-        (N(0,4),  PPQ//2, 0),  (N(7,5),  PPQ//2, 0),
-        (N(3,4),  PPQ//2, 0),  (N(10,5), PPQ//2, 0),
-        (N(0,4),  PPQ//2, 0),  (N(7,5),  PPQ//2, 0),
-    ]))
-    lead_ev.append((PPQ*20, [
-        (N(7,5),  PPQ//2, 0),  (N(10,4), PPQ//2, 0),
-        (N(3,5),  PPQ//2, 0),  (N(7,4),  PPQ//2, 0),
-        (N(0,5),  PPQ//2, 0),  (N(3,4),  PPQ//2, 0),
-        (N(3,5),  PPQ//2, 0),  (N(0,4),  PPQ//2, 0),
-    ]))
-    lead_ev.append((PPQ*24, [
-        (N(0,5),  PPQ//2, 0),  (N(3,5),  PPQ//2, 0),
-        (N(0,5),  PPQ//2, 0),  (N(7,4),  PPQ//2, 0),
-        (N(7,5),  PPQ//2, 0),  (N(10,4), PPQ//2, 0),
-        (N(10,5), PPQ//2, 0),  (N(0,5),  PPQ//2, 0),
-    ]))
-    lead_ev.append((PPQ*28, [
-        (N(10,5), PPQ//2, 0),  (N(7,5),  PPQ//2, 0),
-        (N(3,5),  PPQ//2, 0),  (N(0,5),  PPQ//2, 0),
-        (N(3,5),  PPQ,    0),  (N(0,5),  PPQ,    0),
-    ]))
-    # bars 8-15 + 16-23: KEEP existing motif loop verbatim
-    motif_b = [N(8,4), N(0,5), N(3,5), N(0,5)]
-    motif_a = [N(3,5), N(7,5), N(10,5), N(7,5)]
-    for b in range(8, cfg["bars"], 2):
+    for b in range(0, cfg["bars"], 2):
         t = b * bar
-        motif = motif_b if b < 16 else motif_a
-        for i, n in enumerate(motif):
-            lead_ev.append((t + i * (PPQ // 2), [(n, PPQ // 2, 0)]))
-    cfg["bass_pattern"] = bass_ev
+        for i, n in enumerate(motif_a):
+            lead_ev.append((t + i * eighth, [(n, eighth, 0)]))
+            # octave below joins at bars 8+ for fullness
+            if b >= 8:
+                lead_ev.append((t + i * eighth, [(n - 12, eighth, 0)]))
     cfg["lead_pattern"] = lead_ev
+    cfg["bass_pattern"] = bass_ev
+    cfg["drum_pattern"] = []
 _build_corridor_b_patterns()
 
 
@@ -2781,7 +2574,7 @@ _build_corridor_c_patterns()
 # saw scream.
 SCENES_B["corridor_d"] = {
     "name": "corridor_d",
-    "bars": 8,
+    "bars": 16,
     "bpm": 60,
     "lead": {"prog": 11, "vol": 75, "pan": 64, "reverb": 80, "mod_init": 0},
     "bass": {"prog": 39, "vol": 50, "reverb": 50},
@@ -2795,8 +2588,8 @@ SCENES_B["corridor_d"] = {
         (0, [N(1,3), N(4,3), N(7,3), N(10,3)]),    # C# dim7 (bars 0-2)
         (3, [N(0,3), N(3,3), N(7,3), N(10,3)]),    # Cm (bars 3-7, quiet)
     ],
-    "pad_breakdowns": [(6, 7)],
-    "pad_vel_ramp": (40, 30, 8),               # fading
+    "pad_breakdowns": [(6, 7), (12, 15)],       # sustained silence from bar 12 onward
+    "pad_vel_ramp": (40, 20, 16),              # fading across full 16 bars
     "lead_pattern": [],
     "bass_pattern": [],
     "drum_pattern": [],
@@ -2814,7 +2607,7 @@ def _build_corridor_d_patterns():
 
     # Bass: C2 drone for bars 0-2, then silence for bars 3-7
     bass_ev.append((0, [(N(0,2), PPQ*12, 0)]))       # bars 0-2: C2 drone
-    bass_ev.append((PPQ*12, [(None, PPQ*20, 0)]))    # bars 3-7: silence
+    bass_ev.append((PPQ*12, [(None, PPQ*52, 0)]))    # bars 3-15: silence
     cfg["bass_pattern"] = bass_ev
 
     # Lead: dim7 stabs (bars 0-2), then single held C7 with vibrato (bars 3-7)
@@ -2832,6 +2625,17 @@ def _build_corridor_d_patterns():
     # bars 3-7: single held C7 with vibrato (heavy CC1 ramp makes it tremble)
     lead_ev.append((PPQ*12, [
         (N(0,7), PPQ*20, 0),    # C7 held for 5 bars
+    ]))
+    # bars 8-12: held G5 (drops a 5th) — the dread deepens. Music box
+    # timbre on a lower pitch with the same heavy vibrato makes it feel
+    # like the held note is sinking rather than ringing out.
+    lead_ev.append((PPQ*32, [
+        (N(7,5), PPQ*20, -10),   # G5 held, vel -10 (sinking)
+    ]))
+    # bars 13-14: silence (the dread resolves into nothing)
+    # bar 15: single ghost note — Bb5 fading, a final "music box is haunted" whisper
+    lead_ev.append((PPQ*60, [
+        (N(10,5), PPQ*4, -15),   # Bb5 ghost note, very quiet
     ]))
     cfg["lead_pattern"] = lead_ev
 _build_corridor_d_patterns()

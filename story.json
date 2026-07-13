@@ -170,19 +170,19 @@
         },
         {
           "file": "corridor_b.mp3",
-          "fadeAt": 60.5
+          "fadeAt": 93
         },
         {
           "file": "corridor_c.mp3",
-          "fadeAt": 50.0
+          "fadeAt": 95
         },
         {
           "file": "corridor_d.mp3",
-          "fadeAt": 45.0
+          "fadeAt": 63
         },
         {
           "file": "corridor_e.mp3",
-          "fadeAt": 22.0
+          "fadeAt": 95
         }
       ],
       "ink": "ink/corridor.ink",
@@ -422,7 +422,7 @@
     "rusty_key": {
       "id": "rusty_key",
       "name": "Rusty Key",
-      "description": "An old iron key, stained with verdigris. The teeth are filed in an unusual pattern — military, maybe, or police. It weighs more than it should.",
+      "description": "An old iron key, stained with verdigris. The teeth are filed in an unusual pattern \u2014 military, maybe, or police. It weighs more than it should.",
       "icon": "assets/items/rusty_key.png",
       "key": true,
       "pickup_message": "You found a rusty key."
@@ -438,7 +438,7 @@
     "battery": {
       "id": "battery",
       "name": "Battery",
-      "description": "A lithium cell still holding a partial charge. The label is in a script you can't read — Cyrillic, maybe, or something older. Smells faintly of ozone.",
+      "description": "A lithium cell still holding a partial charge. The label is in a script you can't read \u2014 Cyrillic, maybe, or something older. Smells faintly of ozone.",
       "icon": "assets/items/battery.png",
       "key": false,
       "pickup_message": "You pocketed a battery."
