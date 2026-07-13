@@ -94,35 +94,59 @@ const frame = $('#canvas-frame');
 //   (X is its own axis; left/right are independent of Y.)
 
 const SNAP_PX = 50;  // snap-attached distance (px, 1:1 on phone/desktop).
+const UNSNAP_PX = 8;  // hysteresis: cursor must come this far back
+                      // inside the canvas before the snap releases
+                      // (so the user can park NEAR an edge without
+                      // getting pulled to the edge while returning).
 
-function snapY(v, spriteH, vpH, snapPx) {
-  // BOTTOM edge: snap to v=1 within snapPx past the edge.
+function snapY(v, spriteH, vpH, snapPx, prevV) {
+  // BOTTOM edge: snap to v=1 within snapPx past edge.
+  // Only snap when the sprite is moving FURTHER off-canvas from the
+  // previous frame (prevV <= 1 → now v > 1, OR prevV > 1 → v > prevV).
+  // When returning (v < prevV while past edge), do NOT snap.
   if (v > 1) {
-    if ((v - 1) * vpH < snapPx) return 1;
-    return v;  // cursor far past edge: save raw value
+    const movingOut = (prevV === undefined) || v > prevV;
+    if (movingOut && (v - 1) * vpH < snapPx) return 1;
+    return v;  // cursor far past edge OR returning: save raw value
   }
-  // TOP edge: snap to spriteH/vpH within snapPx past top.
+  // TOP edge: snap to v=spriteH/vpH within snapPx past top.
   const topPx = v * vpH - spriteH;
   if (topPx < 0) {
-    if (-topPx < snapPx) return spriteH / vpH;
-    return v;  // cursor far past top: save raw value
+    const movingOut = (prevV === undefined) || v < prevV;
+    if (movingOut && -topPx < snapPx) return spriteH / vpH;
+    return v;
+  }
+  // Inside canvas with prev outside: if cursor is within UNSNAP_PX
+  // of returning to the edge zone, don't snap — let user park where
+  // they want.
+  if (prevV !== undefined && (prevV > 1 || prevV * vpH - spriteH < 0)) {
+    // we just came back inside; v is the raw value, keep it.
+    return v;
   }
   return v;
 }
 
-function snapX(v, spriteW, vpW, snapPx) {
+function snapX(v, spriteW, vpW, snapPx, prevV) {
   // placementX is centre; sprite's left = v*vpW - spriteW/2, right = +spriteW/2.
   const rightPx = v * vpW + spriteW / 2;
   const leftPx  = v * vpW - spriteW / 2;
-  // RIGHT edge: snap within snapPx past right.
+  // RIGHT edge: snap only when moving further out.
   if (rightPx > vpW) {
-    if (rightPx - vpW < snapPx) return 1 - spriteW / (2 * vpW);
-    return v;  // cursor far past right: save raw value
+    const movingOut = (prevV === undefined) || v > prevV;
+    if (movingOut && rightPx - vpW < snapPx) return 1 - spriteW / (2 * vpW);
+    return v;
   }
-  // LEFT edge: snap within snapPx past left.
+  // LEFT edge: snap only when moving further out.
   if (leftPx < 0) {
-    if (-leftPx < snapPx) return spriteW / (2 * vpW);
-    return v;  // cursor far past left: save raw value
+    const movingOut = (prevV === undefined) || v < prevV;
+    if (movingOut && -leftPx < snapPx) return spriteW / (2 * vpW);
+    return v;
+  }
+  // Just returned inside: keep raw value (no snap-back-to-edge).
+  if (prevV !== undefined) {
+    const prevRightPx = prevV * vpW + spriteW / 2;
+    const prevLeftPx  = prevV * vpW - spriteW / 2;
+    if (prevRightPx > vpW || prevLeftPx < 0) return v;
   }
   return v;
 }
@@ -431,6 +455,11 @@ function attachSpriteDrag(div, charConfig) {
       lastX: e.clientX, lastY: e.clientY,
       startPlacementY: typeof charConfig.placementY === 'number' ? charConfig.placementY : 0.97,
       startPlacementX: startPX,
+      // Previous frame's snapped placement — used by snapX/snapY to
+      // know which direction the cursor is moving so the snap can
+      // release when the user drags back inside the canvas.
+      lastPlacementY: typeof charConfig.placementY === 'number' ? charConfig.placementY : 0.97,
+      lastPlacementX: startPX,
       startTargetH: typeof charConfig.targetH === 'number' ? charConfig.targetH : 0.85,
     };
     div.classList.add('dragging');
@@ -472,8 +501,13 @@ function onSpriteDragMove(e) {
     // crossing.
     const newPYraw = state.drag.startPlacementY + dyUnits;
     const newPXraw = state.drag.startPlacementX + dxUnits;
-    const newPY = snapY(newPYraw, spriteH, vpH(), SNAP_PX);
-    const newPX = snapX(newPXraw, spriteW, vpW(), SNAP_PX);
+    // Pass the previous frame's snapped values so the snap functions
+    // know which direction the cursor is moving and can release when
+    // the user drags back inside the canvas.
+    const newPY = snapY(newPYraw, spriteH, vpH(), SNAP_PX, state.drag.lastPlacementY);
+    const newPX = snapX(newPXraw, spriteW, vpW(), SNAP_PX, state.drag.lastPlacementX);
+    state.drag.lastPlacementY = newPY;
+    state.drag.lastPlacementX = newPX;
     // One-shot diagnostic so the user can confirm vpW/vpH and
     // sprite dimensions are sane numbers. Triggers once at the start
     // of a drag; afterwards it's quiet. Open the browser console.

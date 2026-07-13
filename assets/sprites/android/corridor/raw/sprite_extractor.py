@@ -213,23 +213,25 @@ def install_to_runtime():
         # width at that height + padding so the arms never touch the
         # canvas edge. Padding H_SCALE_X handles wide figures with
         # outstretched arms (ball-frames).
-        # 2. Scale figure to fit target_h MINUS vertical padding on
-        # both top and bottom. The figure must NEVER touch the top or
-        # bottom edge — feet/sash/coat bottom were being chopped at
-        # the bottom in earlier revisions.
-        v_pad = max(12, int(round(target_h * 0.04)))  # at least 12px, or 4% of height
-        usable_h = target_h - 2 * v_pad
+        # 2. Scale figure. We pad top, left, right — but NOT bottom:
+        # the runtime anchors the sprite by its bottom edge so the
+        # feet stay grounded. Adding bottom padding would make the
+        # figure float above the ground line.
+        top_pad = max(12, int(round(target_h * 0.04)))  # at least 12px
+        usable_h = target_h - top_pad
         scale = usable_h / tight_h
         figure_h = usable_h
         figure_w = max(1, int(round(tight_w * scale)))
-        # 3. Pad horizontally so figure never touches canvas border.
-        pad = max(12, int(round(figure_w * 0.06)))  # at least 12px, or 6% of width
+        # 3. Pad horizontally (left and right) so figure never
+        # touches the side edges.
+        pad = max(12, int(round(figure_w * 0.06)))
         new_w = figure_w + 2 * pad
-        # 4. Build canvas; paste figure centred horizontally AND
-        # vertically (with v_pad transparent margin on top + bottom).
+        # 4. Build canvas; paste figure with top_pad transparent
+        # pixels above, left+right pad on the sides, and 0 bottom
+        # padding so feet sit flush at y=target_h-1.
         shrunk = tight.resize((figure_w, figure_h), Image.Resampling.LANCZOS)
         canvas = Image.new("RGBA", (new_w, target_h), (0, 0, 0, 0))
-        canvas.paste(shrunk, (pad, v_pad), shrunk)
+        canvas.paste(shrunk, (pad, top_pad), shrunk)
         dst = corridor_dir / f"frame_{frame_n:02d}.png"
         canvas.save(dst)
         installed += 1
