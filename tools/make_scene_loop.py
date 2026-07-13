@@ -58,6 +58,9 @@ RENDER_SH = ROOT / "tools" / "render-midi.sh"
 # -----------------------------------------------------------------------------
 PPQ = 96
 BEATS_PER_BAR = 4
+QUARTER = PPQ
+EIGHTH = PPQ // 2
+SIXTEENTH = PPQ // 4
 CH_LEAD = 0
 CH_BASS = 1
 CH_PAD = 2
@@ -958,6 +961,254 @@ def _build_jailbreak_patterns():
     cfg["drum_pattern"] = drum_ev
 _build_jailbreak_patterns()
 
+# ---------- 4c. jailbreak_c — tempo push climax, lead screams ---------
+# 24 bars @ 120→132 BPM. The tempo push from A continues; kit becomes
+# tom-driven for the peak. Lead climbs an octave. Bass has 8th-note
+# urgency. The pursuit peaks here.
+SCENES_B["jailbreak_c"] = {
+    "name": "jailbreak_c",
+    "bars": 24,
+    "bpm": 120,
+    "lead": {"prog": 81, "vol": 100, "pan": 64, "reverb": 50, "mod_init": 20},
+    "bass": {"prog": 38, "vol": 100, "reverb": 15},
+    "pad":  {"prog": 89, "vol": 70, "pan": 64, "reverb": 60},
+    "drums": {"vol": 90, "reverb": 25},
+    "lead_mod_ramp": (20, 80),
+    "lead_vel_ramp": (95, 115),
+    "key_intervals": MINOR,
+    "root": 9,                                 # A minor (same as A)
+    "pad_chords": [
+        (0,  [N(9,3), N(0,4), N(4,4), N(7,4)]),       # Am
+        (8,  [N(9,3), N(0,4), N(4,4), N(9,4)]),       # Am (add 9)
+        (16, [N(4,3), N(7,3), N(11,3), N(2,4)]),      # Dm (relative)
+    ],
+    "pad_vel_ramp": (80, 95, 24),
+    "pad_breakdowns": [],
+    "lead_pattern": [],
+    "bass_pattern": [],
+    "drum_pattern": [],
+    "tempo_changes": [(12, 132)],               # tempo push at bar 12
+}
+
+def _build_jailbreak_c_patterns():
+    """Tempo push climax: 16th-note bass, tom-driven kit, lead screams."""
+    cfg = SCENES_B["jailbreak_c"]
+    bar = PPQ * BEATS_PER_BAR
+    SIXTEENTH = PPQ // 4
+    EIGHTH = PPQ // 2
+    bass_ev = []
+    lead_ev = []
+    drum_ev = []
+    # Bass: 16th-note pulse on A, climbs in the second half
+    bass_ev.append((0, [
+        (N(9,1), SIXTEENTH, 0), (N(9,2), SIXTEENTH, 0),
+        (N(9,1), SIXTEENTH, 0), (N(0,2), SIXTEENTH, 0),
+        (N(9,1), SIXTEENTH, 0), (N(9,2), SIXTEENTH, 0),
+        (N(9,1), SIXTEENTH, 0), (N(4,2), SIXTEENTH, 0),
+    ] * 12))   # bars 0-11
+    bass_ev.append((PPQ*48, [
+        (N(9,1), SIXTEENTH, 0), (N(9,2), SIXTEENTH, 0),
+        (N(9,1), SIXTEENTH, 0), (N(0,2), SIXTEENTH, 0),
+        (N(4,2), SIXTEENTH, 0), (N(9,2), SIXTEENTH, 0),
+        (N(4,2), SIXTEENTH, 0), (N(7,2), SIXTEENTH, 0),
+    ] * 12))   # bars 12-23
+    cfg["bass_pattern"] = bass_ev
+    # Lead: screaming high A minor arpeggios
+    for b in range(0, 24, 2):
+        t = b * bar
+        motif = [N(9,4), N(0,5), N(4,5), N(0,5)]      # Am arpeggio
+        for i, n in enumerate(motif):
+            vel = min(20, 5 + i)
+            lead_ev.append((t + i * EIGHTH, [(n, EIGHTH, vel)]))
+    cfg["lead_pattern"] = lead_ev
+    # Drums: 4-on-floor + tom fills every 4 bars
+    KICK = 36; SNARE = 38; TOM_HI = 50; TOM_MID = 47; TOM_LO = 45; HAT = 42; RIDE = 51
+    for b in range(24):
+        t = b * bar
+        # Kick on every beat
+        for beat in range(4):
+            drum_ev.append((t + beat * PPQ, [(KICK, EIGHTH, 0)]))
+        # Snare on 2 and 4
+        drum_ev.append((t + PPQ, [(SNARE, EIGHTH, 0)]))
+        drum_ev.append((t + PPQ*3, [(SNARE, EIGHTH, 0)]))
+        # Hats on every 8th
+        for e in range(8):
+            drum_ev.append((t + e * EIGHTH, [(HAT, SIXTEENTH, -15)]))
+        # Tom fill at end of bar (last 2 beats) every 4 bars
+        if b % 4 == 3:
+            drum_ev.append((t + PPQ*2, [(TOM_HI, EIGHTH, 0)]))
+            drum_ev.append((t + PPQ*2 + EIGHTH, [(TOM_MID, EIGHTH, 0)]))
+            drum_ev.append((t + PPQ*3, [(TOM_LO, QUARTER, 0)]))
+    cfg["drum_pattern"] = [(t, n, v) for t, notes in drum_ev for n, _, v in notes]
+_build_jailbreak_c_patterns()
+
+# ---------- 4d. jailbreak_d — caught glimpse, the dread moment ----------
+# 16 bars @ 60 BPM (half-time). Kit stripped to heartbeat. Bass drops
+# to sub-octave drone. Lead: single held high A5 with heavy vibrato.
+# The chase caught a glimpse — the pursuer is closer than we thought.
+SCENES_B["jailbreak_d"] = {
+    "name": "jailbreak_d",
+    "bars": 16,
+    "bpm": 60,
+    "lead": {"prog": 81, "vol": 90, "pan": 64, "reverb": 80, "mod_init": 0},
+    "bass": {"prog": 38, "vol": 70, "reverb": 60},
+    "pad":  {"prog": 89, "vol": 60, "pan": 64, "reverb": 90},
+    "drums": {"vol": 50, "reverb": 60},         # heartbeat only
+    "lead_mod_ramp": (0, 110),                  # HEAVY vibrato
+    "lead_vel_ramp": (95, 105),
+    "key_intervals": MINOR,
+    "root": 9,                                 # A minor
+    "pad_chords": [
+        (0, [N(9,3), N(2,4), N(5,4), N(9,4)]),        # Am9 (dark color)
+        (8, [N(4,3), N(9,3), N(0,4), N(4,4)]),       # Dm9 (relative)
+    ],
+    "pad_vel_ramp": (50, 40, 16),
+    "pad_breakdowns": [],
+    "lead_pattern": [],
+    "bass_pattern": [],
+    "drum_pattern": [],
+}
+
+def _build_jailbreak_d_patterns():
+    """Caught glimpse: heartbeat kit, sub-octave bass drone, held A5."""
+    cfg = SCENES_B["jailbreak_d"]
+    bar = PPQ * BEATS_PER_BAR
+    bass_ev = []
+    lead_ev = []
+    drum_ev = []
+    # Bass: A1 drone throughout
+    bass_ev.append((0, [(N(9,1), PPQ*64, 0)]))
+    cfg["bass_pattern"] = bass_ev
+    # Lead: single held A5 with heavy vibrato, descends at the end
+    lead_ev.append((0, [(N(9,5), PPQ*60, 0)]))          # A5 held for 15 bars
+    # bar 15-16: bend down a half-step (the voice catches)
+    lead_ev.append((PPQ*60, [
+        (N(8,5), PPQ*4, -5),                            # Ab5 at the end
+    ]))
+    cfg["lead_pattern"] = lead_ev
+    # Drums: heartbeat only — kick on 1, snare on 3, ghost ride
+    KICK = 36; SNARE = 38; RIDE = 51
+    for b in range(16):
+        t = b * bar
+        drum_ev.append((t, [(KICK, QUARTER, -10)]))
+        drum_ev.append((t + PPQ*2, [(SNARE, QUARTER, -10)]))
+        drum_ev.append((t + PPQ, [(RIDE, EIGHTH, -25)]))
+        drum_ev.append((t + PPQ*3, [(RIDE, EIGHTH, -25)]))
+    cfg["drum_pattern"] = [(t, n, v) for t, notes in drum_ev for n, _, v in notes]
+_build_jailbreak_d_patterns()
+
+# ---------- 4e. jailbreak_e — escape acceleration, loop seam ----------
+# 24 bars @ 60→120 BPM (half-time lift to full tempo at bar 12).
+# Kit comes back bar-by-bar. Lead climbs back to A's register. Last 4
+# bars mirror A's opening for seamless loop seam.
+SCENES_B["jailbreak_e"] = {
+    "name": "jailbreak_e",
+    "bars": 24,
+    "bpm": 60,
+    "lead": {"prog": 81, "vol": 95, "pan": 64, "reverb": 50, "mod_init": 30},
+    "bass": {"prog": 38, "vol": 95, "reverb": 20},
+    "pad":  {"prog": 89, "vol": 80, "pan": 64, "reverb": 70},
+    "drums": {"vol": 85, "reverb": 30},
+    "lead_mod_ramp": (110, 30),                 # vibrato decays as we recover
+    "lead_vel_ramp": (90, 110),
+    "key_intervals": MINOR,
+    "root": 9,                                 # A minor
+    "pad_chords": [
+        (0,  [N(9,3), N(0,4), N(4,4), N(7,4)]),       # Am
+        (12, [N(9,3), N(0,4), N(4,4), N(9,4)]),       # Am (add 9)
+        (20, [N(9,3), N(0,4), N(4,4), N(7,4)]),       # Am (seam to A)
+    ],
+    "pad_vel_ramp": (60, 95, 24),
+    "pad_breakdowns": [],
+    "lead_pattern": [],
+    "bass_pattern": [],
+    "drum_pattern": [],
+    "tempo_changes": [(12, 120)],               # half-time lift to full tempo
+}
+
+def _build_jailbreak_e_patterns():
+    """Escape: kit returns bar-by-bar, tempo lifts at bar 12, loop seam."""
+    cfg = SCENES_B["jailbreak_e"]
+    bar = PPQ * BEATS_PER_BAR
+    EIGHTH = PPQ // 2
+    bass_ev = []
+    lead_ev = []
+    drum_ev = []
+    KICK = 36; SNARE = 38; HAT = 42; RIDE = 51; CRASH = 49
+    # Bass: 8th-note pulse, A1 alternates with A2
+    for b in range(24):
+        t = b * bar
+        for beat in range(4):
+            bass_ev.append((t + beat * PPQ, [
+                (N(9,1), EIGHTH, 0), (N(9,2), EIGHTH, 0),
+            ]))
+    cfg["bass_pattern"] = bass_ev
+    # Lead: climbing back — low at first, then up to A's register
+    # bars 0-7: low register (post-scare)
+    lead_ev.append((0, [
+        (N(9,4), PPQ*2, -10), (N(7,4), PPQ*2, -10),
+        (N(4,4), PPQ*2, -10), (N(0,4), PPQ*2, -10),
+    ]))
+    lead_ev.append((PPQ*16, [
+        (N(9,4), PPQ*2, -5), (N(0,5), PPQ*2, -3),
+        (N(4,4), PPQ*2, -5), (N(7,4), PPQ*2, -5),
+    ]))
+    # bars 8-15: mid register, climbing
+    lead_ev.append((PPQ*32, [
+        (N(9,4), PPQ*2, 0), (N(0,5), PPQ*2, 3),
+        (N(4,5), PPQ*2, 5), (N(7,5), PPQ*2, 5),
+    ]))
+    lead_ev.append((PPQ*48, [
+        (N(9,5), PPQ*2, 5), (N(7,5), PPQ*2, 5),
+        (N(4,5), PPQ*2, 3), (N(0,5), PPQ*2, 0),
+    ]))
+    # bars 16-23: high register, A's opening shape
+    for b in range(16, 24, 2):
+        t = b * bar
+        motif = [N(9,4), N(0,5), N(4,5), N(0,5)]
+        for i, n in enumerate(motif):
+            vel = 3 + i
+            lead_ev.append((t + i * EIGHTH, [(n, EIGHTH, vel)]))
+    cfg["lead_pattern"] = lead_ev
+    # Drums: kit returns bar-by-bar
+    # bars 0-3: heartbeat (kick on 1, ride ghosts)
+    for b in range(4):
+        t = b * bar
+        drum_ev.append((t, [(KICK, QUARTER, 0)]))
+        drum_ev.append((t + PPQ*2, [(RIDE, EIGHTH, -25)]))
+    # bars 4-7: add snare on 3 + hats
+    for b in range(4, 8):
+        t = b * bar
+        drum_ev.append((t, [(KICK, QUARTER, 0)]))
+        drum_ev.append((t + PPQ*2, [(SNARE, QUARTER, 0)]))
+        for e in range(8):
+            drum_ev.append((t + e * (PPQ//2), [(HAT, PPQ//4, -10)]))
+        drum_ev.append((t + PPQ, [(RIDE, EIGHTH, -20)]))
+        drum_ev.append((t + PPQ*3, [(RIDE, EIGHTH, -20)]))
+    # bars 8-11: half-time 4-on-floor
+    for b in range(8, 12):
+        t = b * bar
+        for beat in range(4):
+            drum_ev.append((t + beat * PPQ, [(KICK, EIGHTH, 0)]))
+        drum_ev.append((t + PPQ, [(SNARE, EIGHTH, 0)]))
+        drum_ev.append((t + PPQ*3, [(SNARE, EIGHTH, 0)]))
+        for e in range(8):
+            drum_ev.append((t + e * (PPQ//2), [(HAT, PPQ//4, -5)]))
+    # bar 12: tempo lift crash + full 4-on-floor
+    drum_ev.append((PPQ*48, [(CRASH, PPQ, 5), (KICK, EIGHTH, 0), (SNARE, EIGHTH, 0)]))
+    # bars 12-23: full 4-on-floor + ride
+    for b in range(12, 24):
+        t = b * bar
+        for beat in range(4):
+            drum_ev.append((t + beat * PPQ, [(KICK, EIGHTH, 0)]))
+        drum_ev.append((t + PPQ, [(SNARE, EIGHTH, 0)]))
+        drum_ev.append((t + PPQ*3, [(SNARE, EIGHTH, 0)]))
+        for e in range(8):
+            drum_ev.append((t + e * (PPQ//2), [(HAT, PPQ//4, 0)]))
+        drum_ev.append((t + PPQ*2, [(RIDE, QUARTER, 0)]))
+    cfg["drum_pattern"] = [(t, n, v) for t, notes in drum_ev for n, _, v in notes]
+_build_jailbreak_e_patterns()
+
 # ---------- 5. kabukicho — neon jazz noir, smoky bar, F minor -------------
 # SHAPE: A A' B A'' — 16-bar jazz form.
 # bars 0-3 (A): tenor sax melody + walking bass + brushed kit.
@@ -1048,14 +1299,14 @@ def _build_kabukicho_patterns():
     lead_ev = []
     # A (bars 0-3): opening theme — lyrical tenor melody on Fm
     theme_a = [
-        (N(5,5), PPQ),       # F5 quarter
+        (N(5,5), PPQ),       # F5 QUARTER
         (N(8,5), PPQ),       # Ab5
         (N(10,5), PPQ),      # Bb5
         (N(8,5), PPQ),       # Ab5
         (N(10,5), PPQ),      # Bb5
         (N(5,5), eighth),    # F5 8th
         (N(3,5), eighth),    # Eb5
-        (N(5,5), PPQ),       # F5 quarter
+        (N(5,5), PPQ),       # F5 QUARTER
     ]
     cursor = 0
     for n, d in theme_a:
@@ -1141,6 +1392,306 @@ def _build_kabukicho_patterns():
             drum_ev.append((b * bar + sub, TOM_LO, 30))
     cfg["drum_pattern"] = drum_ev
 _build_kabukicho_patterns()
+
+# ---------- 5c. kabukicho_c — darker harmony, chromatic passing tones --
+# 24 bars @ 90 BPM. Sax climbs into higher register with chromatic b2
+# approach on bass — the bar gets smokier. Brush kit adds ghost hits.
+# Pad has sharp-11th colors (Fm7#11 → Bbm7 → Db7 → Cm7).
+SCENES_B["kabukicho_c"] = {
+    "name": "kabukicho_c",
+    "bars": 24,
+    "bpm": 90,
+    "lead": {"prog": 65, "vol": 95, "pan": 64, "reverb": 70, "mod_init": 30},   # Tenor Sax
+    "bass": {"prog": 33, "vol": 90, "reverb": 30},                              # Fingered Bass
+    "pad":  {"prog": 89, "vol": 70, "pan": 64, "reverb": 80},                   # Fantasia Pad
+    "drums": {"vol": 60, "reverb": 40},                                          # Brush kit
+    "lead_mod_ramp": (30, 70),
+    "lead_vel_ramp": (85, 105),
+    "key_intervals": MINOR,
+    "root": 5,                                 # F minor
+    "pad_chords": [
+        (0,  [N(5,3), N(8,3), N(0,4), N(6,4)]),       # Fm7#11
+        (8,  [N(10,3), N(1,4), N(5,4), N(10,4)]),     # Bbm7
+        (16, [N(1,3), N(5,3), N(10,3), N(3,4)]),      # Db7
+    ],
+    "pad_vel_ramp": (70, 90, 24),
+    "pad_breakdowns": [],
+    "lead_pattern": [],
+    "bass_pattern": [],
+    "drum_pattern": [],
+}
+
+def _build_kabukicho_c_patterns():
+    """Darker: chromatic b2 on bass, sax climbs, brush ghosts."""
+    cfg = SCENES_B["kabukicho_c"]
+    bar = PPQ * BEATS_PER_BAR
+    EIGHTH = PPQ // 2
+    bass_ev = []
+    lead_ev = []
+    drum_ev = []
+    # Bass: walking with chromatic b2 approach on bar 8
+    # bars 0-3: F walking bass
+    bass_ev.append((0, [
+        (N(5,1), EIGHTH, 0), (N(8,1), EIGHTH, 0),
+        (N(0,2), EIGHTH, 0), (N(3,2), EIGHTH, 0),
+        (N(5,2), EIGHTH, 0), (N(8,2), EIGHTH, 0),
+        (N(5,2), EIGHTH, 0), (N(3,2), EIGHTH, 0),
+    ]))
+    # bars 4-7: Bbm walking
+    bass_ev.append((PPQ*16, [
+        (N(10,1), EIGHTH, 0), (N(1,2), EIGHTH, 0),
+        (N(5,2), EIGHTH, 0), (N(8,2), EIGHTH, 0),
+        (N(10,2), EIGHTH, 0), (N(1,3), EIGHTH, 0),
+        (N(10,2), EIGHTH, 0), (N(8,2), EIGHTH, 0),
+    ]))
+    # bar 8: chromatic b2 approach (E natural → F)
+    bass_ev.append((PPQ*32, [
+        (N(5,1), EIGHTH, 0), (N(4,1), EIGHTH, 0),
+        (N(5,2), EIGHTH, 0), (N(8,2), EIGHTH, 0),
+        (N(5,2), EIGHTH, 0), (N(3,2), EIGHTH, 0),
+        (N(0,2), EIGHTH, 0), (N(5,1), EIGHTH, 0),
+    ]))
+    # bars 9-15: continue walking with darker color
+    bass_ev.append((PPQ*36, [
+        (N(8,1), EIGHTH, 0), (N(0,2), EIGHTH, 0),
+        (N(3,2), EIGHTH, 0), (N(5,2), EIGHTH, 0),
+        (N(8,2), EIGHTH, 0), (N(5,2), EIGHTH, 0),
+        (N(3,2), EIGHTH, 0), (N(0,2), EIGHTH, 0),
+    ]))
+    bass_ev.append((PPQ*44, [
+        (N(5,2), EIGHTH, 0), (N(3,2), EIGHTH, 0),
+        (N(0,2), EIGHTH, 0), (N(3,2), EIGHTH, 0),
+        (N(5,2), EIGHTH, 0), (N(8,2), EIGHTH, 0),
+        (N(5,2), EIGHTH, 0), (N(3,2), EIGHTH, 0),
+    ]))
+    # bars 16-23: Db walking back to F
+    bass_ev.append((PPQ*64, [
+        (N(1,1), EIGHTH, 0), (N(5,1), EIGHTH, 0),
+        (N(10,1), EIGHTH, 0), (N(1,2), EIGHTH, 0),
+        (N(5,2), EIGHTH, 0), (N(10,2), EIGHTH, 0),
+        (N(5,2), EIGHTH, 0), (N(1,2), EIGHTH, 0),
+    ]))
+    bass_ev.append((PPQ*72, [
+        (N(10,1), EIGHTH, 0), (N(5,2), EIGHTH, 0),
+        (N(10,2), EIGHTH, 0), (N(5,2), EIGHTH, 0),
+        (N(10,2), EIGHTH, 0), (N(8,2), EIGHTH, 0),
+        (N(5,2), EIGHTH, 0), (N(3,2), EIGHTH, 0),
+    ]))
+    cfg["bass_pattern"] = bass_ev
+    # Lead: sax climbs higher with bluesy bends
+    lead_ev.append((0, [
+        (N(5,4), EIGHTH, -5), (N(8,4), EIGHTH, -3),
+        (N(0,5), EIGHTH, 0), (N(3,5), EIGHTH, 0),
+        (N(5,5), PPQ, 3),
+    ]))
+    lead_ev.append((PPQ*16, [
+        (N(10,4), EIGHTH, 0), (N(1,5), EIGHTH, 3),
+        (N(5,5), EIGHTH, 5), (N(8,5), EIGHTH, 5),
+        (N(10,5), PPQ, 8),
+    ]))
+    # bar 8: chromatic b2 bend (E natural over Fm — bluesy)
+    lead_ev.append((PPQ*32, [
+        (N(5,5), EIGHTH, 3), (N(4,5), EIGHTH, 5),
+        (N(5,5), EIGHTH, 3), (N(8,5), EIGHTH, 0),
+        (N(5,5), PPQ, 0),
+    ]))
+    lead_ev.append((PPQ*48, [
+        (N(3,5), EIGHTH, 0), (N(5,5), EIGHTH, 3),
+        (N(8,5), EIGHTH, 5), (N(5,5), EIGHTH, 3),
+        (N(3,5), PPQ, 0),
+    ]))
+    # bars 16-23: high register descent
+    lead_ev.append((PPQ*64, [
+        (N(1,5), EIGHTH, 5), (N(5,5), EIGHTH, 8),
+        (N(10,5), EIGHTH, 10), (N(8,5), EIGHTH, 5),
+        (N(5,5), PPQ, 3),
+    ]))
+    lead_ev.append((PPQ*80, [
+        (N(5,5), EIGHTH, 0), (N(8,5), EIGHTH, 0),
+        (N(5,5), PPQ*2, 0),
+    ]))
+    cfg["lead_pattern"] = lead_ev
+    # Drums: brush kit — kick on 1, brush snare sweep on 2&4, hat on 8ths
+    KICK = 36; BRUSH = 39; HAT = 42
+    for b in range(24):
+        t = b * bar
+        drum_ev.append((t, [(KICK, EIGHTH, -5)]))
+        drum_ev.append((t + PPQ, [(BRUSH, PPQ*2, -10)]))
+        drum_ev.append((t + PPQ*3, [(BRUSH, PPQ*2, -10)]))
+        for e in range(8):
+            drum_ev.append((t + e * EIGHTH, [(HAT, PPQ//4, -15)]))
+    cfg["drum_pattern"] = [(t, n, v) for t, notes in drum_ev for n, _, v in notes]
+_build_kabukicho_c_patterns()
+
+# ---------- 5d. kabukicho_d — single note ring-out, the sax is haunted -
+# 16 bars @ 90 BPM. Forced-silence: 1-2 dim7 stabs then COMPLETE PAD
+# SILENCE. ONE held sax note (C5) with heavy vibrato rings out alone.
+# The smoky bar has gone quiet. The sax player isn't there anymore.
+SCENES_B["kabukicho_d"] = {
+    "name": "kabukicho_d",
+    "bars": 20,
+    "bpm": 90,
+    "lead": {"prog": 65, "vol": 90, "pan": 64, "reverb": 90, "mod_init": 0},   # Tenor Sax
+    "bass": {"prog": 33, "vol": 60, "reverb": 60},
+    "pad":  {"prog": 89, "vol": 30, "pan": 64, "reverb": 100},
+    "drums": {"vol": 0, "reverb": 0},                                          # no kit
+    "lead_mod_ramp": (0, 110),
+    "lead_vel_ramp": (95, 105),
+    "key_intervals": MINOR,
+    "root": 5,                                 # F minor (anchor)
+    "pad_chords": [
+        (0, [N(4,3), N(7,3), N(10,3), N(1,4)]),       # F# dim7 (bar 0 only)
+    ],
+    "pad_breakdowns": [(1, 15)],
+    "pad_vel_ramp": (40, 20, 16),
+    "lead_pattern": [],
+    "bass_pattern": [],
+    "drum_pattern": [],
+}
+
+def _build_kabukicho_d_patterns():
+    """Single note ring-out: F# dim7 stab, then held C5 with heavy vibrato."""
+    cfg = SCENES_B["kabukicho_d"]
+    bar = PPQ * BEATS_PER_BAR
+    bass_ev = []
+    lead_ev = []
+    # Bar 0: F# dim7 stab (F#-A-C-Eb)
+    lead_ev.append((0, [
+        (N(6,5), PPQ, 0), (N(9,5), PPQ, 0),
+        (N(0,6), PPQ, 0), (N(3,6), PPQ, 0),
+    ]))
+    # Bars 1-15: single held C5 with heavy vibrato
+    lead_ev.append((PPQ*4, [(N(0,5), PPQ*76, 0)]))
+    cfg["lead_pattern"] = lead_ev
+    # Bass: F2 drone for bar 0, then silence
+    bass_ev.append((0, [(N(5,1), PPQ*4, 0)]))
+    bass_ev.append((PPQ*4, [(None, PPQ*76, 0)]))
+    cfg["bass_pattern"] = bass_ev
+_build_kabukicho_d_patterns()
+
+# ---------- 5e. kabukicho_e — recovery, sax returns, loop seam ---------
+# 24 bars @ 90 BPM. Held C5 continues from D for bars 0-1, then sax
+# returns at bar 2 with A's opening shape. Walking bass returns. Last 4
+# bars mirror A's opening for seamless loop.
+SCENES_B["kabukicho_e"] = {
+    "name": "kabukicho_e",
+    "bars": 24,
+    "bpm": 90,
+    "lead": {"prog": 65, "vol": 95, "pan": 64, "reverb": 70, "mod_init": 30},   # Tenor Sax
+    "bass": {"prog": 33, "vol": 90, "reverb": 30},                              # Fingered Bass
+    "pad":  {"prog": 89, "vol": 75, "pan": 64, "reverb": 80},                   # Fantasia Pad
+    "drums": {"vol": 60, "reverb": 40},                                          # Brush kit
+    "lead_mod_ramp": (110, 30),                  # vibrato decays as sax recovers
+    "lead_vel_ramp": (85, 100),
+    "key_intervals": MINOR,
+    "root": 5,                                 # F minor
+    "pad_chords": [
+        (0,  [N(5,3), N(8,3), N(0,4), N(5,4)]),       # Fm (return to A's chord)
+        (8,  [N(8,3), N(0,4), N(3,4), N(8,4)]),       # Ab
+        (16, [N(5,3), N(8,3), N(0,4), N(5,4)]),       # Fm (seam)
+        (20, [N(5,3), N(8,3), N(0,4), N(5,4)]),       # Fm (seam)
+    ],
+    "pad_vel_ramp": (60, 85, 24),
+    "pad_breakdowns": [],
+    "lead_pattern": [],
+    "bass_pattern": [],
+    "drum_pattern": [],
+}
+
+def _build_kabukicho_e_patterns():
+    """Recovery: held C5 fades, sax returns to A's register, walking bass."""
+    cfg = SCENES_B["kabukicho_e"]
+    bar = PPQ * BEATS_PER_BAR
+    EIGHTH = PPQ // 2
+    bass_ev = []
+    lead_ev = []
+    drum_ev = []
+    # Bass: walking bass returns at bar 2
+    # bars 0-1: F drone (held from D)
+    bass_ev.append((0, [(N(5,1), PPQ*8, -10)]))
+    # bars 2-7: F walking
+    bass_ev.append((PPQ*8, [
+        (N(5,1), EIGHTH, -5), (N(8,1), EIGHTH, -3),
+        (N(0,2), EIGHTH, 0), (N(3,2), EIGHTH, 0),
+        (N(5,2), EIGHTH, 0), (N(8,2), EIGHTH, 0),
+        (N(5,2), EIGHTH, 0), (N(3,2), EIGHTH, 0),
+    ]))
+    bass_ev.append((PPQ*16, [
+        (N(5,2), EIGHTH, 0), (N(8,2), EIGHTH, 0),
+        (N(5,2), EIGHTH, 0), (N(3,2), EIGHTH, 0),
+        (N(0,2), EIGHTH, 0), (N(3,2), EIGHTH, 0),
+        (N(5,2), EIGHTH, 0), (N(3,2), EIGHTH, 0),
+    ]))
+    # bars 8-15: Ab walking
+    bass_ev.append((PPQ*32, [
+        (N(8,1), EIGHTH, 0), (N(0,2), EIGHTH, 0),
+        (N(3,2), EIGHTH, 0), (N(5,2), EIGHTH, 0),
+        (N(8,2), EIGHTH, 0), (N(5,2), EIGHTH, 0),
+        (N(3,2), EIGHTH, 0), (N(0,2), EIGHTH, 0),
+    ]))
+    bass_ev.append((PPQ*40, [
+        (N(5,2), EIGHTH, 0), (N(3,2), EIGHTH, 0),
+        (N(0,2), EIGHTH, 0), (N(3,2), EIGHTH, 0),
+        (N(5,2), EIGHTH, 0), (N(8,2), EIGHTH, 0),
+        (N(5,2), EIGHTH, 0), (N(3,2), EIGHTH, 0),
+    ]))
+    # bars 16-23: Fm walking (seam to A)
+    bass_ev.append((PPQ*64, [
+        (N(5,1), EIGHTH, 0), (N(8,1), EIGHTH, 0),
+        (N(0,2), EIGHTH, 0), (N(3,2), EIGHTH, 0),
+        (N(5,2), EIGHTH, 0), (N(8,2), EIGHTH, 0),
+        (N(5,2), EIGHTH, 0), (N(3,2), EIGHTH, 0),
+    ]))
+    bass_ev.append((PPQ*72, [
+        (N(5,2), EIGHTH, 0), (N(8,2), EIGHTH, 0),
+        (N(5,2), EIGHTH, 0), (N(3,2), EIGHTH, 0),
+        (N(0,2), EIGHTH, 0), (N(3,2), EIGHTH, 0),
+        (N(5,2), PPQ*2, 0),
+    ]))
+    cfg["bass_pattern"] = bass_ev
+    # Lead: held C5 fades, sax returns at bar 4 with A's shape
+    lead_ev.append((0, [(N(0,5), PPQ*8, -5)]))           # bars 0-1: held C5 fading
+    lead_ev.append((PPQ*8, [(N(0,5), PPQ*8, -10)]))       # bars 2-3: continues fading
+    # bars 4-7: whisper sax
+    lead_ev.append((PPQ*16, [
+        (N(5,4), EIGHTH, -10), (N(8,4), EIGHTH, -8),
+        (N(0,5), EIGHTH, -5), (N(3,5), EIGHTH, -3),
+        (N(5,5), PPQ, 0),
+    ]))
+    # bars 8-15: climbing
+    lead_ev.append((PPQ*32, [
+        (N(8,4), EIGHTH, 0), (N(0,5), EIGHTH, 3),
+        (N(3,5), EIGHTH, 5), (N(5,5), EIGHTH, 5),
+        (N(8,5), PPQ, 8),
+    ]))
+    lead_ev.append((PPQ*48, [
+        (N(5,5), EIGHTH, 5), (N(3,5), EIGHTH, 3),
+        (N(0,5), EIGHTH, 0), (N(3,5), EIGHTH, 0),
+        (N(5,5), PPQ, 0),
+    ]))
+    # bars 16-23: A's opening shape
+    lead_ev.append((PPQ*64, [
+        (N(5,4), EIGHTH, 0), (N(8,4), EIGHTH, 0),
+        (N(0,5), EIGHTH, 3), (N(3,5), EIGHTH, 5),
+        (N(5,5), PPQ, 5),
+    ]))
+    lead_ev.append((PPQ*80, [
+        (N(8,5), EIGHTH, 5), (N(5,5), EIGHTH, 3),
+        (N(3,5), PPQ*2, 0),
+    ]))
+    cfg["lead_pattern"] = lead_ev
+    # Drums: brush kit, heartbeat returns
+    KICK = 36; BRUSH = 39; HAT = 42
+    # bars 0-3: silence (post-scare)
+    for b in range(4, 24):
+        t = b * bar
+        drum_ev.append((t, [(KICK, EIGHTH, -5)]))
+        drum_ev.append((t + PPQ, [(BRUSH, PPQ*2, -10)]))
+        drum_ev.append((t + PPQ*3, [(BRUSH, PPQ*2, -10)]))
+        for e in range(8):
+            drum_ev.append((t + e * EIGHTH, [(HAT, PPQ//4, -15)]))
+    cfg["drum_pattern"] = [(t, n, v) for t, notes in drum_ev for n, _, v in notes]
+_build_kabukicho_e_patterns()
 
 # ---------- 6. corp_office — cold corporate, F# minor 92 BPM --------------
 # SHAPE: bars 0-3 EP keyboard stabs ONLY (chord stabs on beats 1+3),
@@ -1535,6 +2086,336 @@ def _build_terminal_lab_patterns():
     cfg["drum_pattern"] = drum_ev
 _build_terminal_lab_patterns()
 
+# ---------- 7c. terminal_lab_c — glitching chaos, kit drops hits -----
+# 24 bars @ 100 BPM. The system breaks down. Kit deliberately drops
+# beats (the "skip"). Bass has chromatic b2 approach. Pad shifts to
+# sharp-11th / dim7 colors. Lead plays wrong notes. KICK MISSING on
+# bar 16 = the glitch event.
+SCENES_B["terminal_lab_c"] = {
+    "name": "terminal_lab_c",
+    "bars": 24,
+    "bpm": 100,
+    "lead": {"prog": 88, "vol": 95, "pan": 64, "reverb": 70, "mod_init": 30},   # Fantasia
+    "bass": {"prog": 39, "vol": 95, "reverb": 30},                              # Synth Bass
+    "pad":  {"prog": 89, "vol": 70, "pan": 64, "reverb": 90},                   # Fantasia Pad
+    "drums": {"vol": 75, "reverb": 30},
+    "lead_mod_ramp": (30, 70),
+    "lead_vel_ramp": (85, 105),
+    "key_intervals": MINOR,
+    "root": 11,                                # B minor
+    "pad_chords": [
+        (0,  [N(11,3), N(3,4), N(6,4), N(10,4)]),      # Bm7#11
+        (8,  [N(4,3), N(7,3), N(11,3), N(4,4)]),       # Em
+        (16, [N(6,3), N(9,3), N(1,4), N(6,4)]),        # G (relative major)
+    ],
+    "pad_vel_ramp": (70, 90, 24),
+    "pad_breakdowns": [],
+    "lead_pattern": [],
+    "bass_pattern": [],
+    "drum_pattern": [],
+}
+
+def _build_terminal_lab_c_patterns():
+    """Glitching chaos: kit skips, chromatic b2, wrong notes in lead."""
+    cfg = SCENES_B["terminal_lab_c"]
+    bar = PPQ * BEATS_PER_BAR
+    EIGHTH = PPQ // 2
+    bass_ev = []
+    lead_ev = []
+    drum_ev = []
+    # Bass: B1 pulse with chromatic b2 approach on bar 8
+    bass_ev.append((0, [
+        (N(11,1), EIGHTH, 0), (N(11,2), EIGHTH, 0),
+        (N(11,1), EIGHTH, 0), (N(3,2), EIGHTH, 0),
+        (N(11,1), EIGHTH, 0), (N(11,2), EIGHTH, 0),
+        (N(11,1), EIGHTH, 0), (N(3,2), EIGHTH, 0),
+    ] * 2))   # bars 0-3
+    bass_ev.append((PPQ*16, [
+        (N(11,1), EIGHTH, 0), (N(11,2), EIGHTH, 0),
+        (N(11,1), EIGHTH, 0), (N(3,2), EIGHTH, 0),
+        (N(11,1), EIGHTH, 0), (N(10,1), EIGHTH, 0),    # chromatic b2
+        (N(11,1), EIGHTH, 0), (N(3,2), EIGHTH, 0),
+    ]))
+    # bars 8-15: Em with chromatic motion
+    bass_ev.append((PPQ*32, [
+        (N(4,1), EIGHTH, 0), (N(4,2), EIGHTH, 0),
+        (N(4,1), EIGHTH, 0), (N(7,2), EIGHTH, 0),
+        (N(4,1), EIGHTH, 0), (N(4,2), EIGHTH, 0),
+        (N(4,1), EIGHTH, 0), (N(3,2), EIGHTH, 0),     # chromatic pull
+    ]))
+    bass_ev.append((PPQ*40, [
+        (N(4,1), EIGHTH, 0), (N(4,2), EIGHTH, 0),
+        (N(4,1), EIGHTH, 0), (N(7,2), EIGHTH, 0),
+        (N(11,1), EIGHTH, 0), (N(4,2), EIGHTH, 0),   # pivot back
+        (N(11,1), EIGHTH, 0), (N(7,2), EIGHTH, 0),
+    ]))
+    # bars 16-23: G major walking back
+    bass_ev.append((PPQ*64, [
+        (N(6,1), EIGHTH, 0), (N(6,2), EIGHTH, 0),
+        (N(6,1), EIGHTH, 0), (N(9,2), EIGHTH, 0),
+        (N(6,1), EIGHTH, 0), (N(6,2), EIGHTH, 0),
+        (N(6,1), EIGHTH, 0), (N(1,2), EIGHTH, 0),
+    ]))
+    bass_ev.append((PPQ*72, [
+        (N(6,1), EIGHTH, 0), (N(6,2), EIGHTH, 0),
+        (N(6,1), EIGHTH, 0), (N(9,2), EIGHTH, 0),
+        (N(11,1), EIGHTH, 0), (N(6,2), EIGHTH, 0),
+        (N(11,1), EIGHTH, 0), (N(9,2), EIGHTH, 0),
+    ]))
+    cfg["bass_pattern"] = bass_ev
+    # Lead: Bm arpeggios with "wrong" notes (chromatic b2, E natural over Bm)
+    lead_ev.append((0, [
+        (N(11,4), EIGHTH, -5), (N(3,5), EIGHTH, 0),
+        (N(6,5), EIGHTH, 3), (N(3,5), EIGHTH, 0),
+        (N(11,4), EIGHTH, -3), (N(3,5), EIGHTH, 0),
+        (N(6,5), EIGHTH, 3), (N(3,5), EIGHTH, 0),
+    ]))
+    lead_ev.append((PPQ*16, [
+        (N(11,4), EIGHTH, 0), (N(4,5), EIGHTH, 5),    # E natural = wrong note
+        (N(3,5), EIGHTH, 0), (N(4,5), EIGHTH, 3),
+        (N(6,5), EIGHTH, 5), (N(3,5), EIGHTH, 0),
+        (N(11,4), EIGHTH, 0), (N(3,5), EIGHTH, 0),
+    ]))
+    # bars 8-15: Em with chromatic passing tones
+    lead_ev.append((PPQ*32, [
+        (N(4,5), EIGHTH, 0), (N(7,5), EIGHTH, 3),
+        (N(11,5), EIGHTH, 5), (N(7,5), EIGHTH, 3),
+        (N(4,5), EIGHTH, 0), (N(7,5), EIGHTH, 3),
+        (N(11,5), EIGHTH, 5), (N(7,5), EIGHTH, 3),
+    ]))
+    lead_ev.append((PPQ*48, [
+        (N(4,5), EIGHTH, 0), (N(7,5), EIGHTH, 3),
+        (N(11,5), EIGHTH, 5), (N(7,5), EIGHTH, 3),
+        (N(4,5), EIGHTH, 0), (N(7,5), EIGHTH, 3),
+        (N(11,5), EIGHTH, 5), (N(6,5), EIGHTH, 3),
+    ]))
+    # bars 16-23: G major — climb back
+    lead_ev.append((PPQ*64, [
+        (N(6,5), EIGHTH, 5), (N(9,5), EIGHTH, 8),
+        (N(1,6), EIGHTH, 10), (N(9,5), EIGHTH, 5),
+        (N(6,5), EIGHTH, 3), (N(9,5), EIGHTH, 5),
+        (N(1,6), EIGHTH, 8), (N(9,5), EIGHTH, 5),
+    ]))
+    lead_ev.append((PPQ*80, [
+        (N(6,5), EIGHTH, 3), (N(9,5), EIGHTH, 5),
+        (N(6,5), PPQ*2, 0),
+    ]))
+    cfg["lead_pattern"] = lead_ev
+    # Drums: deliberate drops — KICK MISSING on bar 16 (the glitch event)
+    KICK = 36; SNARE = 38; HAT = 42; RIDE = 51
+    for b in range(24):
+        t = b * bar
+        # Kick on every beat — except bar 16 (no kicks at all)
+        if b != 16:
+            for beat in range(4):
+                drum_ev.append((t + beat * PPQ, [(KICK, EIGHTH, 0)]))
+        # Snare on 2 and 4 — except bar 16 (skipped, the glitch)
+        if b != 16:
+            drum_ev.append((t + PPQ, [(SNARE, EIGHTH, 0)]))
+            drum_ev.append((t + PPQ*3, [(SNARE, EIGHTH, 0)]))
+        # Hats on every 8th
+        for e in range(8):
+            drum_ev.append((t + e * EIGHTH, [(HAT, PPQ//4, -10)]))
+    # Crash on bar 8 (transition)
+    drum_ev.append((PPQ*32, [(49, PPQ, 0)]))
+    cfg["drum_pattern"] = [(t, n, v) for t, notes in drum_ev for n, _, v in notes]
+_build_terminal_lab_c_patterns()
+
+# ---------- 7d. terminal_lab_d — glitching-stutter scare, kit skips -----
+# 16 bars @ 100 BPM. Kit "skips" — hits on wrong beats. Bass pedal
+# with chromatic b2 approach on beat 4 of odd bars. Pad shifts to
+# sharp 11ths / dim7 colors. The system is corrupted.
+SCENES_B["terminal_lab_d"] = {
+    "name": "terminal_lab_d",
+    "bars": 24,
+    "bpm": 100,
+    "lead": {"prog": 88, "vol": 85, "pan": 64, "reverb": 90, "mod_init": 0},
+    "bass": {"prog": 39, "vol": 85, "reverb": 50},
+    "pad":  {"prog": 89, "vol": 60, "pan": 64, "reverb": 100},
+    "drums": {"vol": 50, "reverb": 50},                # quieter, glitchy
+    "lead_mod_ramp": (0, 110),                        # HEAVY vibrato
+    "lead_vel_ramp": (90, 100),
+    "key_intervals": MINOR,
+    "root": 11,                                # B minor
+    "pad_chords": [
+        (0, [N(10,3), N(1,4), N(5,4), N(8,4)]),        # Am7#11 (dark color)
+        (8, [N(0,3), N(3,3), N(6,3), N(10,3)]),        # Cdim7 (glitch)
+    ],
+    "pad_vel_ramp": (50, 40, 16),
+    "pad_breakdowns": [],
+    "lead_pattern": [],
+    "bass_pattern": [],
+    "drum_pattern": [],
+}
+
+def _build_terminal_lab_d_patterns():
+    """Glitching stutter: kit on wrong beats, chromatic b2 on bass."""
+    cfg = SCENES_B["terminal_lab_d"]
+    bar = PPQ * BEATS_PER_BAR
+    EIGHTH = PPQ // 2
+    bass_ev = []
+    lead_ev = []
+    drum_ev = []
+    # Bass: B1 pedal with chromatic b2 approach on beat 4 of odd bars
+    for b in range(24):
+        t = b * bar
+        bass_ev.append((t, [(N(11,1), PPQ, 0)]))
+        bass_ev.append((t + PPQ, [(N(11,1), PPQ, 0)]))
+        bass_ev.append((t + PPQ*2, [(N(11,1), PPQ, 0)]))
+        # Beat 4: chromatic b2 (A natural = b2 of B)
+        if b % 2 == 1:
+            bass_ev.append((t + PPQ*3, [
+                (N(10,1), EIGHTH, 0),    # chromatic approach
+                (N(11,1), EIGHTH, 0),    # resolve
+            ]))
+        else:
+            bass_ev.append((t + PPQ*3, [(N(11,1), PPQ, 0)]))
+    cfg["bass_pattern"] = bass_ev
+    # Lead: single held D5 with heavy vibrato (trembles as if glitching)
+    lead_ev.append((0, [(N(3,5), PPQ*92, 0)]))          # D5 held
+    # bar 23: glitch pitch bend down
+    lead_ev.append((PPQ*92, [(N(2,5), PPQ*4, -5)]))
+    cfg["lead_pattern"] = lead_ev
+    # Drums: kit on WRONG beats (the glitch)
+    KICK = 36; SNARE = 38; HAT = 42
+    for b in range(16):
+        t = b * bar
+        # Kick on beat 3 instead of 1 (the glitch)
+        drum_ev.append((t + PPQ*2, [(KICK, EIGHTH, -10)]))
+        # Snare on beat 1 instead of 2
+        drum_ev.append((t, [(SNARE, EIGHTH, -10)]))
+        # Hat on every 8th — but random velocity (very quiet)
+        for e in range(8):
+            drum_ev.append((t + e * EIGHTH, [(HAT, PPQ//4, -25)]))
+    cfg["drum_pattern"] = [(t, n, v) for t, notes in drum_ev for n, _, v in notes]
+_build_terminal_lab_d_patterns()
+
+# ---------- 7e. terminal_lab_e — reboot recovery, loop seam ----------
+# 24 bars @ 100 BPM. Held D5 continues from D for bars 0-1, then lead
+# climbs back to A's register. Kit returns bar-by-bar. Last 4 bars
+# mirror A's opening for seamless loop.
+SCENES_B["terminal_lab_e"] = {
+    "name": "terminal_lab_e",
+    "bars": 24,
+    "bpm": 100,
+    "lead": {"prog": 88, "vol": 90, "pan": 64, "reverb": 70, "mod_init": 30},
+    "bass": {"prog": 39, "vol": 90, "reverb": 25},
+    "pad":  {"prog": 89, "vol": 75, "pan": 64, "reverb": 85},
+    "drums": {"vol": 75, "reverb": 30},
+    "lead_mod_ramp": (110, 30),                  # vibrato decays as system recovers
+    "lead_vel_ramp": (85, 100),
+    "key_intervals": MINOR,
+    "root": 11,                                # B minor
+    "pad_chords": [
+        (0,  [N(11,3), N(3,4), N(6,4), N(10,4)]),      # Bm7#11 (return to A)
+        (12, [N(11,3), N(3,4), N(6,4), N(10,4)]),      # Bm7#11
+        (20, [N(11,3), N(3,4), N(6,4), N(10,4)]),      # Bm7#11 (seam)
+    ],
+    "pad_vel_ramp": (50, 85, 24),
+    "pad_breakdowns": [],
+    "lead_pattern": [],
+    "bass_pattern": [],
+    "drum_pattern": [],
+}
+
+def _build_terminal_lab_e_patterns():
+    """Reboot recovery: held D5 fades, lead returns to A's shape."""
+    cfg = SCENES_B["terminal_lab_e"]
+    bar = PPQ * BEATS_PER_BAR
+    EIGHTH = PPQ // 2
+    bass_ev = []
+    lead_ev = []
+    drum_ev = []
+    # Bass: B1 pedal fades, then walking returns at bar 4
+    bass_ev.append((0, [(N(11,1), PPQ*8, -10)]))           # bars 0-1: B1 fading
+    bass_ev.append((PPQ*8, [(N(11,1), PPQ*8, -5)]))         # bars 2-3: B1 continues
+    # bars 4-7: Bm walking
+    bass_ev.append((PPQ*16, [
+        (N(11,1), EIGHTH, 0), (N(11,2), EIGHTH, 0),
+        (N(11,1), EIGHTH, 0), (N(3,2), EIGHTH, 0),
+        (N(11,1), EIGHTH, 0), (N(11,2), EIGHTH, 0),
+        (N(11,1), EIGHTH, 0), (N(3,2), EIGHTH, 0),
+    ]))
+    bass_ev.append((PPQ*24, [
+        (N(11,1), EIGHTH, 0), (N(11,2), EIGHTH, 0),
+        (N(11,1), EIGHTH, 0), (N(3,2), EIGHTH, 0),
+        (N(11,1), EIGHTH, 0), (N(11,2), EIGHTH, 0),
+        (N(11,1), EIGHTH, 0), (N(6,2), EIGHTH, 0),
+    ]))
+    # bars 8-15: continue walking
+    bass_ev.append((PPQ*32, [
+        (N(11,1), EIGHTH, 0), (N(11,2), EIGHTH, 0),
+        (N(11,1), EIGHTH, 0), (N(3,2), EIGHTH, 0),
+        (N(11,1), EIGHTH, 0), (N(11,2), EIGHTH, 0),
+        (N(11,1), EIGHTH, 0), (N(3,2), EIGHTH, 0),
+    ] * 2))
+    # bars 16-23: Bm walking (seam to A)
+    bass_ev.append((PPQ*64, [
+        (N(11,1), EIGHTH, 0), (N(11,2), EIGHTH, 0),
+        (N(11,1), EIGHTH, 0), (N(3,2), EIGHTH, 0),
+        (N(11,1), EIGHTH, 0), (N(11,2), EIGHTH, 0),
+        (N(11,1), EIGHTH, 0), (N(3,2), EIGHTH, 0),
+    ] * 2))
+    cfg["bass_pattern"] = bass_ev
+    # Lead: held D5 fades, then Bm arpeggios
+    lead_ev.append((0, [(N(3,5), PPQ*8, -5)]))             # bars 0-1: D5 fading
+    lead_ev.append((PPQ*8, [(N(3,5), PPQ*8, -10)]))         # bars 2-3: continues fading
+    # bars 4-7: Bm arpeggios whisper
+    lead_ev.append((PPQ*16, [
+        (N(11,4), EIGHTH, -10), (N(3,5), EIGHTH, -5),
+        (N(6,5), EIGHTH, 0), (N(3,5), EIGHTH, -3),
+        (N(11,4), EIGHTH, -5), (N(3,5), EIGHTH, 0),
+        (N(6,5), EIGHTH, 3), (N(3,5), EIGHTH, 0),
+    ]))
+    # bars 8-15: climbing
+    lead_ev.append((PPQ*32, [
+        (N(11,4), EIGHTH, 0), (N(3,5), EIGHTH, 3),
+        (N(6,5), EIGHTH, 5), (N(3,5), EIGHTH, 3),
+        (N(11,4), EIGHTH, 0), (N(3,5), EIGHTH, 3),
+        (N(6,5), EIGHTH, 5), (N(3,5), EIGHTH, 3),
+    ]))
+    lead_ev.append((PPQ*48, [
+        (N(11,4), EIGHTH, 0), (N(3,5), EIGHTH, 3),
+        (N(6,5), EIGHTH, 5), (N(3,5), EIGHTH, 3),
+        (N(11,4), EIGHTH, 0), (N(3,5), EIGHTH, 3),
+        (N(6,5), EIGHTH, 5), (N(3,5), EIGHTH, 3),
+    ]))
+    # bars 16-23: A's opening shape
+    lead_ev.append((PPQ*64, [
+        (N(11,4), EIGHTH, 0), (N(3,5), EIGHTH, 0),
+        (N(6,5), EIGHTH, 3), (N(3,5), EIGHTH, 0),
+        (N(11,4), EIGHTH, -3), (N(3,5), EIGHTH, 0),
+        (N(6,5), EIGHTH, 3), (N(3,5), EIGHTH, 0),
+    ]))
+    lead_ev.append((PPQ*80, [
+        (N(11,4), EIGHTH, -3), (N(3,5), EIGHTH, 0),
+        (N(6,5), PPQ*2, 3),
+    ]))
+    cfg["lead_pattern"] = lead_ev
+    # Drums: kit returns bar-by-bar
+    KICK = 36; SNARE = 38; HAT = 42; RIDE = 51
+    # bars 0-3: silence (post-scare)
+    # bars 4-7: kick on 1 only (recovery heartbeat)
+    for b in range(4, 8):
+        t = b * bar
+        drum_ev.append((t, [(KICK, QUARTER, -10)]))
+    # bars 8-11: add snare on 3
+    for b in range(8, 12):
+        t = b * bar
+        drum_ev.append((t, [(KICK, QUARTER, -5)]))
+        drum_ev.append((t + PPQ*2, [(SNARE, QUARTER, -5)]))
+    # bars 12-23: full 4-on-floor
+    for b in range(12, 24):
+        t = b * bar
+        for beat in range(4):
+            drum_ev.append((t + beat * PPQ, [(KICK, EIGHTH, 0)]))
+        drum_ev.append((t + PPQ, [(SNARE, EIGHTH, 0)]))
+        drum_ev.append((t + PPQ*3, [(SNARE, EIGHTH, 0)]))
+        for e in range(8):
+            drum_ev.append((t + e * EIGHTH, [(HAT, PPQ//4, -10)]))
+    cfg["drum_pattern"] = [(t, n, v) for t, notes in drum_ev for n, _, v in notes]
+_build_terminal_lab_e_patterns()
+
 # ---------- 8. ship_engine — mechanical space-station, low pulse ---------
 # ---------- 8. ship_engine — industrial, layer-by-layer mechanical pressure ----------
 # Shape: BARR-PULSE → ADD KICK → ADD HATS → ADD SNARE+LEAD → SNARE-ROLL +
@@ -1808,6 +2689,219 @@ SCENES_B["cold_open_b"] = {
     "cross_boundary_crash": False,                # no drums
     "drum_pattern": [],
 }
+
+# ---------- 1c. cold_open_c — peak swell, full climax ---------------
+# 24 bars @ 70 BPM. The drone reaches its maximum density. Lead climbs
+# into high Phrygian notes (Eb6, F6). Bass has a 5th motion with sustained
+# octaves. Pad is at full swell — the climax of the cold open.
+SCENES_B["cold_open_c"] = {
+    "name": "cold_open_c",
+    "bars": 24,
+    "bpm": 70,
+    "lead": {"prog": 82, "vol": 100, "pan": 64, "reverb": 70, "mod_init": 0},
+    "bass": {"prog": 39, "vol": 90, "reverb": 25},
+    "pad":  {"prog": 100, "vol": 100, "pan": 64, "reverb": 100},
+    "drums": {"vol": 0, "reverb": 0},
+    "lead_mod_ramp": (0, 70),
+    "lead_vel_ramp": (90, 120),
+    "key_intervals": PHRYGIAN,
+    "root": 2,                                 # D Phrygian
+    "pad_chords": [
+        (0,  [N(2,3), N(7,3), N(0,4), N(5,4)]),       # D, G, C, F (full climax chord)
+        (12, [N(2,3), N(5,3), N(9,3), N(0,4)]),       # D, F, A, C (Phrygian stack — tension)
+    ],
+    "pad_vel_ramp": (100, 110, 24),
+    "pad_breakdowns": [],
+    "lead_pattern": [],
+    "bass_pattern": [],
+    "drum_pattern": [],
+}
+
+def _build_cold_open_c_patterns():
+    """Peak swell: lead climbs Phrygian at full vel, bass has 5th motion."""
+    cfg = SCENES_B["cold_open_c"]
+    bar = PPQ * BEATS_PER_BAR
+    EIGHTH = PPQ // 2
+    bass_ev = []
+    lead_ev = []
+    # Bass: drone + 5th throughout, with sustained upper octaves for the climax
+    bass_ev.append((0, [
+        (N(2,1), PPQ*32, 0), (N(2,2), PPQ*32, 0),
+        (N(9,2), PPQ*16, 5), (N(2,2), PPQ*16, 0),
+        (N(9,2), PPQ*16, 5), (N(2,2), PPQ*16, 0),
+        (N(9,2), PPQ*8, 5), (N(2,2), PPQ*8, 0),
+        (N(9,2), PPQ*8, 5), (N(2,2), PPQ*8, 0),
+    ]))
+    bass_ev.append((PPQ*96, [
+        (N(2,1), PPQ*4, 0), (N(2,2), PPQ*4, 0),
+        (N(2,4), PPQ*4, 10), (N(5,4), PPQ*4, 8),
+        (N(2,4), PPQ*4, 10), (N(9,4), PPQ*4, 8),
+        (N(2,4), PPQ*8, 10), (N(5,4), PPQ*8, 8),
+    ]))
+    cfg["bass_pattern"] = bass_ev
+    # Lead: high Phrygian melody, peaks at Eb6/F6, vel climbs to 120
+    lead_ev.append((PPQ*16, [
+        (N(2,5), PPQ*4, -5), (N(7,5), PPQ*4, 0),
+        (N(5,5), PPQ*4, 0), (N(3,6), PPQ*4, 5),    # Eb6 entry
+        (N(7,5), PPQ*4, 0), (N(5,6), PPQ*4, 5),    # F6
+    ]))
+    lead_ev.append((PPQ*32, [
+        (N(3,6), PPQ*2, 5), (N(7,5), PPQ*2, 0),
+        (N(5,6), PPQ*4, 8), (N(3,6), PPQ*4, 5),
+        (N(2,6), PPQ*4, 3), (N(7,5), PPQ*4, 0),
+    ]))
+    lead_ev.append((PPQ*56, [
+        (N(3,6), PPQ*2, 8), (N(5,6), PPQ*2, 10),   # peak
+        (N(7,5), PPQ*4, 5), (N(3,6), PPQ*4, 8),
+        (N(5,6), PPQ*4, 10), (N(3,6), PPQ*4, 5),
+    ]))
+    lead_ev.append((PPQ*72, [
+        (N(7,5), PPQ*4, 3), (N(5,6), PPQ*4, 5),
+        (N(3,6), PPQ*8, 5), (None, PPQ*16, 0),
+    ]))
+    # bars 17-23: continue climbing, big sustained high note
+    lead_ev.append((PPQ*84, [
+        (N(2,6), PPQ*4, 5), (N(3,6), PPQ*4, 8),
+        (N(5,6), PPQ*8, 10), (N(3,6), PPQ*8, 5),
+    ]))
+    lead_ev.append((PPQ*96, [
+        (N(7,5), PPQ*8, 5), (N(5,6), PPQ*8, 8),
+        (N(3,6), PPQ*8, 5), (N(2,6), PPQ*8, 3),
+    ]))
+    cfg["lead_pattern"] = lead_ev
+_build_cold_open_c_patterns()
+
+# ---------- 1d. cold_open_d — cliff-silence scare, single held note -----
+# 16 bars @ 70 BPM. Forced-silence: 2 dim7 stabs then COMPLETE PAD SILENCE.
+# ONE held low note rings out alone for the rest. The drone was hiding
+# something.
+SCENES_B["cold_open_d"] = {
+    "name": "cold_open_d",
+    "bars": 16,
+    "bpm": 70,
+    "lead": {"prog": 82, "vol": 90, "pan": 64, "reverb": 90, "mod_init": 0},
+    "bass": {"prog": 39, "vol": 60, "reverb": 50},
+    "pad":  {"prog": 100, "vol": 30, "pan": 64, "reverb": 100},
+    "drums": {"vol": 0, "reverb": 0},
+    "lead_mod_ramp": (0, 110),                  # HEAVY vibrato on the held note
+    "lead_vel_ramp": (95, 110),
+    "key_intervals": PHRYGIAN,
+    "root": 2,                                 # D Phrygian (same)
+    "pad_chords": [
+        (0, [N(1,3), N(4,3), N(7,3), N(10,3)]),    # C# dim7 (bar 0 only)
+    ],
+    "pad_breakdowns": [(1, 15)],                # COMPLETE SILENCE after bar 0
+    "pad_vel_ramp": (40, 20, 16),
+    "lead_pattern": [],
+    "bass_pattern": [],
+    "drum_pattern": [],
+}
+
+def _build_cold_open_d_patterns():
+    """Forced silence: dim7 stab, then single held D3 with tremolo."""
+    cfg = SCENES_B["cold_open_d"]
+    bar = PPQ * BEATS_PER_BAR
+    lead_ev = []
+    bass_ev = []
+    # Bar 0: C# dim7 stab on lead
+    lead_ev.append((0, [
+        (N(1,5), PPQ, 0), (N(4,5), PPQ, 0),
+        (N(7,5), PPQ, 0), (N(10,5), PPQ, 0),
+    ]))
+    # Bars 1-15: single held D3 with heavy vibrato (the "voice catches")
+    lead_ev.append((PPQ*4, [
+        (N(2,3), PPQ*60, 0),    # D3 held for 15 bars
+    ]))
+    cfg["lead_pattern"] = lead_ev
+    # Bass: D2 drone for bar 0, then silence
+    bass_ev.append((0, [(N(2,1), PPQ*4, 0)]))         # bar 0: D2 drone
+    bass_ev.append((PPQ*4, [(None, PPQ*60, 0)]))       # bars 1-15: silence
+    cfg["bass_pattern"] = bass_ev
+_build_cold_open_d_patterns()
+
+# ---------- 1e. cold_open_e — recovery, drone returns, loop seam -----
+# 24 bars @ 70 BPM. Held D3 continues from D for bars 0-1, then drone
+# re-enters at bar 2 with A's opening shape. Pad swell builds back up.
+# Last 4 bars mirror A's opening drone for seamless loop.
+SCENES_B["cold_open_e"] = {
+    "name": "cold_open_e",
+    "bars": 24,
+    "bpm": 70,
+    "lead": {"prog": 82, "vol": 90, "pan": 64, "reverb": 70, "mod_init": 0},
+    "bass": {"prog": 39, "vol": 85, "reverb": 25},
+    "pad":  {"prog": 100, "vol": 80, "pan": 64, "reverb": 100},
+    "drums": {"vol": 0, "reverb": 0},
+    "lead_mod_ramp": (110, 0),                  # vibrato decays (recovering)
+    "lead_vel_ramp": (85, 100),
+    "key_intervals": PHRYGIAN,
+    "root": 2,                                 # D Phrygian (same)
+    "pad_chords": [
+        (0, [N(2,3), N(7,3), N(0,4), N(5,4)]),       # D, G, C, F (return to A's chord)
+        (16, [N(2,3), N(5,3), N(9,3), N(0,4)]),      # Phrygian stack (tension)
+        (20, [N(2,3), N(5,3), N(9,3), N(0,4)]),      # Phrygian stack (seam)
+    ],
+    "pad_breakdowns": [],
+    "pad_vel_ramp": (60, 90, 24),
+    "lead_pattern": [],
+    "bass_pattern": [],
+    "drum_pattern": [],
+}
+
+def _build_cold_open_e_patterns():
+    """Recovery: held D3 fades, drone re-enters at bar 2, builds to seam."""
+    cfg = SCENES_B["cold_open_e"]
+    bar = PPQ * BEATS_PER_BAR
+    bass_ev = []
+    lead_ev = []
+    # Bass: held D3 fades, drone returns at bar 4, builds to upper octave shimmer
+    bass_ev.append((0, [(N(2,3), PPQ*8, -10)]))         # bars 0-1: D3 fading from D
+    bass_ev.append((PPQ*8, [(N(2,2), PPQ*16, 0), (N(2,1), PPQ*16, 0)]))  # bars 2-5: drone
+    bass_ev.append((PPQ*24, [
+        (N(2,2), PPQ*8, 0), (N(2,1), PPQ*8, 0),
+        (N(9,2), PPQ*8, 5), (N(2,2), PPQ*8, 0),
+    ]))
+    bass_ev.append((PPQ*40, [
+        (N(2,2), PPQ*4, 0), (N(2,1), PPQ*4, 0),
+        (N(9,2), PPQ*4, 5), (N(2,2), PPQ*4, 0),
+        (N(9,2), PPQ*4, 5), (N(2,2), PPQ*4, 0),
+        (N(9,2), PPQ*4, 5), (N(2,2), PPQ*4, 0),
+    ]))
+    # Bars 16-23: drone + sustained upper-octave shimmer for loop seam
+    bass_ev.append((PPQ*64, [
+        (N(2,1), PPQ*4, 0), (N(2,2), PPQ*4, 0),
+        (N(2,4), PPQ*4, 8), (N(5,4), PPQ*4, 6),
+        (N(2,4), PPQ*4, 8), (N(9,4), PPQ*4, 6),
+        (N(2,4), PPQ*4, 8), (N(5,4), PPQ*4, 6),
+    ]))
+    bass_ev.append((PPQ*80, [
+        (N(2,4), PPQ*4, 8), (N(5,4), PPQ*4, 6),
+        (N(2,4), PPQ*4, 8), (N(9,4), PPQ*4, 6),
+        (N(2,4), PPQ*8, 8), (N(5,4), PPQ*8, 6),
+    ]))
+    cfg["bass_pattern"] = bass_ev
+    # Lead: held D3 fades, lead climbs Phrygian melody mirroring A
+    lead_ev.append((0, [(N(2,3), PPQ*8, -5)]))           # bars 0-1: D3 fading
+    lead_ev.append((PPQ*32, [                            # bar 8 — whisper
+        (N(2,5), PPQ*4, -15), (N(7,5), PPQ*4, -10),
+        (N(5,5), PPQ*4, -10), (N(3,5), PPQ*8, -5),
+    ]))
+    lead_ev.append((PPQ*56, [                            # bar 14 — climbing
+        (N(7,5), PPQ*4, -5), (N(3,6), PPQ*4, 0),
+        (N(5,6), PPQ*4, 3), (N(3,6), PPQ*4, 0),
+        (N(7,5), PPQ*4, -3),
+    ]))
+    lead_ev.append((PPQ*72, [                            # bar 18 — last gasp
+        (N(3,6), PPQ*4, 0), (N(7,5), PPQ*4, -3),
+    ]))
+    lead_ev.append((PPQ*80, [                            # bar 20 — taper
+        (N(7,5), PPQ*4, -5), (N(2,5), PPQ*4, -10),
+        (N(0,5), PPQ*8, -10),
+    ]))
+    lead_ev.append((PPQ*96, [                            # bar 24 — sustained fade
+        (None, PPQ*32, 0),                              # silence for tail
+    ]))
+    cfg["lead_pattern"] = lead_ev
+_build_cold_open_e_patterns()
 
 # ---------- 2. chase_b — pursuit intensifies, descends into breakdown -----
 SCENES_B["chase_b"] = {
@@ -3182,7 +4276,7 @@ def _build_corp_office_d_patterns():
     # bars 3-7: SINGLE held note — C#6 (the b3 of F# minor, the unbinding
     # note). Held for 5 bars with rising CC1 modulation. The note trembles
     # but doesn't resolve — the listener is left holding their breath.
-    lead_ev.append((PPQ * 12, [(N(4,6), PPQ * 20, -5)]))   # C#6 held bars 3-7 (20 quarter notes)
+    lead_ev.append((PPQ * 12, [(N(4,6), PPQ * 20, -5)]))   # C#6 held bars 3-7 (20 QUARTER notes)
     cfg["lead_pattern"] = lead_ev
 
     # Drums deliberately empty (silence is the kit)
@@ -3467,6 +4561,282 @@ def _build_ship_engine_b_patterns():
 _build_ship_engine_b_patterns()
 
 
+# ---------- 8c. ship_engine_c — engine strain, peak intensity ---------
+# 24 bars @ 80 BPM. The engine reaches max strain. Lead climbs into
+# high register. Kit adds ride bell and tom fills. Bass drops to sub-
+# octave. Pad has dim7 colors for the dissonance.
+SCENES_B["ship_engine_c"] = {
+    "name": "ship_engine_c",
+    "bars": 24,
+    "bpm": 80,
+    "lead": {"prog": 82, "vol": 100, "pan": 64, "reverb": 70, "mod_init": 30},
+    "bass": {"prog": 39, "vol": 100, "reverb": 30},
+    "pad":  {"prog": 100, "vol": 75, "pan": 64, "reverb": 90},
+    "drums": {"vol": 85, "reverb": 30},
+    "lead_mod_ramp": (30, 80),
+    "lead_vel_ramp": (90, 115),
+    "key_intervals": MINOR,
+    "root": 2,                                 # D minor
+    "pad_chords": [
+        (0,  [N(2,3), N(5,3), N(9,3), N(0,4)]),       # Dm
+        (8,  [N(5,3), N(8,3), N(0,4), N(3,4)]),       # Fm (relative)
+        (16, [N(11,2), N(2,3), N(5,3), N(9,3)]),      # Cm (descending fifth)
+    ],
+    "pad_vel_ramp": (75, 95, 24),
+    "pad_breakdowns": [],
+    "lead_pattern": [],
+    "bass_pattern": [],
+    "drum_pattern": [],
+}
+
+def _build_ship_engine_c_patterns():
+    """Engine strain: dense kit, lead climbs, sub-octave bass."""
+    cfg = SCENES_B["ship_engine_c"]
+    bar = PPQ * BEATS_PER_BAR
+    EIGHTH = PPQ // 2
+    bass_ev = []
+    lead_ev = []
+    drum_ev = []
+    # Bass: D1 sub-octave pulse with 5th motion
+    bass_ev.append((0, [
+        (N(2,1), EIGHTH, 0), (N(2,2), EIGHTH, 0),
+        (N(2,1), EIGHTH, 0), (N(9,1), EIGHTH, 0),
+        (N(2,1), EIGHTH, 0), (N(2,2), EIGHTH, 0),
+        (N(2,1), EIGHTH, 0), (N(9,1), EIGHTH, 0),
+    ] * 8))
+    bass_ev.append((PPQ*32, [
+        (N(2,1), EIGHTH, 0), (N(2,2), EIGHTH, 0),
+        (N(2,1), EIGHTH, 0), (N(9,1), EIGHTH, 0),
+        (N(2,1), EIGHTH, 0), (N(2,2), EIGHTH, 0),
+        (N(2,1), EIGHTH, 0), (N(0,2), EIGHTH, 0),
+    ] * 8))
+    bass_ev.append((PPQ*64, [
+        (N(2,1), EIGHTH, 0), (N(2,2), EIGHTH, 0),
+        (N(2,1), EIGHTH, 0), (N(9,1), EIGHTH, 0),
+        (N(2,1), EIGHTH, 0), (N(2,2), EIGHTH, 0),
+        (N(2,1), EIGHTH, 0), (N(5,2), EIGHTH, 0),
+    ] * 8))
+    cfg["bass_pattern"] = bass_ev
+    # Lead: Dm arpeggio climbs to high register
+    lead_ev.append((0, [
+        (N(2,4), EIGHTH, -5), (N(5,4), EIGHTH, 0),
+        (N(9,4), EIGHTH, 3), (N(0,5), EIGHTH, 5),
+        (N(2,5), EIGHTH, 8), (N(0,5), EIGHTH, 5),
+        (N(9,4), EIGHTH, 3), (N(0,5), EIGHTH, 5),
+    ] * 2))
+    # bars 8-15: Fm arpeggio higher
+    lead_ev.append((PPQ*32, [
+        (N(5,5), EIGHTH, 5), (N(8,5), EIGHTH, 8),
+        (N(0,6), EIGHTH, 10), (N(3,6), EIGHTH, 12),
+        (N(5,6), EIGHTH, 15), (N(3,6), EIGHTH, 12),
+        (N(0,6), EIGHTH, 10), (N(8,5), EIGHTH, 8),
+    ] * 2))
+    lead_ev.append((PPQ*48, [
+        (N(5,5), EIGHTH, 8), (N(8,5), EIGHTH, 10),
+        (N(0,6), EIGHTH, 12), (N(3,6), EIGHTH, 15),
+        (N(5,6), EIGHTH, 18), (N(3,6), EIGHTH, 15),
+        (N(0,6), EIGHTH, 12), (N(8,5), EIGHTH, 10),
+    ] * 2))
+    # bars 16-23: Cm descent back
+    lead_ev.append((PPQ*64, [
+        (N(11,5), EIGHTH, 12), (N(2,6), EIGHTH, 15),
+        (N(5,6), EIGHTH, 18), (N(2,6), EIGHTH, 15),
+        (N(11,5), EIGHTH, 12), (N(2,6), EIGHTH, 15),
+        (N(5,6), EIGHTH, 18), (N(2,6), EIGHTH, 15),
+    ] * 2))
+    lead_ev.append((PPQ*80, [
+        (N(11,5), EIGHTH, 10), (N(2,6), EIGHTH, 12),
+        (N(5,6), PPQ*2, 15),
+    ]))
+    cfg["lead_pattern"] = lead_ev
+    # Drums: 4-on-floor + ride bell + tom fills
+    KICK = 36; SNARE = 38; TOM_HI = 50; TOM_MID = 47; TOM_LO = 45; HAT = 42; RIDE = 51
+    for b in range(24):
+        t = b * bar
+        for beat in range(4):
+            drum_ev.append((t + beat * PPQ, [(KICK, EIGHTH, 0)]))
+        drum_ev.append((t + PPQ, [(SNARE, EIGHTH, 0)]))
+        drum_ev.append((t + PPQ*3, [(SNARE, EIGHTH, 0)]))
+        for e in range(8):
+            drum_ev.append((t + e * EIGHTH, [(HAT, PPQ//4, -10)]))
+        # Ride bell every 2 bars (denser texture)
+        if b % 2 == 1:
+            drum_ev.append((t + PPQ*2, [(RIDE, QUARTER, 0)]))
+        # Tom fill every 4 bars
+        if b % 4 == 3:
+            drum_ev.append((t + PPQ*2, [(TOM_HI, EIGHTH, 0)]))
+            drum_ev.append((t + PPQ*2 + EIGHTH, [(TOM_MID, EIGHTH, 0)]))
+            drum_ev.append((t + PPQ*3, [(TOM_LO, QUARTER, 0)]))
+    cfg["drum_pattern"] = [(t, n, v) for t, notes in drum_ev for n, _, v in notes]
+_build_ship_engine_c_patterns()
+
+# ---------- 8d. ship_engine_d — engine stall, single low note ---------
+# 16 bars @ 80 BPM. The engine dies. Forced-silence: dim7 stab, then
+# complete kit/pad silence. ONE held low note (D2) with heavy vibrato
+# rings out alone. The station is silent.
+SCENES_B["ship_engine_d"] = {
+    "name": "ship_engine_d",
+    "bars": 16,
+    "bpm": 80,
+    "lead": {"prog": 82, "vol": 85, "pan": 64, "reverb": 90, "mod_init": 0},
+    "bass": {"prog": 39, "vol": 70, "reverb": 60},
+    "pad":  {"prog": 100, "vol": 30, "pan": 64, "reverb": 100},
+    "drums": {"vol": 0, "reverb": 0},            # no kit — engine died
+    "lead_mod_ramp": (0, 110),                  # HEAVY vibrato
+    "lead_vel_ramp": (95, 100),
+    "key_intervals": MINOR,
+    "root": 2,                                 # D minor
+    "pad_chords": [
+        (0, [N(1,3), N(4,3), N(7,3), N(10,3)]),        # C# dim7 (bar 0 only)
+    ],
+    "pad_breakdowns": [(1, 15)],                # COMPLETE SILENCE after bar 0
+    "pad_vel_ramp": (40, 20, 16),
+    "lead_pattern": [],
+    "bass_pattern": [],
+    "drum_pattern": [],
+}
+
+def _build_ship_engine_d_patterns():
+    """Engine stall: C# dim7 stab, held D2 with heavy vibrato."""
+    cfg = SCENES_B["ship_engine_d"]
+    bar = PPQ * BEATS_PER_BAR
+    bass_ev = []
+    lead_ev = []
+    # Bar 0: C# dim7 stab
+    lead_ev.append((0, [
+        (N(1,4), PPQ, 0), (N(4,4), PPQ, 0),
+        (N(7,4), PPQ, 0), (N(10,4), PPQ, 0),
+    ]))
+    # Bars 1-15: held D2 with heavy vibrato
+    lead_ev.append((PPQ*4, [(N(2,2), PPQ*60, 0)]))
+    cfg["lead_pattern"] = lead_ev
+    # Bass: D2 drone for bar 0, then silence
+    bass_ev.append((0, [(N(2,1), PPQ*4, 0)]))
+    bass_ev.append((PPQ*4, [(None, PPQ*60, 0)]))
+    cfg["bass_pattern"] = bass_ev
+_build_ship_engine_d_patterns()
+
+# ---------- 8e. ship_engine_e — restart recovery, loop seam ----------
+# 24 bars @ 80 BPM. Held D2 continues from D for bars 0-1, then bass
+# pulse re-enters at bar 2 with A's opening shape. Lead climbs back.
+# Last 4 bars mirror A's opening for seamless loop.
+SCENES_B["ship_engine_e"] = {
+    "name": "ship_engine_e",
+    "bars": 24,
+    "bpm": 80,
+    "lead": {"prog": 82, "vol": 90, "pan": 64, "reverb": 70, "mod_init": 30},
+    "bass": {"prog": 39, "vol": 95, "reverb": 25},
+    "pad":  {"prog": 100, "vol": 80, "pan": 64, "reverb": 90},
+    "drums": {"vol": 75, "reverb": 30},
+    "lead_mod_ramp": (110, 30),                  # vibrato decays as engine recovers
+    "lead_vel_ramp": (85, 100),
+    "key_intervals": MINOR,
+    "root": 2,                                 # D minor
+    "pad_chords": [
+        (0,  [N(2,3), N(5,3), N(9,3), N(0,4)]),       # Dm (return to A's chord)
+        (12, [N(2,3), N(5,3), N(9,3), N(0,4)]),       # Dm
+        (20, [N(2,3), N(5,3), N(9,3), N(0,4)]),       # Dm (seam)
+    ],
+    "pad_vel_ramp": (50, 90, 24),
+    "pad_breakdowns": [],
+    "lead_pattern": [],
+    "bass_pattern": [],
+    "drum_pattern": [],
+}
+
+def _build_ship_engine_e_patterns():
+    """Restart: held D2 fades, bass pulse returns, kit rebuilds."""
+    cfg = SCENES_B["ship_engine_e"]
+    bar = PPQ * BEATS_PER_BAR
+    EIGHTH = PPQ // 2
+    bass_ev = []
+    lead_ev = []
+    drum_ev = []
+    # Bass: held D2 fades, then pulse returns at bar 2
+    bass_ev.append((0, [(N(2,2), PPQ*8, -10)]))          # bars 0-1: D2 fading
+    bass_ev.append((PPQ*8, [(N(2,2), PPQ*8, -5)]))        # bars 2-3: continues fading
+    # bars 4-7: D1 pulse
+    bass_ev.append((PPQ*16, [
+        (N(2,1), EIGHTH, -5), (N(2,2), EIGHTH, -3),
+        (N(2,1), EIGHTH, -5), (N(9,1), EIGHTH, -3),
+        (N(2,1), EIGHTH, -5), (N(2,2), EIGHTH, -3),
+        (N(2,1), EIGHTH, -5), (N(9,1), EIGHTH, -3),
+    ]))
+    bass_ev.append((PPQ*24, [
+        (N(2,1), EIGHTH, 0), (N(2,2), EIGHTH, 0),
+        (N(2,1), EIGHTH, 0), (N(9,1), EIGHTH, 0),
+        (N(2,1), EIGHTH, 0), (N(2,2), EIGHTH, 0),
+        (N(2,1), EIGHTH, 0), (N(9,1), EIGHTH, 0),
+    ]))
+    # bars 8-23: full pulse (seam to A)
+    for b in range(8, 24):
+        t = b * bar
+        bass_ev.append((t, [
+            (N(2,1), EIGHTH, 0), (N(2,2), EIGHTH, 0),
+            (N(2,1), EIGHTH, 0), (N(9,1), EIGHTH, 0),
+            (N(2,1), EIGHTH, 0), (N(2,2), EIGHTH, 0),
+            (N(2,1), EIGHTH, 0), (N(9,1), EIGHTH, 0),
+        ]))
+    cfg["bass_pattern"] = bass_ev
+    # Lead: held D2 fades, then climbs back to A's register
+    lead_ev.append((0, [(N(2,2), PPQ*8, -10)]))           # bars 0-1: D2 fading
+    lead_ev.append((PPQ*8, [(N(2,3), PPQ*8, -10)]))        # bars 2-3: D3 fading
+    # bars 4-7: low register
+    lead_ev.append((PPQ*16, [
+        (N(2,4), EIGHTH, -5), (N(5,4), EIGHTH, -3),
+        (N(9,4), EIGHTH, 0), (N(0,5), EIGHTH, 3),
+        (N(2,4), EIGHTH, -3), (N(5,4), EIGHTH, 0),
+        (N(9,4), EIGHTH, 3), (N(0,5), EIGHTH, 5),
+    ]))
+    # bars 8-15: climbing
+    lead_ev.append((PPQ*32, [
+        (N(2,4), EIGHTH, 0), (N(5,4), EIGHTH, 3),
+        (N(9,4), EIGHTH, 5), (N(0,5), EIGHTH, 8),
+        (N(2,5), EIGHTH, 10), (N(0,5), EIGHTH, 8),
+        (N(9,4), EIGHTH, 5), (N(0,5), EIGHTH, 8),
+    ]))
+    lead_ev.append((PPQ*48, [
+        (N(2,4), EIGHTH, 5), (N(5,4), EIGHTH, 8),
+        (N(9,4), EIGHTH, 10), (N(0,5), EIGHTH, 12),
+        (N(2,5), EIGHTH, 15), (N(0,5), EIGHTH, 12),
+        (N(9,4), EIGHTH, 10), (N(0,5), EIGHTH, 12),
+    ]))
+    # bars 16-23: A's opening shape
+    lead_ev.append((PPQ*64, [
+        (N(2,4), EIGHTH, 0), (N(5,4), EIGHTH, 0),
+        (N(9,4), EIGHTH, 3), (N(0,5), EIGHTH, 5),
+        (N(2,4), EIGHTH, -3), (N(5,4), EIGHTH, 0),
+        (N(9,4), EIGHTH, 3), (N(0,5), EIGHTH, 5),
+    ]))
+    lead_ev.append((PPQ*80, [
+        (N(2,4), EIGHTH, -3), (N(5,4), EIGHTH, 0),
+        (N(9,4), PPQ*2, 3),
+    ]))
+    cfg["lead_pattern"] = lead_ev
+    # Drums: kit returns bar-by-bar
+    KICK = 36; SNARE = 38; HAT = 42
+    # bars 0-7: silence (engine offline)
+    # bars 8-11: kick only
+    for b in range(8, 12):
+        t = b * bar
+        drum_ev.append((t, [(KICK, QUARTER, -10)]))
+    # bars 12-15: add snare
+    for b in range(12, 16):
+        t = b * bar
+        drum_ev.append((t, [(KICK, QUARTER, -5)]))
+        drum_ev.append((t + PPQ*2, [(SNARE, QUARTER, -5)]))
+    # bars 16-23: full 4-on-floor (seam)
+    for b in range(16, 24):
+        t = b * bar
+        for beat in range(4):
+            drum_ev.append((t + beat * PPQ, [(KICK, EIGHTH, 0)]))
+        drum_ev.append((t + PPQ, [(SNARE, EIGHTH, 0)]))
+        drum_ev.append((t + PPQ*3, [(SNARE, EIGHTH, 0)]))
+        for e in range(8):
+            drum_ev.append((t + e * EIGHTH, [(HAT, PPQ//4, -10)]))
+    cfg["drum_pattern"] = [(t, n, v) for t, notes in drum_ev for n, _, v in notes]
+_build_ship_engine_e_patterns()
+
 # ---------- 9. alley_confrontation_b — tranquil counter-melody at full pad ---
 # A-side: 16 bars @ 90 BPM, F#dim7→C7b9→A#dim7→F7b9 walking bass, Pad 4
 # Choir on ch0, FX 6 Goblin on ch2 whisper. B-side complements: same BPM,
@@ -3551,18 +4921,189 @@ SCENES_B["alley_confrontation_b"] = {
 # fadeAt = seconds into scene entry when crossfade from A→B starts.
 # Omit fadeAt to default to halfway through A's loop length.
 # -----------------------------------------------------------------------------
+# ---------- 9c. alley_confrontation_c — dim7 walk one more cycle -----
+# 16 bars @ 90 BPM. The confrontation continues. Pad walks the dim7
+# cycle one more rotation: F#dim7 → C7b9 → A#dim7 → F7b9. Lead
+# (Choir Pad) extends the melodic arc into a held high note at the end.
+SCENES_B["alley_confrontation_c"] = {
+    "name": "alley_confrontation_c",
+    "bars": 16,
+    "bpm": 90,
+    "lead": {"prog": 91, "vol": 85, "pan": 64, "reverb": 85, "mod_init": 30},
+    "bass": {"prog": 35, "vol": 75, "reverb": 30},
+    "pad":  {"prog": 54, "vol": 90, "pan": 64, "reverb": 100},
+    "drums": {"vol": 0, "reverb": 0},
+    "lead_vel_ramp": (80, 110),
+    "lead_mod_ramp": (30, 70),
+    "key_intervals": PHRYGIAN,
+    "root": 6,                                 # F# Phrygian
+    "pad_chords": [
+        (0,    [N(6,3), N(9,3), N(0,4), N(3,4)]),       # F#dim7
+        (PPQ*16, [N(0,3), N(4,3), N(10,3), N(1,4)]),   # C7b9
+        (PPQ*32, [N(10,2), N(1,3), N(6,3), N(8,3)]),   # A#dim7
+        (PPQ*48, [N(5,3), N(9,3), N(2,4), N(4,4)]),    # F7b9
+    ],
+    "pad_vel_ramp": (85, 95, 16),
+    "lead_pattern": [],
+    "bass_pattern": [],
+    "drum_pattern": [],
+}
+
+def _build_alley_confrontation_c_patterns():
+    """Dim7 walk one more rotation, melodic arc climbs to A5."""
+    cfg = SCENES_B["alley_confrontation_c"]
+    bar = PPQ * BEATS_PER_BAR
+    bass_ev = []
+    lead_ev = []
+    # Bass: same drone cycle, with 5th color on C7b9 and F7b9
+    bass_ev.append((0, [(N(6,1), PPQ*16, 0), (N(6,2), PPQ*16, 0)]))         # F# drone
+    bass_ev.append((PPQ*16, [(N(0,1), PPQ*16, 0), (N(6,2), PPQ*16, 0)]))      # C drone + F# 5th
+    bass_ev.append((PPQ*32, [(N(10,1), PPQ*16, 0), (N(10,2), PPQ*16, 0)]))   # A# drone
+    bass_ev.append((PPQ*48, [(N(5,1), PPQ*16, 0), (N(0,2), PPQ*16, 0)]))      # F drone + C 5th
+    cfg["bass_pattern"] = bass_ev
+    # Lead: extended melodic arc — climbs Eb5→F#5→A5 then descends to F#5
+    lead_ev.append((PPQ*16, [
+        (N(3,5), PPQ*8, -5),                    # Eb5
+        (N(5,5), PPQ*8, 0),                     # F#5
+    ]))
+    lead_ev.append((PPQ*32, [
+        (N(3,5), PPQ*8, 0),                     # Eb5
+        (N(9,5), PPQ*8, 3),                     # A5 (climax)
+        (N(7,5), PPQ*8, 0),                     # G5
+    ]))
+    lead_ev.append((PPQ*48, [
+        (N(7,5), PPQ*8, -3),                    # G5
+        (N(5,5), PPQ*8, -5),                    # F#5
+        (N(3,5), PPQ*8, -8),                    # Eb5
+        (N(5,5), PPQ*8, -10),                   # F#5 held (tail)
+    ]))
+    cfg["lead_pattern"] = lead_ev
+_build_alley_confrontation_c_patterns()
+
+# ---------- 9d. alley_confrontation_d — single low drone, the silence -
+# 16 bars @ 90 BPM. Pad goes silent after bar 0 (dim7 stab). ONE held
+# low F#2 with heavy vibrato rings out alone. The alley is empty.
+SCENES_B["alley_confrontation_d"] = {
+    "name": "alley_confrontation_d",
+    "bars": 20,
+    "bpm": 90,
+    "lead": {"prog": 91, "vol": 80, "pan": 64, "reverb": 95, "mod_init": 0},
+    "bass": {"prog": 35, "vol": 60, "reverb": 60},
+    "pad":  {"prog": 54, "vol": 25, "pan": 64, "reverb": 100},
+    "drums": {"vol": 0, "reverb": 0},
+    "lead_vel_ramp": (90, 100),
+    "lead_mod_ramp": (0, 110),
+    "key_intervals": PHRYGIAN,
+    "root": 6,                                 # F# Phrygian (anchor)
+    "pad_chords": [
+        (0, [N(5,3), N(8,3), N(11,3), N(2,4)]),        # F dim7 (bar 0 only)
+    ],
+    "pad_breakdowns": [(1, 15)],
+    "pad_vel_ramp": (40, 20, 16),
+    "lead_pattern": [],
+    "bass_pattern": [],
+    "drum_pattern": [],
+}
+
+def _build_alley_confrontation_d_patterns():
+    """Single low F# drone with heavy vibrato, silence otherwise."""
+    cfg = SCENES_B["alley_confrontation_d"]
+    bar = PPQ * BEATS_PER_BAR
+    bass_ev = []
+    lead_ev = []
+    # Bar 0: F dim7 stab
+    lead_ev.append((0, [
+        (N(5,4), PPQ, 0), (N(8,4), PPQ, 0),
+        (N(11,4), PPQ, 0), (N(2,5), PPQ, 0),
+    ]))
+    # Bars 1-15: held F#2 with heavy vibrato
+    lead_ev.append((PPQ*4, [(N(6,2), PPQ*76, 0)]))
+    cfg["lead_pattern"] = lead_ev
+    # Bass: F#1 drone for bar 0, then silence
+    bass_ev.append((0, [(N(6,1), PPQ*4, 0)]))
+    bass_ev.append((PPQ*4, [(None, PPQ*76, 0)]))
+    cfg["bass_pattern"] = bass_ev
+_build_alley_confrontation_d_patterns()
+
+# ---------- 9e. alley_confrontation_e — recovery, dim7 walk returns -----
+# 16 bars @ 90 BPM. Held F#2 continues from D for bars 0-1, then dim7
+# walk returns at bar 2 with A's opening shape. Last 4 bars mirror A's
+# opening chord cycle for seamless loop.
+SCENES_B["alley_confrontation_e"] = {
+    "name": "alley_confrontation_e",
+    "bars": 16,
+    "bpm": 90,
+    "lead": {"prog": 91, "vol": 85, "pan": 64, "reverb": 85, "mod_init": 30},
+    "bass": {"prog": 35, "vol": 75, "reverb": 25},
+    "pad":  {"prog": 54, "vol": 90, "pan": 64, "reverb": 95},
+    "drums": {"vol": 0, "reverb": 0},
+    "lead_vel_ramp": (75, 100),
+    "lead_mod_ramp": (110, 30),                  # vibrato decays as alley recovers
+    "key_intervals": PHRYGIAN,
+    "root": 6,                                 # F# Phrygian
+    "pad_chords": [
+        (0,    [N(6,3), N(9,3), N(0,4), N(3,4)]),       # F#dim7 (return to A)
+        (PPQ*16, [N(0,3), N(4,3), N(10,3), N(1,4)]),   # C7b9
+        (PPQ*32, [N(10,2), N(1,3), N(6,3), N(8,3)]),   # A#dim7
+        (PPQ*48, [N(5,3), N(9,3), N(2,4), N(4,4)]),    # F7b9 (seam)
+    ],
+    "pad_vel_ramp": (60, 90, 16),
+    "lead_pattern": [],
+    "bass_pattern": [],
+    "drum_pattern": [],
+}
+
+def _build_alley_confrontation_e_patterns():
+    """Recovery: held F#2 fades, dim7 walk returns, loop seam."""
+    cfg = SCENES_B["alley_confrontation_e"]
+    bar = PPQ * BEATS_PER_BAR
+    bass_ev = []
+    lead_ev = []
+    # Bars 0-1: F# drone fading
+    bass_ev.append((0, [(N(6,2), PPQ*8, -10)]))
+    # Bars 2-5: F# drone returns
+    bass_ev.append((PPQ*8, [(N(6,1), PPQ*16, 0), (N(6,2), PPQ*16, 0)]))
+    # Bars 6-9: C drone
+    bass_ev.append((PPQ*24, [(N(0,1), PPQ*16, 0), (N(0,2), PPQ*16, 0)]))
+    # Bars 10-13: A# drone
+    bass_ev.append((PPQ*40, [(N(10,1), PPQ*16, 0), (N(10,2), PPQ*16, 0)]))
+    # Bars 14-15: F drone (seam to A)
+    bass_ev.append((PPQ*56, [(N(5,1), PPQ*8, 0), (N(5,2), PPQ*8, 0)]))
+    cfg["bass_pattern"] = bass_ev
+    # Lead: held F#2 fades, melodic arc returns at bar 4
+    lead_ev.append((0, [(N(6,2), PPQ*8, -10)]))           # bars 0-1: F#2 fading
+    lead_ev.append((PPQ*16, [
+        (N(3,5), PPQ*8, -5),                              # bars 4-5: Eb5
+        (N(5,5), PPQ*8, 0),                               # F#5
+    ]))
+    lead_ev.append((PPQ*32, [
+        (N(3,5), PPQ*8, 0),                               # bars 8-9: Eb5
+        (N(9,5), PPQ*8, 3),                               # A5
+        (N(7,5), PPQ*8, 0),                               # G5
+    ]))
+    lead_ev.append((PPQ*48, [
+        (N(7,5), PPQ*8, -3),                              # bars 12-13: G5
+        (N(5,5), PPQ*8, -5),                              # F#5
+    ]))
+    lead_ev.append((PPQ*56, [
+        (N(6,5), PPQ*4, -8),                              # bars 14-15: Gb5 ghost
+        (N(5,5), PPQ*4, -10),                             # F#5 held (seam)
+    ]))
+    cfg["lead_pattern"] = lead_ev
+_build_alley_confrontation_e_patterns()
+
 MEDLEYS: dict[str, list[str]] = {
-    "alley":        ["alley_confrontation.mp3", "alley_confrontation_b.mp3"],
-    "cold_open":    ["cold_open.mp3",    "cold_open_b.mp3"],
+    "alley":        ["alley_confrontation.mp3", "alley_confrontation_b.mp3", "alley_confrontation_c.mp3", "alley_confrontation_d.mp3", "alley_confrontation_e.mp3"],
+    "cold_open":    ["cold_open.mp3",    "cold_open_b.mp3", "cold_open_c.mp3", "cold_open_d.mp3", "cold_open_e.mp3"],
     "chase":        ["chase.mp3",        "chase_b.mp3",
                      "chase_c.mp3",      "chase_d.mp3",      "chase_e.mp3"],
     "corridor":     ["corridor.mp3",     "corridor_b.mp3",
                      "corridor_c.mp3",   "corridor_d.mp3",   "corridor_e.mp3"],
-    "jailbreak":    ["jailbreak.mp3",    "jailbreak_b.mp3"],
-    "kabukicho":    ["kabukicho.mp3",    "kabukicho_b.mp3"],
+    "jailbreak":    ["jailbreak.mp3",    "jailbreak_b.mp3", "jailbreak_c.mp3", "jailbreak_d.mp3", "jailbreak_e.mp3"],
+    "kabukicho":    ["kabukicho.mp3",    "kabukicho_b.mp3", "kabukicho_c.mp3", "kabukicho_d.mp3", "kabukicho_e.mp3"],
     "corp_office":  ["corp_office.mp3",  "corp_office_b.mp3",  "corp_office_c.mp3",  "corp_office_d.mp3",  "corp_office_e.mp3"],
-    "terminal_lab": ["terminal_lab.mp3", "terminal_lab_b.mp3"],
-    "ship_engine":  ["ship_engine.mp3",  "ship_engine_b.mp3"],
+    "terminal_lab": ["terminal_lab.mp3", "terminal_lab_b.mp3", "terminal_lab_c.mp3", "terminal_lab_d.mp3", "terminal_lab_e.mp3"],
+    "ship_engine":  ["ship_engine.mp3",  "ship_engine_b.mp3", "ship_engine_c.mp3", "ship_engine_d.mp3", "ship_engine_e.mp3"],
 }
 
 

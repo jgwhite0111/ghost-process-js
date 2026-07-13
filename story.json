@@ -54,6 +54,18 @@
         {
           "file": "cold_open_b.mp3",
           "fadeAt": 51.1
+        },
+        {
+          "file": "cold_open_c.mp3",
+          "fadeAt": 82.3
+        },
+        {
+          "file": "cold_open_d.mp3",
+          "fadeAt": 52.8
+        },
+        {
+          "file": "cold_open_e.mp3",
+          "fadeAt": 82.3
         }
       ],
       "ink": "ink/cold_open.ink",
@@ -74,6 +86,18 @@
         {
           "file": "alley_confrontation_b.mp3",
           "fadeAt": 23.8
+        },
+        {
+          "file": "alley_confrontation_c.mp3",
+          "fadeAt": 41.7
+        },
+        {
+          "file": "alley_confrontation_d.mp3",
+          "fadeAt": 50.5
+        },
+        {
+          "file": "alley_confrontation_e.mp3",
+          "fadeAt": 41.7
         }
       ],
       "ink": "ink/alley.ink",
@@ -219,6 +243,18 @@
         {
           "file": "jailbreak_b.mp3",
           "fadeAt": 35.1
+        },
+        {
+          "file": "jailbreak_c.mp3",
+          "fadeAt": 42.9
+        },
+        {
+          "file": "jailbreak_d.mp3",
+          "fadeAt": 62.0
+        },
+        {
+          "file": "jailbreak_e.mp3",
+          "fadeAt": 45.1
         }
       ],
       "ink": "ink/jailbreak.ink",
@@ -253,6 +289,18 @@
         {
           "file": "kabukicho_b.mp3",
           "fadeAt": 31.4
+        },
+        {
+          "file": "kabukicho_c.mp3",
+          "fadeAt": 61.1
+        },
+        {
+          "file": "kabukicho_d.mp3",
+          "fadeAt": 50.4
+        },
+        {
+          "file": "kabukicho_e.mp3",
+          "fadeAt": 61.1
         }
       ],
       "ink": "ink/kabukicho.ink",
@@ -344,6 +392,18 @@
         {
           "file": "terminal_lab_b.mp3",
           "fadeAt": 50.6
+        },
+        {
+          "file": "terminal_lab_c.mp3",
+          "fadeAt": 54.7
+        },
+        {
+          "file": "terminal_lab_d.mp3",
+          "fadeAt": 57.6
+        },
+        {
+          "file": "terminal_lab_e.mp3",
+          "fadeAt": 54.7
         }
       ],
       "ink": "ink/terminal_lab.ink",
@@ -380,6 +440,18 @@
         {
           "file": "ship_engine_b.mp3",
           "fadeAt": 51.7
+        },
+        {
+          "file": "ship_engine_c.mp3",
+          "fadeAt": 72.0
+        },
+        {
+          "file": "ship_engine_d.mp3",
+          "fadeAt": 46.0
+        },
+        {
+          "file": "ship_engine_e.mp3",
+          "fadeAt": 72.0
         }
       ],
       "ink": "ink/ship_engine.ink",
