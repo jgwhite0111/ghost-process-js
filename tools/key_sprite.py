@@ -172,7 +172,9 @@ def write_rgba(rgba_array, dst_path, size=None):
             figure_h = th
             resized = cv2.resize(tight, (figure_w, figure_h), interpolation=cv2.INTER_LANCZOS4)
             # 3. Pad horizontally so figure never touches canvas border.
-            pad = max(8, int(round(figure_w * 0.04)))
+            # Use a 6% padding (min 12px) — generous enough that the arm
+            # + ball + laser all stay inside the canvas in every frame.
+            pad = max(12, int(round(figure_w * 0.06)))
             new_w = figure_w + 2 * pad
             canvas = np.zeros((figure_h, new_w, 4), dtype=rgba_array.dtype)
             canvas[:, pad:pad + figure_w] = resized

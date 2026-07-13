@@ -220,7 +220,7 @@ def install_to_runtime():
         # If figure is already wider than target_w, give it some
         # canvas breathing room by adding margin on the sides via
         # a wider target canvas (the runtime uses img.width).
-        pad = max(8, int(round(figure_w * 0.04)))  # at least 8px, or 4% of width
+        pad = max(12, int(round(figure_w * 0.06)))  # at least 12px, or 6% of width
         new_w = figure_w + 2 * pad
         # Centre the figure horizontally with pad of transparent pixels
         # on each side — arms can never spill off canvas because we
