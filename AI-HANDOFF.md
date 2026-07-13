@@ -39,6 +39,136 @@ tree right now: status, what shipped, what's dirty, what's open.
 
 ---
 
+## Update (2026-07-13) — long-track music experiment: REVERTED, new direction pending
+
+This banner tells the next session how to start clean for a fresh
+music-design attempt. The previous shape (A+B medleys) is restored.
+
+### What happened this session
+
+User rejected the long-track rewrite as a failed experiment:
+
+> *"they all just feel padded out and abstract whereas before they
+> might have been repetitive but they at least each had a distinctive
+> character ... so we can consider this a failed experiment. in the
+> next session we will try a different method. but make sure any
+> changes are reverted. no need to keep any of the new mids. nothing
+> blew me away"*
+
+User separately confirmed: *alf_tv you can still remove* (drop
+already landed earlier in this session).
+
+### What got reverted
+
+23 experiment commits dropped via `git reset --hard b109656`
+(commits 7aeffa2..227a1fc inclusive). All `_long.{mid,mp3}`
+artifacts and all 10 `tools/make_*_long.py` composer scripts are
+gone. `story.json` is back to the A+B medley arrays for every
+scene. `AI-HANDOFF.md`'s earlier long-track writeup is gone with
+the reset.
+
+### Final state (verified at end of session)
+
+```
+HEAD = 227a1fc (music: drop alf_tv scene)
+Branch: main
+Ahead of origin/main by 46 commits
+Working tree: CLEAN
+Server: :8765 up, pid 67650
+```
+
+`story.json` wiring (post-revert):
+
+| scene        | music                                                           |
+|--------------|-----------------------------------------------------------------|
+| intro        | `intro_theme.mp3`                                               |
+| cold_open    | `[cold_open.mp3, cold_open_b.mp3]`                              |
+| alley        | `[alley_confrontation.mp3, alley_confrontation_b.mp3]`          |
+| chase        | `[chase.mp3, chase_b.mp3]`                                      |
+| corridor     | `[corridor.mp3, corridor_b.mp3]`                                |
+| jailbreak    | `[jailbreak.mp3, jailbreak_b.mp3]`                              |
+| kabukicho    | `[kabukicho.mp3, kabukicho_b.mp3]`                              |
+| corp_office  | `[corp_office.mp3, corp_office_b.mp3]`                          |
+| terminal_lab | `[terminal_lab.mp3, terminal_lab_b.mp3]`                        |
+| ship_engine  | `[ship_engine.mp3, ship_engine_b.mp3]`                          |
+
+`alf_tv` is gone (SCENES entry deleted, MIDI + MP3 removed). The
+commit message calls out that alf_tv was a "cheesy upbeat 80s
+sitcom theme" — not part of the cyberpunk-horror palette.
+
+### Why the experiment failed (forensic notes for the new attempt)
+
+The user's exact complaints:
+
+1. *"feels more like the existing compositions are just stretched
+   out and slowed in temp to pad the song out"*
+2. *"the slowed tempo actually ruins the original chords"*
+3. *"it could do with more work across the board to make the songs
+   feel a bit more varied and unpredictable"*
+
+The core failure mode was **harmonic-rhythm collapse**: each
+16-bar section held ONE chord for the full 16 bars (so a 16-bar
+tune with 4 chord changes/cycle became a 64-bar version with 4
+chord changes/cycle → 4× slower chord motion). I diagnosed this
+correctly mid-session and shipped pass 2 (chord-cycle every 1-2
+bars, secondary dominants, half-step modulations, 7/8 outro
+breaks). **Pass 2 was rejected too** — the user did not engage
+with any of the pass-2 work; the only feedback was the blanket
+"failed experiment" verdict. Conclusion: chord-density fixes
+weren't what was wanted. The complaint is about *character* and
+*distinctiveness*, not *harmonic motion*.
+
+User's diagnosis from the rejection quote: *"they might have been
+repetitive but they at least each had a distinctive character"*.
+The original A+B medleys have scene-specific signatures
+(music-box for corridor, jazz noir for kabukicho, engine drone
+for ship_engine, etc.). The long tracks replaced those signatures
+with generic "arc" templates.
+
+### Constraints for the next session's music attempt
+
+User has not specified the new direction. Inheriting these from
+the experiment:
+
+- The user values **distinctive per-scene character** above
+  structural cleverness (arcs, modulations, time-signature breaks).
+- The user will say when something is "padded out" or "abstract"
+  — these are the rejection criteria.
+- Keep the SC-55/SC-88 soundfont aesthetic (`vendor/sc55.sf2`).
+- Keep chiptune-constrained polyphony (4 channels max).
+- Durations per scene: user said 3-5 min acceptable for long
+  tracks, but the experiment taught that longer ≠ better if the
+  content doesn't justify the length.
+
+### Useful starting points for the next session
+
+- `docs/MUSIC_BSIDE_GUIDE.md` — the original B-side design plan
+  from 2026-07-08; the per-scene signatures live here.
+- `tools/make_scene_loop.py` — 2597 lines, 9 SCENES + 9
+  SCENES_B entries, with helpers `vel_ramp`, `tempo_changes`,
+  `pad_vel_ramp`, `pad_breakdowns`, `drum_shapes`. The framework
+  is mature; the question is what to compose WITH it, not whether
+  to rebuild it.
+- `python3 tools/test_full_chain.py` — renders all 18 medleys and
+  reports errors. Run before and after any new attempt.
+
+### Commits this session (chronological, top to bottom)
+
+```
+227a1fc music: drop alf_tv scene (was orphaned, not in story.json)
+b109656 music: add alley_confrontation_b medley partner
+3ccf405 sprites: drop _deleted/ archives
+89c6bf9 handoff: update for /new session — corridor animation fix + thug multi-pass keyer
+4cb4b6f thug: halo erosion radius 1 -> 2
+```
+
+The 23 dropped commits (between `7aeffa2` and `227a1fc`, exclusive)
+are still in the reflog for ~30 days. Recover with
+`git reset --hard 7aeffa2` or `git reset --hard bb98419` if any
+experiment artifact needs to be inspected.
+
+---
+
 ## Update (2026-07-08) — music shape rewrite (commit c57f709)
 
 ### What shipped
