@@ -362,6 +362,34 @@ sitting unused, `rm` them or move to `ink/_drafts/`.
 
 ---
 
+## Update (2026-07-13) — _deleted/ archive purge + carryover triage
+
+### Commits
+
+- `3f318fc` — `git rm -r assets/sprites/_deleted/` (96 corridor
+  scratch frames v7..v12 + REJECTED v11) +
+  `assets/sprites/_deleted/eidolon_return/` (16 frames).
+  112 files, ~8.7 MB. eidolon_return is still a live scene
+  per `story.json:145` + `_registry.js:62`; its source MP4
+  lives cross-project at
+  `~/ghost-process-98/.wip-android-sprite/i2v_clip_android_eidolon_return.mp4`
+  (per `SPRITE_PIPELINE.md:50`), so PNGs are regenerable.
+  Corridor scratch: v19 shipped and held; no rollback path needed.
+- This handoff update folded into the same commit.
+
+### Carryover triage (resolved this turn)
+
+- **Dialogue box / "feet floating"** — user marked resolved.
+  No specific fix cited; assume the v0.2.32 cursor-past-edge
+  restoration + the runtime sprite-reset at frame 0 (`59b7ece`)
+  removed the visible symptom. Carrying the "fixed" mark forward.
+- **Walking-bass pass on the other 14 scenes** — user said
+  *"not sure about that yet."* Parked. Do not auto-apply.
+- **SC-55mkII soundfont A/B test** — still deferred per
+  `docs/SC55_AB_TEST.md`.
+
+---
+
 ## Update (2026-07-13) — corridor android animation + thug sprite keying (this session)
 
 This is a session-ending banner. The next session can start cold
@@ -511,16 +539,15 @@ worked** in this session — the user was focused on the thug sprite
 across the whole session:
 
 - **Dialogue box vertical layout / "feet floating above viewport
-  edge" complaint** (banner A above) — user has not picked option
-  (a) shrink dialogue, (b) bottom safe-area padding, (c) top-pin
-  dialogue, (d) restore feet-anchor. Still parked. Re-litigate
-  on next session if user re-elevates.
-- **Corridor android sprite source has duplicate historical
-  generations** archived at `assets/sprites/android/_deleted/.scratch_archive/`.
-  v6 is the canonical baseline; v7/v8/v9/v10/v12 + REJECTED v11
-  are archived but recoverable from `_deleted/` if v17/v19 work
-  needs an earlier strip as fallback. Don't touch unless user
-  asks.
+  edge" complaint** (banner A above) — user marked as resolved
+  2026-07-13 (no specific fix cited; assume the v0.2.32 cursor-
+  past-edge restoration + the runtime sprite-reset at frame 0
+  removed the visible foot-floating symptom). No further work.
+- **Corridor android sprite source scratch archive** —
+  `assets/sprites/android/_deleted/.scratch_archive/v7..v12`
+  + REJECTED v11 was DELETED in commit `3f318fc` (2026-07-13).
+  v19 shipped and held; user signed off — no rollback path
+  needed. v6 remains the canonical baseline in `corridor/raw/`.
 - **Source `talking.webp` may produce further improvements at a
   different HALO_RADIUS** — `2` is shipped but we could not
   definitively pick "1" or "2" via vision alone (vision kept
@@ -533,11 +560,13 @@ across the whole session:
 None of these are blockers; they are the standard PC-98 horror
 project's residual work.
 
-- Dialogue box layout (section above) — open.
-- SC-55mkII soundfont A/B test (parked, `docs/SC55_AB_TEST.md`).
-- Eight other SCENES_B A-side rewrites done; 14 other scenes with
-  walking-bass-eligible ch 1 untouched (lane, ch 1 in those is
-  Synth Bass 2 still).
+- **Walking-bass pass scope** — 6 scenes rewritten (terminal_lab,
+  ship_engine, alley_confrontation, clinic_tension, cold_open,
+  ship_engine_b). 14 other scenes (alf_tv, chase, chase_b,
+  cold_open_b, corp_office, corp_office_b, corridor, corridor_b,
+  jailbreak, jailbreak_b, kabukicho, kabukicho_b, smoky_club_intro,
+  terminal_lab_b) still have Synth Bass 2 on ch 1. User undecided
+  2026-07-13: *not sure about that yet.* Do not auto-apply.
 
 ---
 
