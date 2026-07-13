@@ -355,6 +355,17 @@ class CharacterSprite {
         } else {
             this.targetOpacity = 1;
         }
+        // Reset to the rest pose whenever the sprite BECOMES visible,
+        // not just when it instant-snap-shows. The fade-in window
+        // (400ms at FADE_RATE=2.5) is long enough for a 6fps corridor
+        // animation to advance 2-3 frames while still invisible — so
+        // the player first sees it at frame 2 or 3, not the rest pose.
+        // Force a fresh start at frame 0 so the player always sees the
+        // animation begin from its intended starting frame.
+        this.currentFrame = 0;
+        this._phase = 0;
+        this.elapsed = 0;
+        this._hasFiredOneShot = false;
     }
     setHidden(instant = false) {
         this._visible = false;
