@@ -24,7 +24,7 @@ Usage:
 
     # Glob of PNGs:
     python3 tools/key_sprite.py \
-        --src 'sprites/alley/idle_*.png' \
+        --src 'sprites/alley/frame_*.png' \
         --out sprites/alley_keyed/
 
     # MP4 → N evenly-spaced keyframes:
@@ -36,7 +36,7 @@ Usage:
 
     # With resize:
     python3 tools/key_sprite.py \
-        --src 'alley/idle_*.png' \
+        --src 'alley/frame_*.png' \
         --out alley/ \
         --size 240x426
 

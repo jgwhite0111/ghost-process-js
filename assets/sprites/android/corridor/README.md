@@ -3,7 +3,7 @@
 ```
 corridor/
 ├── README.md
-├── idle_01.png .. idle_16.png   runtime strip (corridor dir root)
+├── frame_01.png .. frame_16.png   runtime strip (corridor dir root)
 ├── raw/                         source MP4 + extractor + 16 keyed frames
 └── processed/                   intended install dir; currently empty
                                  (the v17/v19 WIP strip lives at the dir root)
@@ -17,7 +17,7 @@ corridor/
 | `sprite_extractor.py` | Pipeline: MP4 → 16 chroma-keyed PNGs → 180×320 RGBA strip installed into `processed/`. Local to this scene; the generalised equivalent lives at `tools/key_sprite.py`. |
 | `transparent_sprites/frame_00.png` .. `frame_15.png` | 16 chroma-keyed PNGs at source resolution (768×1364) — kept as a regression baseline for v6/v17/v19 chroma tuning. Re-derive with `python3 tools/key_sprite.py --bg green`. |
 
-## idle_01.png .. idle_16.png
+## frame_01.png .. frame_16.png
 
 16 sprite frames at **180×320 RGBA**. This is the strip that
 `story.json` references and that the runtime loads. The current contents
@@ -56,5 +56,5 @@ target dir; it does not resize or install.
 
 ## Naming
 
-Extracted `frame_NN.png` becomes `idle_{NN+1:02d}.png`. So `frame_00` →
-`idle_01`, `frame_15` → `idle_16`. Sixteen keyframes total.
+Extracted `frame_NN.png` becomes `frame_{NN+1:02d}.png`. So `frame_00` →
+`frame_01`, `frame_15` → `frame_16`. Sixteen keyframes total.

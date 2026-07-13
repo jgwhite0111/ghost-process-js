@@ -117,6 +117,20 @@ class CharacterSprite {
         //      kill these because the legitimate body shading leans
         //      green on this convicts sprite, but we MUST mute the
         //      green or else the face looks like it's translucent.
+        //   3. Pass 3 boundary eraser — kills solid green-dominant
+        //      pixels next to transparent neighbours. See note below.
+        //
+        // Per-character profiles:
+        //   - 'android': Pass 1 uses a looser cyan guard (b > g*0.6)
+        //     so the energy-ball's green-yellow halo fringe is spared.
+        //     Pass 3 (the boundary eraser) is SKIPPED — the android
+        //     sprite's body shading near the ball-hand reads as
+        //     green-dominant at the silhouette boundary, and pass 3
+        //     was punching transparency holes through the sleeve.
+        //     Green outline of silhouette still gets killed by pass 1.
+        //   - everything else (convicts, etc): original behavior,
+        //     byte-identical to before this patch.
+        const isAndroid = this.character && this.character.id === 'android';
         const w = img.width;
         const h = img.height;
         const c = document.createElement('canvas');
@@ -131,11 +145,21 @@ class CharacterSprite {
             // Pass 1: low-alpha edges → transparent.
             if (a > 0 && a < 240 && g > r * 1.2 && g > b * 1.2 && g < 220) {
                 // Cyan-side guard: don't kill low-alpha pixels where
-                // B is near or above G — those are the energy-ball
-                // edge, not the green halo. Otherwise the despill
-                // eats the ball's alpha fringe and the ball reads
-                // as a transparent disc that bleeds the background.
-                if (b >= g - 10) continue;
+                // B is high — those are the energy-ball edge, not the
+                // green halo. Otherwise the despill eats the ball's
+                // alpha fringe and the ball reads as a transparent
+                // disc that bleeds the background.
+                //
+                // Android needs a LOOSER guard (b > g*0.6) because
+                // the ball halo is green-yellow (b in 40-80, g 120-160)
+                // — under the convicts guard (b >= g - 10), those
+                // pixels would be killed, creating the transparency
+                // halo around the ball.
+                if (isAndroid) {
+                    if (b > g * 0.6) continue;
+                } else {
+                    if (b >= g - 10) continue;
+                }
                 px[i + 3] = 0;
             }
         }
@@ -190,6 +214,16 @@ class CharacterSprite {
         // exposes the next inner layer, which also gets killed if it's
         // green-dominant. This is bounded — interior pixels aren't
         // next to transparent so they don't get touched.
+        //
+        // SKIPPED for android: this pass was punching transparency
+        // holes through the captain's sleeve wherever the energy
+        // ball sits — the body shading near the ball-hand reads as
+        // green-dominant at the silhouette boundary, and the
+        // 4-neighbor check found a transparent neighbour (the ball
+        // halo that pass 1 keyed out) and killed the sleeve pixel.
+        // For the android, the green outline is sparse enough that
+        // pass 1 alone removes it; pass 3 is unnecessary AND harmful.
+        if (!isAndroid) {
         for (let iter = 0; iter < 3; iter++) {
             let changed = 0;
             for (let y = 0; y < h; y++) {
@@ -223,6 +257,7 @@ class CharacterSprite {
             }
             if (changed === 0) break;
         }
+        } // end if (!isAndroid) — pass 3 boundary eraser skipped for android
         ctx.putImageData(data, 0, 0);
         return c;
     }

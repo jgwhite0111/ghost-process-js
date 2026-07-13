@@ -78,7 +78,7 @@
           "targetH": 0.6666124131944445,
           "scenes": {
             "alley": {
-              "frames": "assets/sprites/android/alley/idle_*.png",
+              "frames": "assets/sprites/android/alley/frame_*.png",
               "fps": 4,
               "loop": true
             }
@@ -128,7 +128,7 @@
           "position": "closeup",
           "scenes": {
             "chase": {
-              "frames": "assets/sprites/android/chase/idle_*.png",
+              "frames": "assets/sprites/android/chase/frame_*.png",
               "fps": 6,
               "loop": true
             }
@@ -162,7 +162,7 @@
           "position": "right",
           "scenes": {
             "corridor": {
-              "frames": "assets/sprites/android/corridor/idle_*.png",
+              "frames": "assets/sprites/android/corridor/frame_*.png",
               "fps": 6,
               "loop": false,
               "playForward": true,
@@ -197,7 +197,7 @@
           "speaker": "THUG",
           "scenes": {
             "jailbreak": {
-              "frames": "assets/sprites/thug/jailbreak/idle_*.png",
+              "frames": "assets/sprites/thug/jailbreak/frame_*.png",
               "fps": 6,
               "loop": true
             }
@@ -232,7 +232,7 @@
           "position": "right",
           "scenes": {
             "kabukicho": {
-              "frames": "assets/sprites/android/chase/idle_*.png",
+              "frames": "assets/sprites/android/chase/frame_*.png",
               "fps": 6,
               "loop": true
             }
@@ -275,7 +275,7 @@
           "position": "right",
           "scenes": {
             "corp_office": {
-              "frames": "assets/sprites/android/corridor/idle_*.png",
+              "frames": "assets/sprites/android/corridor/frame_*.png",
               "fps": 4,
               "loop": false,
               "playForward": true,
@@ -311,7 +311,7 @@
           "position": "left",
           "scenes": {
             "terminal_lab": {
-              "frames": "assets/sprites/android/corridor/idle_*.png",
+              "frames": "assets/sprites/android/corridor/frame_*.png",
               "fps": 6,
               "loop": false,
               "playForward": true,
@@ -346,7 +346,7 @@
           "speaker": "THUG",
           "scenes": {
             "ship_engine": {
-              "frames": "assets/sprites/thug/jailbreak/idle_*.png",
+              "frames": "assets/sprites/thug/jailbreak/frame_*.png",
               "fps": 6,
               "loop": true
             }
@@ -360,7 +360,7 @@
           "position": "left",
           "scenes": {
             "ship_engine": {
-              "frames": "assets/sprites/android/corridor/idle_*.png",
+              "frames": "assets/sprites/android/corridor/frame_*.png",
               "fps": 4,
               "loop": false,
               "playForward": true,

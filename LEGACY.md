@@ -168,7 +168,7 @@ overlay for the scanline + pixelated look.
 |---|---|---|
 | Godot v0.x | PC-98 palette + 16-color dither look | `assets/palettes/*.js` + CSS `.scanlines` + `image-rendering: pixelated` |
 | Godot v0.x | Palette slot map (6 lighting + 8 identity + 2 accent) | `tools/palettes.py` + per-scene `*.js` palettes |
-| Godot v0.x | Android character base image | `assets/sprites/android/*/idle_*.png` |
+| Godot v0.x | Android character base image | `assets/sprites/android/*/frame_*.png` |
 | Godot v0.x | Style bible (mature PC-98, no moe, no figures in BG) | `AGENTS.md` §"Style bible" |
 | Godot v0.x | 3 MP3 audio tracks (pre-rendered MIDI) | `assets/audio/*.mp3` |
 | v0.98 | `story.json` as single source of truth | `story.json` |
@@ -205,7 +205,7 @@ Tempting moves that are wrong:
 - **"The Godot sprite pipeline is more sophisticated, let me
   port it"** — the Godot sprite pipeline was specifically
   designed for Godot's `AnimatedSprite` node. It has no analogue
-  in the v0.2 vanilla-JS engine. Use `assets/sprites/<char>/<scene>/idle_*.png`
+  in the v0.2 vanilla-JS engine. Use `assets/sprites/<char>/<scene>/frame_*.png`
   directly with the runtime's frame-animation in
   `src/runtime/sprites.js`.
 - **"The Godot `AGENTS.md` is more thorough, let me merge it in"**

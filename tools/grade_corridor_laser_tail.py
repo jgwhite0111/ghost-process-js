@@ -1,5 +1,5 @@
-"""Apply a soft alpha taper to the right edge of corridor idle_15 and
-idle_16 only. NEVER touches idle_01..idle_14.
+"""Apply a soft alpha taper to the right edge of corridor frame_15 and
+frame_16 only. NEVER touches frame_01..frame_14.
 
 This is the v6->v6.1 polish pass: frames 1-14 stay exactly as v6
 (clean chroma key, untouched). Only the two laser-bearing frames at
@@ -29,10 +29,10 @@ V6 = Path("/tmp/regen/v6")
 # Frames explicitly OUT OF SCOPE. Listing them here as a guard rail
 # so the next agent/auditor can grep for this list and immediately see
 # which frames must NEVER be touched by this script.
-PROTECTED_FRAMES = frozenset(f"idle_{i:02d}.png" for i in range(1, 15))
+PROTECTED_FRAMES = frozenset(f"frame_{i:02d}.png" for i in range(1, 15))
 
 # Frames IN SCOPE -- the laser-bearing tail.
-TARGET_FRAMES = frozenset({"idle_15.png", "idle_16.png"})
+TARGET_FRAMES = frozenset({"frame_15.png", "frame_16.png"})
 
 # Taper geometry -- matches the source 180-wide canvas.
 TAPER_START = 140   # pixels: x >= 140 starts fading
@@ -58,7 +58,7 @@ def taper_laser_right_edge(img: Image.Image) -> Image.Image:
 
 def main(argv: list[str]) -> int:
     src_dir = Path(argv[1]) if len(argv) > 1 else V6
-    if not (src_dir / "idle_15.png").exists():
+    if not (src_dir / "frame_15.png").exists():
         print(f"ERROR: {src_dir} does not look like a v6 frame dir", file=sys.stderr)
         return 2
 

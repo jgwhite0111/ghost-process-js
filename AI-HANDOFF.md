@@ -163,7 +163,7 @@ landed in the cleanup resolution (commits d40f9d1, 0148947).
 
 **Modified (M):**
 
-- 16× `assets/sprites/android/corridor/idle_*.png` — v17 cyan-restored
+- 16× `assets/sprites/android/corridor/frame_*.png` — v17 cyan-restored
   strip + v19 sleeve animation. Active WIP per the archived
   `HANDOFF_SPRITES.md` history (now deleted; see commit 5bac1ba).
   The chroma/replacement recipe for v6'' is in the git history
@@ -177,7 +177,7 @@ to retarget its Source MP4 path and landed in commit 2ccf338 alongside
 this handoff update.
 
 **No more deleted files.** The 18 staged deletes listed in the
-2026-07-08 banner (`scene_corridor.png`, 16× `eidolon_return/idle_*`,
+2026-07-08 banner (`scene_corridor.png`, 16× `eidolon_return/frame_*`,
 `eidolon_return.ink`) were either committed in the intervening 14
 commits or moved to `_deleted/` archives. The 142 staged
 `_raw_source/frame_*` deletes landed cleanly in commit e7f9f3b
@@ -431,7 +431,7 @@ HEAD = 0148947 (sprites: commit corridor/README.md)
 Branch: main
 Sync: ahead of origin/main by 17 commits (was 7 pre-session: 22273d6, bb794b2, 53203c0, ca27844, f80a2a2, 244eed9; +10 this session: 5 first-batch + 4 resolution + 1 handoff-count-fixup). origin/main is at 617249f (v0.2.41).
 Working tree: 17 dirty, 0 untracked
-  - 16× corridor/idle_*.png — v17/v19 WIP
+  - 16× corridor/frame_*.png — v17/v19 WIP
   - src/runtime/sprites.js — v0.2.41 hold-range + despill (617249f)
   - _diagnostics/README.md — modified during the resolution to retarget
     Source MP4 path; landed in the next commit alongside this handoff update
@@ -468,7 +468,7 @@ dded4b9  sprites: commit android_scene_sprite_sources_20260711 diagnostic refere
 
 ### | Item | Why skipped | What next session should do |
 |---|---|---|
-| 16× `assets/sprites/android/corridor/idle_*.png` modified | Active WIP — v17 cyan-restored strip + v19 sleeve animation. Originally documented in the now-deleted `HANDOFF_SPRITES.md` (5bac1ba); recipe recoverable from git history. | Read `git diff` on each; v6 baseline + v17/v19 work is in flight |
+| 16× `assets/sprites/android/corridor/frame_*.png` modified | Active WIP — v17 cyan-restored strip + v19 sleeve animation. Originally documented in the now-deleted `HANDOFF_SPRITES.md` (5bac1ba); recipe recoverable from git history. | Read `git diff` on each; v6 baseline + v17/v19 work is in flight |
 | `src/runtime/sprites.js` modified | Likely v0.2.41 hold-range + cyan-ball despill guard per 617249f | Verify intent against current sprite playback |
 
 (The original banner also listed `corridor/README.md`, `corridor/raw/`,
@@ -628,7 +628,7 @@ do not assume `git checkout HEAD` is a recovery.
 ### Where the actually-good sprites live
 
 The most recent user-accepted chroma is **`/tmp/regen/v6/`** (clean chroma,
-60-65% opaque on idle_01-idle_14, hard-cut laser on idle_15/16). See
+60-65% opaque on frame_01-frame_14, hard-cut laser on frame_15/16). See
 `HANDOFF_SPRITES.md` next to this file for the full forensic breakdown and
 fix plan.
 
@@ -639,7 +639,7 @@ multi-color afterglow). Code + parameters are in `HANDOFF_SPRITES.md`.
 ### What NOT to do on next session pickup
 
 - Do not assume HEAD is the last good state. HEAD is broken cyan-uniform.
-- Do not re-key idle_01..idle_14 with a different chroma function. v6 is the
+- Do not re-key frame_01..frame_14 with a different chroma function. v6 is the
   baseline; copy untouched.
 - Do not apply a cyan-only taper (`is_laser = g > 150 AND r < g + 20`). It
   misses orange/yellow/white afterglow. Use the all-colors taper.

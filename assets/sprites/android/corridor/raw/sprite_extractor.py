@@ -13,7 +13,7 @@ Layout (this file lives in `corridor/raw/`):
         frame_001.png .. frame_141.png   # intermediate frames from MP4
         transparent_sprites/        # 16 keyed PNGs (intermediate output)
       processed/                    # OUTPUTS — runtime-loaded sprite strip
-        idle_01.png .. idle_16.png  # 180x320 RGBA, what the runtime reads
+        frame_01.png .. frame_16.png  # 180x320 RGBA, what the runtime reads
 
 Run from this directory:
     cd assets/sprites/android/corridor/raw
@@ -24,8 +24,8 @@ Pipeline contract:
     black frame and last laser sequence).
   - HSV green-screen key: H in [35,80], S>=40, V>=40. Soft 3x3 Gaussian
     on the alpha to feather edges.
-  - Rename: extracted frame_NN.png -> idle_{NN+1:02d}.png
-            (frame_00 -> idle_01, frame_15 -> idle_16).
+  - Rename: extracted frame_NN.png -> frame_{NN+1:02d}.png
+            (frame_00 -> frame_01, frame_15 -> frame_16).
   - Resize to 180x320 with LANCZOS.
   - Backup any existing processed/ strip to /private/tmp/WT_pre_corridor_install_<ts>/
     before overwriting, so a bad install can be reverted with `cp -a`.
@@ -110,8 +110,8 @@ def install_into_corridor(transparent_dir):
     """
     Rename and resize the freshly-extracted transparent_sprites/frame_NN.png
     files into the corridor sprite strip the runtime loads:
-        ../corridor/idle_NN.png  (NN = 01..16)
-    Pipeline contract: 180x320 RGBA, frame_00 -> idle_01.
+        ../corridor/frame_NN.png  (NN = 01..16)
+    Pipeline contract: 180x320 RGBA, frame_00 -> frame_01.
 
     Backs up the existing corridor strip to /private/tmp/WT_pre_corridor_install/
     before overwriting, so a bad install can be reverted with `cp -a` from there.
@@ -130,9 +130,9 @@ def install_into_corridor(transparent_dir):
     # day so we don't fill /tmp; older backups in the same dir are preserved).
     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     backup_dir = Path(f"/private/tmp/WT_pre_corridor_install_{ts}")
-    if any(corridor_dir.glob("idle_*.png")):
+    if any(corridor_dir.glob("frame_*.png")):
         backup_dir.mkdir(parents=True, exist_ok=True)
-        for f in corridor_dir.glob("idle_*.png"):
+        for f in corridor_dir.glob("frame_*.png"):
             shutil.copy2(f, backup_dir / f.name)
         print(f"Backed up existing corridor strip to {backup_dir}")
 
@@ -140,10 +140,10 @@ def install_into_corridor(transparent_dir):
     installed = 0
     for src_path in sorted(transparent_dir.glob("frame_*.png")):
         idx = int(src_path.stem.split("_")[1])  # frame_00 -> 0
-        idle_n = idx + 1                       # 0 -> idle_01
-        if not (1 <= idle_n <= 16):
+        frame_n = idx + 1                       # 0 -> frame_01
+        if not (1 <= frame_n <= 16):
             continue
-        dst = corridor_dir / f"idle_{idle_n:02d}.png"
+        dst = corridor_dir / f"frame_{frame_n:02d}.png"
         im = Image.open(src_path).convert("RGBA")
         if im.size != target_size:
             im = im.resize(target_size, Image.Resampling.LANCZOS)

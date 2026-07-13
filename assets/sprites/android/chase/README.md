@@ -2,13 +2,13 @@
 
 ```
 chase/
-├── idle_01.png .. idle_16.png   runtime: 180×320 RGBA. What the engine loads.
+├── frame_01.png .. frame_16.png   runtime: 180×320 RGBA. What the engine loads.
 └── raw/                        historical v0.14 I2V source for this character.
 ```
 
-## idle_*.png
+## frame_*.png
 
-16 sprite frames at **180×320 RGBA**: `idle_01.png` .. `idle_16.png`. This
+16 sprite frames at **180×320 RGBA**: `frame_01.png` .. `frame_16.png`. This
 is what `story.json` references and what the runtime loads.
 
 ## raw/
@@ -31,7 +31,7 @@ python3 tools/key_sprite.py \
 ## Why no processed/ subdir?
 
 The other scene dirs follow different conventions:
-- `corridor/` uses `idle_*.png` at the root (where the strip lives today) plus `raw/` and an empty `processed/` left over from `sprite_extractor.py` — see `corridor/README.md`.
-- `alley/`, `jailbreak/` use `idle_*.png` at the root with no `raw/` because no green-screen source was retained for those characters.
+- `corridor/` uses `frame_*.png` at the root (where the strip lives today) plus `raw/` and an empty `processed/` left over from `sprite_extractor.py` — see `corridor/README.md`.
+- `alley/`, `jailbreak/` use `frame_*.png` at the root with no `raw/` because no green-screen source was retained for those characters.
 
 This inconsistency is real and called out in `assets/sprites/SPRITE_PIPELINE.md`. Don't move files into or out of subdirs without updating that doc + the relevant `story.json` references.

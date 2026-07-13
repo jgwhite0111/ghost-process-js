@@ -795,7 +795,7 @@ function addNewSprite() {
     targetH: 0.85,
     speaker: name.toUpperCase(),
     scenes: {
-      [state.sceneId]: { frames: `assets/sprites/${name}/${state.sceneId}/idle_*.png`, fps: 4, loop: true },
+      [state.sceneId]: { frames: `assets/sprites/${name}/${state.sceneId}/frame_*.png`, fps: 4, loop: true },
     },
   };
   if (!sc.characters) sc.characters = [];

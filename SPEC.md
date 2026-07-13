@@ -114,7 +114,7 @@ ghost-process-js/
 │   └── vendor-deps.js            # fetch ink-full.js (no CDN)
 └── assets/                       # scene plates, sprites, audio, fonts
     ├── backgrounds/scene_*.png
-    ├── sprites/<character>/<scene>/idle_NN.png
+    ├── sprites/<character>/<scene>/frame_NN.png
     ├── audio/*.mp3
     ├── items/*.png
     └── fonts/{nouveau_ibm.ttf, madou-futo-maru.ttf}
@@ -156,7 +156,7 @@ ghost-process-js/
                       "characters": [
                         { "id":"android", "speaker":"ANDROID", "position":"right",
                           "scenes": { "alley": {
-                            "frames": "assets/sprites/android/alley/idle_*.png",
+                            "frames": "assets/sprites/android/alley/frame_*.png",
                             "fps": 4, "loop": true } } }
                       ],
                       "hitboxes": [{ "x":0.15, "y":0.55, "w":0.10, "h":0.15,
@@ -292,7 +292,7 @@ Out of scope for v0.2. v1 had `editor.html` + `editor.js` for browser-based scen
 ### 8.1 What already exists (carried over)
 
 - 7 scene background PNGs in `assets/backgrounds/` (pre-rendered during the v0.1 era).
-- 64 sprite frames under `assets/sprites/<characterId>/<sceneId>/idle_NN.png` (16 frames × 4 character/scene combinations).
+- 64 sprite frames under `assets/sprites/<characterId>/<sceneId>/frame_NN.png` (16 frames × 4 character/scene combinations).
 - 3 MP3 tracks: `intro_theme.mp3`, `alley_confrontation.mp3`, `clinic_tension.mp3`.
 - 2 fonts: `nouveau_ibm.ttf` (UI/dialogue), `madou-futo-maru.ttf` (titles, "PRESS START").
 - 7 item icons in `assets/items/`.
@@ -363,7 +363,7 @@ projects (abandoned, on disk only as reference).
 - `AGENTS.md` rules ported to this repo's `AGENTS.md`.
 - 3 MP3 audio tracks pre-rendered via `tools/render-midi.sh` (FluidSynth → MP3).
 - 7 background plates regenerated via the asset-generation pipeline (one per scene).
-- Android + Thug character sprites: base image regenerated, talking animation extracted as 16-frame PNG sequences (`idle_01.png` ... `idle_16.png`).
+- Android + Thug character sprites: base image regenerated, talking animation extracted as 16-frame PNG sequences (`frame_01.png` ... `frame_16.png`).
 
 ### Old projects
 
