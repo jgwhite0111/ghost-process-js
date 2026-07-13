@@ -209,18 +209,25 @@ def install_to_runtime():
         y0, y1 = int(ys.min()), int(ys.max())
         tight = im.crop((x0, y0, x1 + 1, y1 + 1))
         tight_w, tight_h = tight.size
-        tight_aspect = tight_w / tight_h
         # Target height is fixed; target width is the figure's own
-        # width at that height. This means the canvas is *per-frame*:
-        # narrow frames produce narrow canvases, wide frames (arms
-        # out) produce wide canvases. The runtime already supports
-        # arbitrary sprite widths (uses img.width for placement).
+        # width at that height + padding so the arms never touch the
+        # canvas edge. Padding H_SCALE_X handles wide figures with
+        # outstretched arms (ball-frames).
         scale = target_h / tight_h
         new_h = target_h
-        new_w = max(1, int(round(tight_w * scale)))
-        shrunk = tight.resize((new_w, new_h), Image.Resampling.LANCZOS)
+        figure_w = max(1, int(round(tight_w * scale)))
+        # Pad figure width so figure doesn't touch horizontal edges.
+        # If figure is already wider than target_w, give it some
+        # canvas breathing room by adding margin on the sides via
+        # a wider target canvas (the runtime uses img.width).
+        pad = max(8, int(round(figure_w * 0.04)))  # at least 8px, or 4% of width
+        new_w = figure_w + 2 * pad
+        # Centre the figure horizontally with pad of transparent pixels
+        # on each side — arms can never spill off canvas because we
+        # sized the canvas to fit.
+        shrunk = tight.resize((figure_w, new_h), Image.Resampling.LANCZOS)
         canvas = Image.new("RGBA", (new_w, new_h), (0, 0, 0, 0))
-        canvas.paste(shrunk, (0, 0), shrunk)
+        canvas.paste(shrunk, (pad, 0), shrunk)
         dst = corridor_dir / f"frame_{frame_n:02d}.png"
         canvas.save(dst)
         installed += 1
