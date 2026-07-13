@@ -171,6 +171,10 @@ landed in the cleanup resolution (commits d40f9d1, 0148947).
 - `src/runtime/sprites.js` — likely v0.2.41 hold-range +
   cyan-ball despill guard (commit 617249f). Uncommitted from the
   parallel session that landed v0.2.41.
+- `assets/sprites/android/_diagnostics/README.md` — Source MP4 path
+  retargeted to `corridor/raw/i2v_clip_android_corridor.mp4` as part of
+  this session's resolution. Lands in the next handoff commit alongside
+  this banner.
 
 **No more deleted files.** The 18 staged deletes listed in the
 2026-07-08 banner (`scene_corridor.png`, 16× `eidolon_return/idle_*`,
@@ -425,9 +429,13 @@ ERRORS: []
 ```
 HEAD = 0148947 (sprites: commit corridor/README.md)
 Branch: main
-Sync: ahead of origin/main by 19 commits (was 10 at start of session, +5 from the first cleanup batch, +4 from the resolution)
-Working tree: 18 dirty, 0 untracked (16 corridor sprite WIP + src/runtime/sprites.js + corridor/raw/transparent_sprites/ count drift as the v17/v19 work lands).
-  All transparent_sprites/ PNGs and the MP4/extractor are now tracked.
+Sync: ahead of origin/main by 16 commits (was 7 pre-session: 22273d6, bb794b2, 53203c0, ca27844, f80a2a2, 244eed9; +9 this session: 5 from the first cleanup batch, 4 from the resolution). origin/main is at 617249f (v0.2.41).
+Working tree: 18 dirty, 0 untracked
+  - 16× corridor/idle_*.png — v17/v19 WIP
+  - src/runtime/sprites.js — v0.2.41 hold-range + despill (617249f)
+  - _diagnostics/README.md — modified during the resolution to retarget
+    Source MP4 path; landed in the next commit alongside this handoff update
+  All transparent_sprites/ PNGs and the MP4/extractor are tracked.
   Cleaned up via the resolution commits above.
 ```
 
