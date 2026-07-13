@@ -439,15 +439,25 @@ function placementXFor(charConfig, spriteW) {
 // fractions — do not multiply by vpW / vpH here.
 function computeSpriteRect(charConfig) {
   const img = state.spriteFrames[charConfig.id + '/' + state.sceneId];
-  if (!img) return null;
-  let scale = targetHFor(charConfig) / img.height;
-  const maxW = vpW() * 0.95;
-  if (img.width * scale > maxW) scale = maxW / img.width;
-  const w = img.width * scale;
-  const h = img.height * scale;
+  if (img) {
+    let scale = targetHFor(charConfig) / img.height;
+    const maxW = vpW() * 0.95;
+    if (img.width * scale > maxW) scale = maxW / img.width;
+    const w = img.width * scale;
+    const h = img.height * scale;
+    const cy = placementYFor(charConfig);
+    const cx = placementXFor(charConfig, w);
+    return { x: cx - w / 2, y: cy - h, w, h };
+  }
+  // Placeholder rect for sprites without frames yet — needs to exist
+  // so the user can still click/drag/delete them, otherwise a freshly
+  // added sprite becomes invisible (no handle) the moment you click
+  // away from it. Aspect ~2:1, default targetH.
+  const h = targetHFor(charConfig);
+  const w = h * 0.5;
   const cy = placementYFor(charConfig);
   const cx = placementXFor(charConfig, w);
-  return { x: cx - w / 2, y: cy - h, w, h };
+  return { x: cx - w / 2, y: cy - h, w, h, noFrames: true };
 }
 function hitboxRectPx(hb) {
   return { x: hb.x * vpW(), y: hb.y * vpH(), w: hb.w * vpW(), h: hb.h * vpH() };
@@ -500,31 +510,37 @@ function renderOverlay() {
   for (const c of (sc.characters || [])) {
     const r = computeSpriteRect(c);
     if (!r) continue;
+    const placeholder = !!r.noFrames;
     let div = draggingKey === dragKey({ kind: 'move', targetKind: 'sprite', ref: c }) ? oldNodes.get('sprite:' + c.id) : null;
     if (!div) {
       div = document.createElement('div');
-      div.className = 'sprite-handle';
+      div.className = placeholder ? 'sprite-handle no-frames' : 'sprite-handle';
       div.dataset.key = 'sprite:' + c.id;
-      const lbl = document.createElement('span'); lbl.className = 'label'; lbl.textContent = c.id;
+      const lbl = document.createElement('span'); lbl.className = 'label';
+      lbl.textContent = placeholder ? `${c.id} (no frames)` : c.id;
       div.appendChild(lbl);
       // Play/pause button — top-left of the sprite box. Previews the
       // animation in real-time on the canvas. Doesn't initiate drag.
-      const playBtn = document.createElement('button');
-      playBtn.className = 'play-btn';
-      playBtn.title = 'Preview animation';
-      playBtn.textContent = '▶';
-      playBtn.addEventListener('pointerdown', (e) => { e.stopPropagation(); });
-      playBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        togglePlay(c);
-      });
-      div.appendChild(playBtn);
+      // Skip for placeholders (no frames to preview).
+      if (!placeholder) {
+        const playBtn = document.createElement('button');
+        playBtn.className = 'play-btn';
+        playBtn.title = 'Preview animation';
+        playBtn.textContent = '▶';
+        playBtn.addEventListener('pointerdown', (e) => { e.stopPropagation(); });
+        playBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          togglePlay(c);
+        });
+        div.appendChild(playBtn);
+      }
       const grip = document.createElement('span'); grip.className = 'resize'; grip.title = 'drag to resize';
       div.appendChild(grip);
       attachSpriteDrag(div, c);
     }
     // Reflect playback state on the play button (re-render safe —
-    // re-binds only the icon, keeps the click handler).
+    // re-binds only the icon, keeps the click handler). No-op for
+    // placeholders (no play button appended above).
     const playBtn = div.querySelector('.play-btn');
     if (playBtn) {
       const animKey = c.id + '/' + state.sceneId;

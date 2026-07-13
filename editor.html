@@ -117,6 +117,14 @@
     position: absolute; box-sizing: border-box; outline: 1px dashed #f0b760;
     outline-offset: -1px; cursor: grab; touch-action: none;
   }
+  .sprite-handle.no-frames {
+    outline: 1px dashed #6c7280;
+    background: repeating-linear-gradient(
+      45deg, rgba(108,114,128,0.15) 0 6px, transparent 6px 12px
+    );
+  }
+  .sprite-handle.no-frames .label { color: #6c7280; }
+  .sprite-handle.no-frames .resize { background: #6c7280; }
   .sprite-handle.selected { outline: 1px solid #f0b760; box-shadow: 0 0 0 1px rgba(240,183,96,0.3); }
   .sprite-handle.dragging { cursor: grabbing; }
   .sprite-handle .label {
