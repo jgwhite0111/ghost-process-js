@@ -46,6 +46,15 @@ Defaults (MiniMax-Image standard green, HSV):
 These match the corridor clip's green ((17, 145, 42) RGB ≈ H≈39 S≈76 V≈57).
 Tune --hue-lo/--hue-hi if a different batch of outputs uses a different
 green; sample the source PNG with any image tool first.
+
+For black-background sources (e.g. some I2V outputs that don't honour the
+green-screen convention, or pre-processed alpha renders), use:
+    --bg black --black-threshold 20
+
+Black-key works by thresholding V (HSV value) below --black-threshold and
+turning those pixels transparent. White or light-on-dark content survives
+intact. Animated sprites with motion blur or semi-transparent anti-aliased
+edges may need a lower threshold (e.g. 12) to preserve the edge pixels.
 """
 
 import argparse
@@ -59,7 +68,26 @@ import numpy as np
 from PIL import Image
 
 
-def key_png(src_path, hsv_lo, hsv_hi, soften=3):
+def make_sprite_mask(bgr_img, bg_mode, hsv_lo, hsv_hi, soften):
+    """Return a uint8 alpha mask (0-255) for the sprite pixels in bgr_img."""
+    hsv = cv2.cvtColor(bgr_img, cv2.COLOR_BGR2HSV)
+    if bg_mode == "green":
+        bg_mask = cv2.inRange(hsv, hsv_lo, hsv_hi)
+    elif bg_mode == "black":
+        # Everything below the V threshold is BG. Sprite pixels are
+        # brighter than that.
+        v = hsv[..., 2]
+        bg_mask = (v < hsv_lo[2]).astype(np.uint8) * 255
+    else:
+        raise ValueError(f"unknown bg_mode {bg_mode!r}; use 'green' or 'black'")
+    sprite_mask = cv2.bitwise_not(bg_mask)
+    if soften > 0:
+        k = soften if soften % 2 == 1 else soften + 1
+        sprite_mask = cv2.GaussianBlur(sprite_mask, (k, k), 0)
+    return sprite_mask
+
+
+def key_png(src_path, bg_mode, hsv_lo, hsv_hi, soften=3):
     """Read a PNG, chroma-key it, return RGBA numpy array at source res."""
     img = cv2.imread(str(src_path), cv2.IMREAD_UNCHANGED)
     if img is None:
@@ -69,19 +97,13 @@ def key_png(src_path, hsv_lo, hsv_hi, soften=3):
     if img.shape[2] == 4:
         # Already RGBA — assume alpha is correct, return as-is.
         return cv2.cvtColor(img, cv2.COLOR_BGRA2RGBA)
-    hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-    green_mask = cv2.inRange(hsv, hsv_lo, hsv_hi)
-    sprite_mask = cv2.bitwise_not(green_mask)
-    if soften > 0:
-        # odd kernel size required; clamp to odd >= 1
-        k = soften if soften % 2 == 1 else soften + 1
-        sprite_mask = cv2.GaussianBlur(sprite_mask, (k, k), 0)
+    sprite_mask = make_sprite_mask(img, bg_mode, hsv_lo, hsv_hi, soften)
     b, g, r = cv2.split(img)
     rgba = cv2.merge([b, g, r, sprite_mask])
     return cv2.cvtColor(rgba, cv2.COLOR_BGRA2RGBA)
 
 
-def key_video(src_path, start_frame, end_frame, keyframes, hsv_lo, hsv_hi, soften=3):
+def key_video(src_path, start_frame, end_frame, keyframes, bg_mode, hsv_lo, hsv_hi, soften=3):
     """Pull N evenly-spaced keyframes from MP4 and key each one."""
     cap = cv2.VideoCapture(str(src_path))
     if not cap.isOpened():
@@ -94,16 +116,11 @@ def key_video(src_path, start_frame, end_frame, keyframes, hsv_lo, hsv_hi, softe
         if not ret or cur >= end_frame:
             break
         if cur in indices:
-            hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-            green_mask = cv2.inRange(hsv, hsv_lo, hsv_hi)
-            sprite_mask = cv2.bitwise_not(green_mask)
-            if soften > 0:
-                k = soften if soften % 2 == 1 else soften + 1
-                sprite_mask = cv2.GaussianBlur(sprite_mask, (k, k), 0)
+            sprite_mask = make_sprite_mask(frame, bg_mode, hsv_lo, hsv_hi, soften)
             b, g, r = cv2.split(frame)
             rgba = cv2.merge([b, g, r, sprite_mask])
             rgba = cv2.cvtColor(rgba, cv2.COLOR_BGRA2RGBA)
-            saved.append((indices_search(indices, cur), rgba))
+            saved.append((int(np.where(indices == cur)[0][0]), rgba))
         cur += 1
     cap.release()
     return saved
@@ -135,6 +152,10 @@ def main():
     ap.add_argument("--sat-min", type=int, default=40, help="HSV saturation min (0-255).")
     ap.add_argument("--val-min", type=int, default=40, help="HSV value min (0-255).")
     ap.add_argument("--soften", type=int, default=3, help="Gaussian kernel size on alpha (odd, 0=off).")
+    ap.add_argument("--bg", choices=["green", "black"], default="green",
+                    help="Source background colour to key against (default green for MiniMax-Image outputs).")
+    ap.add_argument("--black-threshold", type=int, default=20,
+                    help="[--bg black] V (HSV value) below this becomes transparent. Default 20.")
     ap.add_argument("--size", default=None, help="WxH to resize output (e.g. 180x320). Skips if already that size.")
     # Video-only:
     ap.add_argument("--start", type=int, default=1, help="[video] first frame index to consider.")
@@ -145,6 +166,10 @@ def main():
 
     hsv_lo = np.array([args.hue_lo, args.sat_min, args.val_min])
     hsv_hi = np.array([args.hue_hi, 255, 255])
+    # For black-bg mode, --val-min is repurposed as the black-threshold
+    # (single-channel V threshold, no upper bound). We don't need hsv_hi.
+    if args.bg == "black":
+        hsv_lo = np.array([0, 0, args.black_threshold])
     size = None
     if args.size:
         w, h = args.size.lower().split("x")
@@ -157,7 +182,7 @@ def main():
     if src.lower().endswith((".mp4", ".mov", ".webm", ".avi")):
         # Video → directory of keyframes
         out.mkdir(parents=True, exist_ok=True)
-        keyed = key_video(src, args.start, args.end, args.keyframes, hsv_lo, hsv_hi, args.soften)
+        keyed = key_video(src, args.start, args.end, args.keyframes, args.bg, hsv_lo, hsv_hi, args.soften)
         for idx, rgba in keyed:
             dst = out / f"{args.prefix}{idx:02d}.png"
             write_rgba(rgba, dst, size=size)
@@ -173,7 +198,7 @@ def main():
             sys.exit(1)
         out.mkdir(parents=True, exist_ok=True)
         for p in paths:
-            rgba = key_png(p, hsv_lo, hsv_hi, args.soften)
+            rgba = key_png(p, args.bg, hsv_lo, hsv_hi, args.soften)
             dst = out / Path(p).name
             write_rgba(rgba, dst, size=size)
             print(f"wrote {dst}")
@@ -185,7 +210,7 @@ def main():
     if not src_path.exists():
         print(f"not found: {src}", file=sys.stderr)
         sys.exit(1)
-    rgba = key_png(src_path, hsv_lo, hsv_hi, args.soften)
+    rgba = key_png(src_path, args.bg, hsv_lo, hsv_hi, args.soften)
     if str(args.out).endswith(os.sep) or out.is_dir():
         out.mkdir(parents=True, exist_ok=True)
         dst = out / src_path.name
