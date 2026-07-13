@@ -7,6 +7,10 @@ No Mono. No Yarn Spinner. `~/ghost-process/` is an abandoned Godot
 Mono prototype — ignore it. `LEGACY.md` has the full timeline.
 `package.json`, `src/`, `index.html` are ground truth.
 
+PC-98 / late-80s cyberpunk horror visual novel, point-and-click,
+mature (no moe). See `README.md` and `AGENTS.md` §"Project intent"
++ §"Style bible".
+
 ## State (verified 2026-07-13)
 
 ```
