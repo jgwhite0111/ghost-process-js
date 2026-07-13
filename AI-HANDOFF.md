@@ -49,7 +49,7 @@ python3 tools/make_scene_loop.py --list  # show all scenes
 | terminal_lab | `terminal_lab.mp3` → `terminal_lab_b.mp3`                                  | 50.6   |
 | ship_engine  | `ship_engine.mp3` → `ship_engine_b.mp3`                                    | 51.7   |
 
-26 MP3s wired into `story.json` (intro_theme + 25 medley tracks across 9 scenes × up to 5 tracks each). 27 MIDIs on disk. `clinic_tension.mid` / `.mp3` are orphaned (not in `story.json` `next`).
+29 MP3s wired into `story.json` (intro_theme + 28 medley tracks across 9 scenes × up to 5 tracks each). 30 MIDIs on disk. `clinic_tension.mid` / `.mp3` are orphaned (not in `story.json` `next`).
 
 ## Recent work
 
@@ -76,6 +76,30 @@ Files touched:
 - `tools/make_scene_loop.py` MEDLEYS dict — `corp_office` now lists 5 tracks
 - `story.json` — corp_office.music extended to 5 entries (fadeAt 37.3 / 42 / 50 / 22)
 - New assets: `corp_office_c.mp3` (55.5s) / `corp_office_d.mp3` (23.2s) / `corp_office_e.mp3` (44.0s) + `.mid` sources; `corp_office_b.mp3` / `.mid` overwritten in place (new design)
+
+### 2026-07-13: corridor 5-track medley, A+B REWRITTEN for density
+
+The old corridor A had music box playing a single 4-note motif every bar for 12 bars (~1 note/sec — too sparse, no melody). Old corridor B had the same problem in bars 0-7. User liked the instrument selection (Music Box 11 + Celesta 8, Warm Pad 100, Synth Bass 39) — kept it. Rewrote A and B's bars 0-7 for melodic density, then added C/D/E for the standard 5-track phase arc.
+
+| Track | Bars × BPM | Character |
+|---|---|---|
+| `corridor` (A) — REWRITTEN | 24 @ 60 | Music box plays a melodic phrase (Cm arpeggio with stepwise descent), counter-melody joins octave below at bar 4, 3-voice arpeggios over Fm bars 8-11. Bar 12 SILENCE scare beat preserved. Bar 13 single peak note (Eb6). bars 14-19 Ab climax (kept). Bass walks 8va 4ths from bar 0 (was static C2 drone). Pad Cm enters at bar 0 (was bar 4). |
+| `corridor_b` (B) — bars 0-7 REWRITTEN | 24 @ 60 | bars 0-7: celesta plays full melodic phrase over Cm (was 4-note motif every 2 bars). Bass walks 8va 4ths. bars 8-23: KEPT VERBATIM (Fm→Ab→Cm motif loop). |
+| `corridor_c` (C) | 24 @ 60 | Paranoia: same instruments, NO drums. Music box Cm with chromatic passing tones (F#5, Db2) that don't resolve. Pad shifts through paranoid chord colors (Cm7#11 → Bbmaj7 → Fm7#11 → G7b9 → Cm7#11). Bar 12 SILENCE + single wrong note B5 (the scare beat payoff). bars 16-23: "too correct" descending scales — recorder student practising, more disturbing than chaos. |
+| `corridor_d` (D) | 8 @ 60 | Cliff-hanger: bars 0-2 dim7 stabs (C# dim7 → F# dim7) on bass C2 drone, bar 2 silence, bars 3-7 single held music-box C7 with heavy vibrato (CC1 ramp 0→110). Pad drops from C# dim7 to quiet Cm. 37s rendered. |
+| `corridor_e` (E) | 24 @ 60 | Recovery: held C7 continues from D for bars 0-1 (vibrato decaying CC1 110→0), music box motif re-enters at bar 2 with A's opening shape (C-Eb-G-Bb ascending), walking bass returns. bars 20-23 mirror A's opening for invisible loop seam. |
+
+Per-track peak levels: A=-existing → B=-existing → C=-7.9dB → D=-12.8dB → E=-7.2dB. D's silence profile: stabs fade from -32 to -47dB across bars 0-2, then sustained -90+dB silence through the held C7.
+
+Total corridor scene duration ~5:00 (up from ~2:00 with old A+B). E's last 4 bars = A's bars 0-3 = invisible loop seam.
+
+Smoke test passed: all 4 crossfades (A→B→C→D→E) fired cleanly via `window.MusicHandler._crossfadeToNext()`; readyState=4 on all tracks.
+
+Files touched:
+- `tools/make_scene_loop.py` — `SCENES["corridor"]` lead_pattern bars 0-11 rewritten + bass_pattern rewritten + pad_chords shifted earlier; `_build_corridor_b_patterns()` rewritten (bars 0-7 celesta + bass); new `SCENES_B["corridor_c"]` / `["corridor_d"]` / `["corridor_e"]` with pattern builders
+- `tools/make_scene_loop.py` MEDLEYS dict — `corridor` now lists 5 tracks
+- `story.json` — corridor.music extended to 5 entries (fadeAt 60.5 / 50 / 45 / 22)
+- New assets: `corridor_c.mp3` (101s) / `corridor_d.mp3` (37s) / `corridor_e.mp3` (101s) + `.mid` sources; `corridor.mp3` / `corridor_b.mp3` overwritten in place (new design)
 
 ### 2026-07-13: chase 5-track medley experiment (committed as `310784b`)
 

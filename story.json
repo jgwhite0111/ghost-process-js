@@ -171,6 +171,18 @@
         {
           "file": "corridor_b.mp3",
           "fadeAt": 60.5
+        },
+        {
+          "file": "corridor_c.mp3",
+          "fadeAt": 50.0
+        },
+        {
+          "file": "corridor_d.mp3",
+          "fadeAt": 45.0
+        },
+        {
+          "file": "corridor_e.mp3",
+          "fadeAt": 22.0
         }
       ],
       "ink": "ink/corridor.ink",
