@@ -501,13 +501,11 @@ function onSpriteDragMove(e) {
     // crossing.
     const newPYraw = state.drag.startPlacementY + dyUnits;
     const newPXraw = state.drag.startPlacementX + dxUnits;
-    // Pass the previous frame's snapped values so the snap functions
-    // know which direction the cursor is moving and can release when
-    // the user drags back inside the canvas.
-    const newPY = snapY(newPYraw, spriteH, vpH(), SNAP_PX, state.drag.lastPlacementY);
-    const newPX = snapX(newPXraw, spriteW, vpW(), SNAP_PX, state.drag.lastPlacementX);
-    state.drag.lastPlacementY = newPY;
-    state.drag.lastPlacementX = newPX;
+    // Snap-to-edge disabled (user preference): drive the sprite 1:1
+    // from the cursor at all times. For precise edge placement, use
+    // the numeric placementX / placementY inputs in the inspector.
+    const newPY = newPYraw;
+    const newPX = newPXraw;
     // One-shot diagnostic so the user can confirm vpW/vpH and
     // sprite dimensions are sane numbers. Triggers once at the start
     // of a drag; afterwards it's quiet. Open the browser console.
