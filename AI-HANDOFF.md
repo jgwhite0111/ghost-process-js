@@ -362,6 +362,185 @@ sitting unused, `rm` them or move to `ink/_drafts/`.
 
 ---
 
+## Update (2026-07-13) — corridor android animation + thug sprite keying (this session)
+
+This is a session-ending banner. The next session can start cold
+without re-litigating what landed below.
+
+### Commits landed (8 this session)
+
+```
+4cb4b6f thug: halo erosion radius 1 -> 2
+dfae29f thug: halo erosion radius 3 -> 1 (only eat the immediate boundary)
+175180e thug: halo erosion radius 5 -> 3 (less aggressive)
+237d341 thug: erode brown halo within 5px of any transparent neighbour
+4e2d9c1 thug: replace green spill with brown skin in jailbreak frames
+59b7ece runtime: sprite resets to frame 0 when it becomes visible
+56c20f8 editor: play button now mirrors in-game frame order + always restarts from frame 0
+ef5dd61 editor: bigger play button (32x32, 16px icon, drop shadow)
+         (plus 24 prior commits: per-sprite play button, snap-to-edge removal,
+          key_sprite.py tuning, etc.)
+```
+
+(2 prior commits also landed this session but were not in the
+thug/corridor chain: `a59832a` editor per-sprite play button +
+real-time animation preview, and `071d19b` snap-to-edge removal —
+pre-existing WIP, closed.)
+
+### What those commits actually do (forensic)
+
+**Thug sprite pipeline (5 commits, `4e2d9c1`..`4cb4b6f`)** — the
+biggest single piece of work this session. Source:
+`/Users/jwhite/ghost-process-98/assets/sprites/thug/talking.webp`
+(180×320 RGBA, partially pre-keyed). The figure is a bald Black
+prisoner in profile; the source has a green-tinted halo at the
+half-pixel boundary (alpha=128, RGB green-dominant) plus several
+hundred alpha=255 green-tinted pixels scattered through the
+silhouette.
+
+The keyer grew iteratively across five user-corrected passes:
+1. **`4e2d9c1`** — green→brown skin recolour. For any pixel where
+   `(a > 0) & (g >= r) & (g > b) & (g > 30) & (a >= 32)`, replace
+   RGB with luminance-preserving brown:
+   `lum = 0.299r + 0.587g + 0.114b`, then
+   `r' = lum*1.6, g' = lum*0.95, b' = lum*0.50`. So dark green
+   `[0,89,20]` → dark brown `[69,41,22]`. Promotes alpha=128 spill
+   to alpha=255 so the halo doesn't 50%-blend.
+2. **`237d341`** — halo erosion, initially radius=5. Algorithm:
+   pure-Python 2D disk walk — for each opaque pixel P, if any
+   (dr,dc) with dr²+dc² ≤ r² has alpha=0, set P.alpha=0. Avoids
+   needing scipy.
+3. **`175180e`** — radius 5→3 (5 was eating into the jaw/brow
+   silhouette).
+4. **`dfae29f`** — radius 3→1 (per the user, "3px was still
+   aggressive"). Final state: only the immediate-boundary pixels
+   get eroded.
+5. **`4cb4b6f`** — radius 1→2 (settled between extremes; this is the
+   shipped value).
+
+**Frame_01.png opaque-pixel counts across the radius tuning
+(measured from each commit's actual PNG via `git show`):**
+
+| Pass                        | Radius | Opaque (frame_01) | Δ vs no-erosion |
+|-----------------------------|--------|-------------------|-----------------|
+| `4e2d9c1`  post-spill recolour | (none) | 32747          | baseline        |
+| `237d341` halo erosion v1     | 5     | 30219           | -2528           |
+| `175180e` radius 5→3          | 3     | 31280           | -1467           |
+| `dfae29f` radius 3→1          | 1     | 32293           | -454            |
+| `4cb4b6f` radius 1→2 (FINAL)  | 2     | 31831           | -916            |
+
+(Visual comparison via `vision_analyze` on `frame_01.png` had to be
+backed-up by in-game composite: vision kept reporting "still green"
+on the binarised PNG even after the conversion landed. The
+in-editor screenshot at `http://localhost:8765/editor.html?scene=jailbreak`
+confirms the figure reads as clean brown skin on the cyan-lit
+`scene_jailbreak.png` background with no outline rim.)
+
+**Corridor animation + editor (3 commits, `59b7ece`..`ef5dd61`)** —
+
+- **`59b7ece`** — `src/runtime/sprites.js` `setVisible()` now resets
+  `currentFrame`, `_phase`, `elapsed`, `_hasFiredOneShot` to 0.
+  Fixes "corridor android starts on a later frame" complaint:
+  `ambientAnimateScenes` set `isSpeaking=true` while sprite was
+  invisible, so by the time the sprite became visible it was at
+  frame 2-3, not 0.
+- **`56c20f8`** — editor `togglePlay()` resets to frame 0 on click,
+  mirroring in-game. `startAnimTick()` honors `playForward`,
+  `playReverse`, `loop` semantics.
+- **`ef5dd61`** — 32×32 play button (was 20×20), 16px icon, drop
+  shadow, 2px border. Per-sprite, top-left of sprite box.
+
+### Working tree state (verified at session end, not the file's stale claim)
+
+```
+HEAD = b1192cc (handoff: update for /new session)
+Branch: main
+Sync: ahead of origin/main by 43 commits
+Working tree: CLEAN (0 dirty, 0 untracked)
+```
+
+The stale "Working tree: 19 dirty" / "Working tree: 17 dirty" lines
+in the banners below describe intermediate states that were
+resolved across the corridor cleanup + dead-asset cleanup sessions
+that preceded this one. The current repo is clean. **Do not trust
+those numbers — run `git status -sb` on session start.**
+
+### Verification
+
+```
+$ python3 tools/test_full_chain.py
+VISITED: ['intro', 'alley', 'chase', 'kabukicho', 'corp_office',
+          'corridor', 'jailbreak', 'terminal_lab', 'ship_engine', 'alley']
+ERRORS: []
+```
+
+10 scenes, 0 errors. Thug `frame_01..16.png` composite checks out
+in-editor (cyan-lit jailbreak scene, clean brown skin, no halo).
+
+### Files added this session
+
+- `tools/key_thug_talking.py` — multi-pass keyer. Reads
+  `raw/i2v_clip_thug_talking.webp` → 16 chroma-recolored+eroded
+  `frame_NN.png` siblings in `assets/sprites/thug/jailbreak/`.
+  Args: `HALO_RADIUS = 2` (currently shipped).
+- `assets/sprites/thug/raw/i2v_clip_thug_talking.webp` — source,
+  copied from `~/ghost-process-98/assets/sprites/thug/talking.webp`
+  to match the corridor/chase `raw/` convention.
+- `assets/sprites/thug/jailbreak/frame_01.png`..`frame_16.png` —
+  regenerated. Note: these are the **only** thug-jailbreak assets
+  updated; `base.png`, `blink.png`, `mouth.png`,
+  `talking_backup.png` in `~/ghost-process-98` were not touched.
+
+### Files NOT touched this session (potential carryover)
+
+- `src/runtime/sprites.js` `_despillGreen()` — still in place as a
+  runtime safety net against green-channel tint shifts in any future
+  sprite regeneration. Not invoked by the thug pipeline (thug goes
+  green→brown at source), but other sprites use it.
+- `editor.html` `.sprite-handle .play-btn` CSS — bumped in `ef5dd61`
+  but the legacy 20×20 rule is still in `editor.html` ahead of
+  `.play-btn`; the new size wins by specificity, no cleanup needed.
+- `HANDOFF_SPRITES.md` — confirmed absent (deleted in `5bac1ba`).
+  Any mention of "Read HANDOFF_SPRITES.md first" in this file is
+  stale; ignore.
+
+### Carry-over items still open (not resolved in this session)
+
+The following were inherited from prior banners and were **not
+worked** in this session — the user was focused on the thug sprite
+across the whole session:
+
+- **Dialogue box vertical layout / "feet floating above viewport
+  edge" complaint** (banner A above) — user has not picked option
+  (a) shrink dialogue, (b) bottom safe-area padding, (c) top-pin
+  dialogue, (d) restore feet-anchor. Still parked. Re-litigate
+  on next session if user re-elevates.
+- **Corridor android sprite source has duplicate historical
+  generations** archived at `assets/sprites/android/_deleted/.scratch_archive/`.
+  v6 is the canonical baseline; v7/v8/v9/v10/v12 + REJECTED v11
+  are archived but recoverable from `_deleted/` if v17/v19 work
+  needs an earlier strip as fallback. Don't touch unless user
+  asks.
+- **Source `talking.webp` may produce further improvements at a
+  different HALO_RADIUS** — `2` is shipped but we could not
+  definitively pick "1" or "2" via vision alone (vision kept
+  reporting green even on a clean-brown file). The user can
+  flip `tools/key_thug_talking.py:HALO_RADIUS` between 1 and 2
+  and re-run if the choice matters in gameplay.
+
+### What's open / parked for the next session
+
+None of these are blockers; they are the standard PC-98 horror
+project's residual work.
+
+- Dialogue box layout (section above) — open.
+- SC-55mkII soundfont A/B test (parked, `docs/SC55_AB_TEST.md`).
+- Eight other SCENES_B A-side rewrites done; 14 other scenes with
+  walking-bass-eligible ch 1 untouched (lane, ch 1 in those is
+  Synth Bass 2 still).
+
+---
+
 ## Update (2026-07-13) — dead-asset cleanup session (continued)
 
 The 2026-07-13 banner above said a user decision was needed on
