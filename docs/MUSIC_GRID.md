@@ -1,8 +1,6 @@
 # Music Grid
 
-Per-scene music map for `~/ghost-process-js`. Generated against the live
-`story.json` `music` field. Single tracks are legacy (intro + alley still
-go solo). All other scenes are **medleys**...
+Per-scene music map. Generated against the live `story.json` `music` field. Only `intro` is solo; all 9 gameplay scenes are A+B medleys.
 
 [Title truncated]...
 

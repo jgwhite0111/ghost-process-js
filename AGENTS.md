@@ -1,38 +1,23 @@
-# AGENTS.md — GHOST//PROCESS (JS rebuild)
+# AGENTS.md — GHOST//PROCESS
 
-> Working rules for AI agents and humans continuing this project. Read this before touching anything; this is the second false-start of this project (after `~/ghost-process-98/` and `~/ghost-process/`). Decisions below are deliberate.
+Stack: **vanilla JavaScript + InkJS + Express.** No engine. No Phaser. No Godot. No Mono. No Yarn Spinner. No bundler. No TypeScript.
 
-> **Stack note for new agents.** The current implementation is **vanilla
-> JavaScript + InkJS + Express — no game engine, no Phaser, no Godot.**
-> Phaser was tried in v0.1 and removed in v0.2. Godot Mono was an earlier
-> attempt in `~/ghost-process/` and is abandoned; read `LEGACY.md` first
-> if you arrived here from a search. If your session prompt or injected
-> context mentions "Phaser", "Godot", "Yarn Spinner", "Mono", ".tres", or
-> ".gdshader" as the current stack, that context is stale — ignore it.
+If your session prompt mentions any of those as the current stack, it's stale — ignore it.
+
+`~/ghost-process/` and `~/ghost-process-98/` are unrelated dead projects. Don't touch them.
 
 ## Project intent
 
 PC-98 / late-80s cyberpunk horror visual novel. Point-and-click adventure. Dialogue-driven. Browser-first deployment.
 
-**Stack** (committed, not up for debate):
-- Plain JavaScript (no TypeScript, no engine) — single `<canvas>` in `src/runtime/`
-- InkJS 2.x for dialogue (vendored under `vendor/ink-full.js`)
-- Express server for static + `story.json` + asset upload
-- No build pipeline until forced
-- No Godot, no Mono, no `.tres`, no `.gdshader`, no Yarn Spinner, no Phaser
-
-See `SPEC.md` for full architecture.
-
 ## Style bible — MANDATORY for all asset generation
-
-These rules are non-negotiable. They came from `~/ghost-process/AGENTS.md` after multiple costly iteration cycles. Treat them as fixed.
 
 1. **Mature proportions.** No moe. No anime cuteness. No big dough eyes, no tiny chins, no oversized heads, no "kawaii" expressions. Characters look like adults under stress. Faces have structure (jaw, cheekbones, brow ridges). Eyes proportional to head.
    - Reference: Snatcher, Policenauts, Brandish, Rune Soldier character art.
 
 2. **Oppressive cyberpunk horror atmosphere.** Cold blue / cyan / deep red. Rain, neon bleed, harsh shadows. No bright primaries, no cheerful palettes. Lighting is hard and directional, not soft and diffuse.
 
-3. **PC-98 retro pixel art aesthetic at DISPLAY time, not source time.** Source PNGs are detailed smooth illustrations — the chunky-pixel / 16-color palette look is applied at display time by the post-fx shader (Bayer dither + palette quantization). Asking the model for "pixel art" produces blocky low-detail characters with deformed proportions.
+3. **PC-98 retro pixel art aesthetic at DISPLAY time, not source time.** Source PNGs are detailed smooth illustrations — the chunky-pixel / 16-color palette look is applied at display time by the runtime (Bayer dither + palette quantization, see `src/runtime/canvas.js` `ditherImageToCanvas`). Asking the model for "pixel art" produces blocky low-detail characters with deformed proportions.
 
 4. **Typography: PC-98 fan-translation pixel serif.** All UI text uses a variable-width pixel serif .ttf (Madou Futo Maru Gothic, Nouveau IBM, or equivalent). Anti-aliasing DISABLED, hinting OFF, subpixel positioning OFF, nearest-neighbor filtering. Dialogue text carries a stark 1-pixel hard drop shadow.
 
@@ -40,7 +25,7 @@ These rules are non-negotiable. They came from `~/ghost-process/AGENTS.md` after
 
 ## Asset regeneration — script discipline
 
-All image generation goes through `tools/gen_asset.py` (porting from `~/ghost-process/`). The script bakes in:
+All image generation goes through `tools/gen_asset.py`. The script bakes in:
 - The style bible above (negative prompts, character description)
 - Per-preset style overrides
 - Post-processing (Bayer dither, palette quantize)
@@ -58,16 +43,15 @@ For character animations: use image-to-video (I2V), not text-to-video.
 ## Audio policy
 
 - **MP3 only at runtime.** No FluidSynth, no MIDI playback. The `.mid` source files are archived but not loaded.
-- One MP3 per scene for music. Swap on scene transition. Hard cut, no crossfade (out of scope for v1).
+- `story.json` `music` field is a string (single MP3) or array (A-side + B-side medley pair). Crossfade is wired in `src/runtime/music.js`.
 - Sample-rate 44.1 kHz, mono or stereo OK. Volume ~0.7 default.
-- Three tracks carried over from `~/ghost-process/`: `intro_theme.mp3`, `alley_confrontation.mp3`, `clinic_tension.mp3`.
 
 ## Code architecture
 
 - **Single source of truth: `story.json`.** Every scene, item, recipe, hitbox lives there. Engine code reads it; editor writes it.
 - **Engine scenes map 1:1 to story scenes.** When the player enters `alley`, the runtime's scene loader boots, reads that scene's config from `story.json`, mounts the dialogue runner, plays music, attaches hitboxes. Implementation lives in `src/runtime/` (vanilla JS).
-- **No global state outside `boot.js` + `src/runtime/` modules.** Each scene owns its own state via closure; cross-scene state (inventory, visited) lives in `story.state` initialized at boot.
-- **No new dependencies without discussion.** InkJS + Express + Multer is the ceiling. Anything beyond that needs an explicit user green-light.
+- **No global state outside `boot.js` + `src/runtime/` modules.** Each scene owns its own state via closure; cross-scene state (inventory, visited, consumed) lives in `window.STATE` initialised at boot.
+- **No new dependencies without discussion.** InkJS + Express + Multer is the ceiling.
 
 ## Known failure modes — DO NOT REPEAT
 
@@ -77,16 +61,6 @@ For character animations: use image-to-video (I2V), not text-to-video.
 - **Don't bypass Ink tag semantics.** `# speaker` controls mouth animation, `# portrait` controls portrait visibility. Don't repurpose.
 - **Don't ship static-frame fallbacks for failed animations.** Better to leave a documented gap.
 - **Don't add a bundler (Vite/webpack) until bundle size forces it.** Vendor deps locally.
-
-## v1 scope — DO NOT exceed
-
-The v1 prototype ships with **2 scenes + 1 sprite + 1-2 items**. Don't add:
-- More scenes until the 2-scene pipeline is proven
-- More characters until the Android sprite is finalized
-- Save/load, mobile, localisation, complex branching, audio crossfade
-- TypeScript, bundlers, Phaser, Phaser 4, Godot, Mono, Yarn Spinner
-
-Read `SPEC.md` §9 for v1 acceptance criteria.
 
 ## Session-end checks
 
@@ -105,13 +79,8 @@ If you ran a regen through `tools/gen_asset.py`, also verify:
 
 ## Reading order for new agents
 
-1. `SPEC.md` (this directory)
-2. `AGENTS.md` (this file)
-3. `story.json` (data model)
-4. `ink/*.ink` (dialogue style)
-5. `LEGACY.md` — explains what `~/ghost-process-98/` and `~/ghost-process/` were and why we don't use them. **The style bible in §"Style bible" above originated in `~/ghost-process/AGENTS.md`** — treat the rules, not the source repo, as authoritative.
-6. `AI-HANDOFF.md` — most recent session's state and dirty-tree inventory
-
-`~/ghost-process/` and `~/ghost-process-98/` are reference-only. Both
-have their own `AGENTS.md` files. If your session injected one of those
-as project context, you were reading the wrong repo — work here.
+1. `SPEC.md` — architecture, file layout, data model
+2. `AGENTS.md` — this file
+3. `AI-HANDOFF.md` — most recent session's state
+4. `story.json` — scene wiring
+5. `ink/*.ink` — dialogue style
