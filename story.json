@@ -125,6 +125,18 @@
         {
           "file": "chase_b.mp3",
           "fadeAt": 31.6
+        },
+        {
+          "file": "chase_c.mp3",
+          "fadeAt": 45.0
+        },
+        {
+          "file": "chase_d.mp3",
+          "fadeAt": 36.0
+        },
+        {
+          "file": "chase_e.mp3",
+          "fadeAt": 36.0
         }
       ],
       "ink": "ink/chase.ink",

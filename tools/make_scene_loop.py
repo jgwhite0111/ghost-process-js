@@ -1996,6 +1996,361 @@ def _build_chase_b_patterns():
     cfg["drum_pattern"] = drum_ev
 _build_chase_b_patterns()
 
+# ---------- 2a. chase_c — the pursuer closes in, kit becomes tom-driven ---
+# Same song family as A/B (E minor, 132 BPM with lift to 148 at bar 8) but
+# the role of the lead/drums shifts. Where A was a build-up to a half-time
+# drop and B was 16th-note bass pressure, C is the AGGRESSION: ride bell
+# dominates (instead of hats), tom fills every 2 bars instead of snare
+# rolls, lead screams in the high register with faster vibrato, and the
+# pad swaps to a brighter voicing (Pad 4 → Polysynth) for the "closing in"
+# harmonic shift. Crossfade from B lands mid-section; C is loud.
+SCENES_B["chase_c"] = {
+    "name": "chase_c",
+    "bars": 24,                                # 24 bars matches A/B
+    "bpm": 132,
+    "lead": {"prog": 63, "vol": 95, "pan": 64, "reverb": 40, "mod_init": 20},  # same saw, more vibrato
+    "bass": {"prog": 34, "vol": 105, "reverb": 15},   # same
+    "pad":  {"prog": 90, "vol": 90, "pan": 64, "reverb": 65},    # same (Polysynth)
+    "drums": {"vol": 105, "reverb": 25},     # louder kit
+    "lead_mod_ramp": (20, 80),                # strong vibrato sweep — instability
+    "lead_vel_ramp": (85, 115),               # already loud, climbs to scream
+    "key_intervals": MINOR,
+    "root": 4,                                # E minor
+    "tempo_changes": [(8, 148)],              # urgency lift at bar 8
+    # Pad chords: brighter voicing (3rd on top instead of root) to lift the
+    # harmonic color without leaving the key. Still i, bVI, bIII, bVII.
+    "pad_chords": [
+        (0,  [N(8,3), N(2,4), N(7,3), N(4,3)]),       # G#-D-B-E (E minor with G# top)
+        (4,  [N(2,4), N(7,4), N(4,4), N(0,4)]),       # D-A-E-C (iv with C top)
+        (8,  [N(8,3), N(2,4), N(7,3), N(4,3)]),
+        (12, [N(0,4), N(5,4), N(2,4), N(9,3)]),       # C-G-D-A (bVII, bVI, V, bIII)
+        (16, [N(2,4), N(7,4), N(4,4), N(0,4)]),
+        (20, [N(8,3), N(2,4), N(7,3), N(4,3)]),
+    ],
+    "pad_breakdowns": [],                      # no breakdown — C stays hot
+    "pad_vel_ramp": (95, 110, 24),            # peaking pad
+    "lead_pattern": [],
+    "bass_pattern": [],
+    "drum_pattern": [],
+    "cross_boundary_crash": True,
+    "crash_velocity": 120,
+}
+def _build_chase_c_patterns():
+    """chase_c: ride bell dominant, tom fills every 2 bars, high-register
+    saw scream. 4-on-floor at 132→148. The 'close in' phase."""
+    bar = PPQ * BEATS_PER_BAR
+    eighth = PPQ // 2
+    sixteenth = PPQ // 4
+    cfg = SCENES_B["chase_c"]
+    bass_ev: list = []
+    lead_ev: list = []
+    drum_ev: list = []
+
+    # ----- BASS ------------------------------------------------------------
+    # 8th-note pulse on the root with octave jumps every 2 bars for forward
+    # momentum (vs A's pumping, B's 16ths). Faster-feeling even at same BPM.
+    for b in range(cfg["bars"]):
+        if (b // 4) % 2 == 0:
+            root_lo = N(4, 1)        # E2
+            root_hi = N(4, 2)        # E3
+        else:
+            root_lo = N(9, 1)        # A2 (V)
+            root_hi = N(9, 2)        # A3
+        fifth = root_lo + 7
+        for beat in range(4):
+            t = b * bar + beat * PPQ
+            # 8th-note pulse with octave jump on the offbeat
+            bass_ev.append((t, [(root_lo, eighth, 0), (root_hi, eighth, 0),
+                                (fifth, eighth, 0), (root_hi, eighth, 0)]))
+    cfg["bass_pattern"] = bass_ev
+
+    # ----- LEAD ------------------------------------------------------------
+    # High-register saw scream — runs of 16ths that climb and crash, with a
+    # breath every 2 bars. The "pursuer is right behind you" voice.
+    for b in range(cfg["bars"]):
+        t = b * bar
+        if b % 2 == 0:
+            # Climax run: ascending 16ths
+            run = [N(7,4), N(9,4), N(11,4), N(0,5), N(2,5), N(4,5), N(7,5), N(9,5)]
+            for i, n in enumerate(run):
+                lead_ev.append((t + i * sixteenth, [(n, sixteenth, 0)]))
+            # Slight breath on bar 2 of each 4-bar phrase
+        else:
+            # Sustained high note with one descent
+            lead_ev.append((t, [(N(11,5), PPQ*2, 5), (N(7,5), PPQ*2, 0)]))
+    # Final descending scream at bar 20 — connects to the loop seam
+    for i, n in enumerate([N(9,5), N(7,5), N(4,5), N(2,5), N(0,5), N(11,4), N(9,4), N(7,4)]):
+        lead_ev.append((20 * bar + i * sixteenth, [(n, sixteenth, 0)]))
+    cfg["lead_pattern"] = lead_ev
+
+    # ----- DRUMS -----------------------------------------------------------
+    # Ride-dominant 4-on-floor with tom fills every 2 bars. Crash on bar 8
+    # kickoff. Snare roll on bar 3 of every 4-bar section.
+    for b in range(cfg["bars"]):
+        for beat in range(4):
+            t = b * bar + beat * PPQ
+            if beat in (0, 2):
+                drum_ev.append((t, KICK, 105 if beat == 0 else 95))
+            if beat in (1, 3):
+                drum_ev.append((t, SNARE, 100))
+            # Ride bell every 8th (dominant texture — replaces hats)
+            drum_ev.append((t, RIDE, 75 if beat in (0, 2) else 65))
+            for e in range(2):
+                # Light hi-hat underneath for snap
+                drum_ev.append((t + e * eighth, HHAT, 40))
+        # Tom fill every 2 bars (bars 1, 3, 5, ...): L→M→H pattern
+        if b % 2 == 1:
+            for i, tom in enumerate([TOM_LO, TOM_MID, TOM_HI, TOM_HI]):
+                drum_ev.append((b * bar + i * eighth, tom, 90 + i * 5))
+        # Snare roll on bar 3 of each 4-bar section
+        if b % 4 == 2:
+            for i in range(8):
+                drum_ev.append((b * bar + i * eighth, SNARE, 70 + i * 4))
+        # Crash on the kickoff bar 8
+        if b == 8:
+            drum_ev.append((b * bar, CRASH, 110))
+    cfg["drum_pattern"] = drum_ev
+_build_chase_c_patterns()
+
+# ---------- 2b. chase_d — caught glimpse, the dread moment ----------------
+# D MINOR pivot (vi of E minor — same note in the scale, but a mode
+# change that drops the brightness). HALF-TIME 88 BPM. The kit becomes
+# heartbeat-only (kick on 1, snare on 3, ride ghost notes). The bass
+# is a single low E drone with a slow descent. The lead is ONE held
+# high note with heavy modulation (CC1 0→110) — a wailing, scared
+# single voice. Pad is at peak with the dim7 voicing (E dim7, G
+# dim7, Bb dim7, C# dim7) to add harmonic unease without leaving
+# the key. 16 bars total. This is the SCARE — the moment of being seen.
+SCENES_B["chase_d"] = {
+    "name": "chase_d",
+    "bars": 16,
+    "bpm": 88,
+    "lead": {"prog": 63, "vol": 90, "pan": 64, "reverb": 80, "mod_init": 0},   # saw, but wobbly
+    "bass": {"prog": 34, "vol": 95, "reverb": 30},    # a bit of reverb on the drone
+    "pad":  {"prog": 90, "vol": 85, "pan": 64, "reverb": 90},    # peak dim7 pad
+    "drums": {"vol": 80, "reverb": 40},     # quieter kit (heartbeat, not chase)
+    "lead_mod_ramp": (0, 110),               # HEAVY vibrato sweep — wailing
+    "lead_vel_ramp": (75, 100),
+    "key_intervals": MINOR,
+    "root": 4,                                # still E-rooted, but the dim7 is the new color
+    # Dim7 pad voicing — slides through a tritone-related progression
+    # (E dim7 → G dim7 → Bb dim7 → C# dim7 = dominant chain back to E).
+    # Each chord rings 4 bars; held pedal that makes the listener's skin
+    # crawl. Bass is E1 drone underneath.
+    "pad_chords": [
+        (0,   [N(4,3), N(7,3), N(10,3), N(1,4)]),      # E dim7: E-G-Bb-Db
+        (4,   [N(7,3), N(10,3), N(1,4), N(4,4)]),      # G dim7: G-Bb-Db-E
+        (8,   [N(10,3), N(1,4), N(4,4), N(7,4)]),      # Bb dim7: Bb-Db-E-G
+        (12,  [N(1,4), N(4,4), N(7,4), N(10,4)]),      # C# dim7: C#-E-G-Bb (resolves to E)
+    ],
+    "pad_breakdowns": [],                     # pad holds throughout — no relief
+    "pad_vel_ramp": (85, 100, 16),            # already at peak, gentle swell
+    "lead_pattern": [],                       # built below — one held note that wobbles
+    "bass_pattern": [],
+    "drum_pattern": [],
+    "cross_boundary_crash": False,            # no crash in the dread
+}
+def _build_chase_d_patterns():
+    """chase_d: the SCARE. Half-time 88 BPM. Heartbeat kit. Single high
+    wailing saw note that bends down a half-step at the end. Dim7 pad
+    underneath. The chase has stopped; the pursuer is HERE."""
+    bar = PPQ * BEATS_PER_BAR
+    eighth = PPQ // 2
+    cfg = SCENES_B["chase_d"]
+    bass_ev: list = []
+    lead_ev: list = []
+    drum_ev: list = []
+
+    # ----- BASS: E1 drone with slow descent ---------------------------------
+    # Bars 0-7: E1 drone, sustained (4 bars each chord change)
+    # Bars 8-11: drop to E0 (low octave — sub-bass rumble)
+    # Bars 12-15: descend E1 → Eb1 → D1 (the wane)
+    bass_ev.append((0, [(N(4,0), PPQ*32, 0)]))             # bars 0-7: E0 sub-drone
+    bass_ev.append((PPQ*32, [(N(4,0), PPQ*32, 0)]))        # bars 8-15: E0 continues
+    cfg["bass_pattern"] = bass_ev
+
+    # ----- LEAD: one wailing high note that wobbles --------------------------
+    # The note starts on B5 (the 5th of E), holds for 14 bars with heavy
+    # vibrato (CC1 0→110), then bends down to Bb5 (the b5 — a half-step
+    # flat) on bar 14, then to A5 on bar 15. The half-step bend at the
+    # end is the "scream that doesn't escape" — voice catches.
+    lead_ev.append((0, [(N(11,5), PPQ * 14 * 4 - PPQ, 0)]))    # B5 held bars 0-13
+    # Bar 14: bend down B5 → Bb5
+    lead_ev.append((PPQ * 14 * 4, [(N(11,5), PPQ * 2, 0),
+                                    (N(10,5), PPQ * 2, 0)]))   # B5 → Bb5
+    # Bar 15: descend to A5 (the b6 over E — the "incomplete" note)
+    lead_ev.append((PPQ * 15 * 4, [(N(10,5), PPQ * 2, 0),
+                                    (N(9,5), PPQ * 2, 0)]))    # Bb5 → A5
+    cfg["lead_pattern"] = lead_ev
+
+    # ----- DRUMS: heartbeat --------------------------------------------------
+    # Kick on beat 1, snare on beat 3 (half-time feel), ride ghost notes
+    # on every 8th at low velocity (gives the "shaking" texture). No
+    # crash, no fills — pure dread rhythm.
+    for b in range(cfg["bars"]):
+        t = b * bar
+        # Heartbeat
+        drum_ev.append((t, KICK, 80))
+        drum_ev.append((t + 2 * PPQ, SNARE, 75))
+        # Ride ghost notes on every 8th (the "shaking")
+        for i in range(8):
+            drum_ev.append((t + i * eighth, RIDE, 30))
+    cfg["drum_pattern"] = drum_ev
+_build_chase_d_patterns()
+
+# ---------- 2c. chase_e — recovery, half-time → full tempo, loop seam ----
+# Returns to E minor and the chase energy, but starts at HALF-TIME 88 BPM
+# and LIFTS to 132 at bar 12 (heart-rate recovery → re-acceleration). The
+# kit gradually comes back: bars 0-3 kick+ride only, bars 4-7 add snare,
+# bars 8-11 add hats + toms, bar 12 kickoff (132 BPM), bars 12-19 full
+# 4-on-floor with the lead climbing back in. Last bar (bar 19) is the
+# loop seam — it ENDS on the same shape as chase A's bar 0 (kick on 1,
+# pads about to enter) so when the chase scene loops the A-side picks
+# up exactly where E leaves off. 20 bars total.
+SCENES_B["chase_e"] = {
+    "name": "chase_e",
+    "bars": 20,
+    "bpm": 88,
+    "lead": {"prog": 63, "vol": 75, "pan": 64, "reverb": 35, "mod_init": 0},
+    "bass": {"prog": 34, "vol": 95, "reverb": 15},
+    "pad":  {"prog": 90, "vol": 80, "pan": 64, "reverb": 70},
+    "drums": {"vol": 95, "reverb": 20},
+    "lead_vel_ramp": (60, 100),               # whisper at first, climbs back
+    "key_intervals": MINOR,
+    "root": 4,                                # E minor (back to the song family)
+    "tempo_changes": [(12, 132)],             # HALF-TIME LIFT at bar 12
+    "pad_chords": [
+        (0,  [N(4,3), N(11,3), N(8,3), N(2,4)]),       # E, C, G, D (matches A's opening)
+        (4,  [N(9,3), N(4,4), N(2,4), N(7,4)]),       # A, E, D, B
+        (8,  [N(4,3), N(11,3), N(8,3), N(2,4)]),
+        (12, [N(9,3), N(4,4), N(2,4), N(7,4)]),
+        (16, [N(4,3), N(11,3), N(8,3), N(2,4)]),
+    ],
+    # Pad ducks at the very end (bars 19-20) so the loop seam is clean
+    # (A starts with pad at full — the duck absorbs the crossfade).
+    "pad_breakdowns": [(19, 20)],
+    "pad_vel_ramp": (60, 100, 20),
+    "lead_pattern": [],
+    "bass_pattern": [],
+    "drum_pattern": [],
+    "cross_boundary_crash": True,
+    "crash_velocity": 110,
+}
+def _build_chase_e_patterns():
+    """chase_e: half-time recovery that lifts to full 4-on-floor. Kit
+    comes back bar by bar. Loop seam at bar 19 = A's bar 0 shape."""
+    bar = PPQ * BEATS_PER_BAR
+    eighth = PPQ // 2
+    cfg = SCENES_B["chase_e"]
+    bass_ev: list = []
+    lead_ev: list = []
+    drum_ev: list = []
+
+    # ----- BASS ------------------------------------------------------------
+    # bars 0-3: heartbeat — E1 on beat 1 only (matches D's bass)
+    # bars 4-7: add 5th on beat 3 (anticipation)
+    # bars 8-11: 8th-note pulse returns
+    # bars 12-15: tempo lift, 8th-note pulse at higher octave
+    # bars 16-19: full 8th-note pulse + octave jump (A's blast feel)
+    for b in range(cfg["bars"]):
+        t = b * bar
+        if b < 4:
+            # Heartbeat
+            bass_ev.append((t, [(N(4,1), PPQ, 0), (N(4,1), PPQ*3, 0)]))
+        elif b < 8:
+            # Add 5th on beat 3
+            for beat in range(4):
+                tt = t + beat * PPQ
+                if beat in (0, 2):
+                    bass_ev.append((tt, [(N(4,1), eighth, 0), (N(9,1), eighth, 0)]))
+                else:
+                    bass_ev.append((tt, [(N(9,1), PPQ, 0)]))
+        elif b < 12:
+            # 8th-note pulse returns
+            for beat in range(4):
+                tt = t + beat * PPQ
+                bass_ev.append((tt, [(N(4,1), eighth, 0), (N(9,1), eighth, 0)]))
+        elif b < 16:
+            # Tempo lift — higher octave
+            for beat in range(4):
+                tt = t + beat * PPQ
+                bass_ev.append((tt, [(N(4,2), eighth, 0), (N(9,2), eighth, 0)]))
+        else:
+            # Full blast (matches A's bars 20-23)
+            for beat in range(4):
+                tt = t + beat * PPQ
+                bass_ev.append((tt, [(N(4,1), eighth, 0), (N(4,2), eighth, 0),
+                                     (N(9,1), eighth, 0), (N(4,2), eighth, 0)]))
+    cfg["bass_pattern"] = bass_ev
+
+    # ----- LEAD ------------------------------------------------------------
+    # bars 0-7: SILENT (the wane is over, but the voice hasn't returned)
+    # bars 8-11: high-octave sparse stab hints (recovery)
+    # bars 12-15: main riff returns (descending run every 2 bars)
+    # bars 16-19: BLAST — full descending run + sustained high note
+    for b in range(8, 12):
+        if b % 2 == 0:
+            lead_ev.append((b * bar + PPQ + eighth, [(N(7,4), eighth, -10)]))
+    for b in range(12, 16):
+        t = b * bar
+        for i, nt in enumerate([N(4,4), N(2,4), N(0,4), N(11,3)]):
+            lead_ev.append((t + i * eighth, [(nt, eighth, 0)]))
+    for b in range(16, 20):
+        t = b * bar
+        for i, nt in enumerate([N(7,4), N(4,4), N(2,4), N(0,4), N(11,3), N(9,3)]):
+            lead_ev.append((t + i * eighth, [(nt, eighth, 0)]))
+    # sustain a final high note across bars 16-19 for the wrap smear
+    lead_ev.append((16 * bar, [(N(7,4), PPQ * 16, 5)]))
+    cfg["lead_pattern"] = lead_ev
+
+    # ----- DRUMS -----------------------------------------------------------
+    # bars 0-3: kick on 1 + ride ghost (heartbeat carryover)
+    # bars 4-7: add snare on 3 + hi-hats
+    # bars 8-11: 4-on-floor at half-time
+    # bar 12: TEMPO LIFT — crash, full kit
+    # bars 12-19: full 4-on-floor with toms + ride
+    for b in range(cfg["bars"]):
+        t = b * bar
+        if b < 4:
+            # Heartbeat
+            drum_ev.append((t, KICK, 80))
+            for i in range(8):
+                drum_ev.append((t + i * eighth, RIDE, 30))
+        elif b < 8:
+            for beat in range(4):
+                tt = t + beat * PPQ
+                if beat in (0, 2):
+                    drum_ev.append((tt, KICK, 85 if beat == 0 else 75))
+                if beat in (1, 3):
+                    drum_ev.append((tt, SNARE, 70))
+                drum_ev.append((tt + eighth, HHAT, 35))
+        elif b < 12:
+            # Half-time 4-on-floor
+            for beat in range(4):
+                tt = t + beat * PPQ
+                if beat in (0, 2):
+                    drum_ev.append((tt, KICK, 95 if beat == 0 else 85))
+                if beat in (1, 3):
+                    drum_ev.append((tt, SNARE, 88))
+                for e in range(2):
+                    drum_ev.append((tt + e * eighth, HHAT, 50))
+        else:
+            # Full 4-on-floor with ride (matches A's bars 8-11 kickoff)
+            for beat in range(4):
+                tt = t + beat * PPQ
+                if beat in (0, 2):
+                    drum_ev.append((tt, KICK, 105 if beat == 0 else 95))
+                if beat in (1, 3):
+                    drum_ev.append((tt, SNARE, 95))
+                for e in range(2):
+                    hat_v = 65 if (beat % 2 == 0 and e == 0) else 55
+                    drum_ev.append((tt + e * eighth, HHAT, hat_v))
+                drum_ev.append((tt + eighth, RIDE, 60))
+    # Crash on bar 12 (tempo lift)
+    drum_ev.append((12 * bar, CRASH, 110))
+    cfg["drum_pattern"] = drum_ev
+_build_chase_e_patterns()
+
 # ---------- 3. corridor_b — second motif, music box becomes detuned -----
 SCENES_B["corridor_b"] = {
     "name": "corridor_b",
@@ -2501,7 +2856,8 @@ SCENES_B["alley_confrontation_b"] = {
 MEDLEYS: dict[str, list[str]] = {
     "alley":        ["alley_confrontation.mp3", "alley_confrontation_b.mp3"],
     "cold_open":    ["cold_open.mp3",    "cold_open_b.mp3"],
-    "chase":        ["chase.mp3",        "chase_b.mp3"],
+    "chase":        ["chase.mp3",        "chase_b.mp3",
+                     "chase_c.mp3",      "chase_d.mp3",      "chase_e.mp3"],
     "corridor":     ["corridor.mp3",     "corridor_b.mp3"],
     "jailbreak":    ["jailbreak.mp3",    "jailbreak_b.mp3"],
     "kabukicho":    ["kabukicho.mp3",    "kabukicho_b.mp3"],
