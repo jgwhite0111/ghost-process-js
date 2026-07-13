@@ -14,7 +14,9 @@ const state = {
   sceneId: null,
   selected: null,
   bgImages: {},
-  spriteFrames: {},
+  spriteFrames: {},          // { 'id/scene': HTMLImageElement } — currently displayed frame
+  spriteFrameLists: {},      // { 'id/scene': [HTMLImageElement, ...] } — all frames
+  spriteAnim: {},            // { 'id/scene': { idx, lastT, playing } } — playback state
   tool: 'select',
   dirty: false,
   // Viewport (canvas size in pixels — independent of on-screen CSS
@@ -200,22 +202,100 @@ async function loadImage(path) {
 
 async function loadSpriteFrame(charConfig, sceneId) {
   const key = charConfig.id + '/' + sceneId;
+  // Return cached single-frame Image if we already have one (used by
+  // the rect computation / overlay box). Animation playback reads
+  // spriteFrameLists[key] directly for the per-frame list.
   if (state.spriteFrames[key]) return state.spriteFrames[key];
+  const frames = await loadSpriteFrameList(charConfig, sceneId);
+  if (!frames || frames.length === 0) return null;
+  // The legacy single-frame cache gets frame 0 — that's the static
+  // fallback for code paths that don't know about animations.
+  state.spriteFrames[key] = frames[0];
+  return frames[0];
+}
+
+async function loadSpriteFrameList(charConfig, sceneId) {
+  const key = charConfig.id + '/' + sceneId;
+  if (state.spriteFrameLists[key]) return state.spriteFrameLists[key];
   const sceneCfg = (charConfig.scenes || {})[sceneId];
   if (!sceneCfg) return null;
   const dir = sceneCfg.frames.replace(/[\\/][^\\/]*\*\.[^\\/]*$/, '');
   const list = await listDir(dir);
   if (!list || list.length === 0) return null;
+  // Resolve the file name pattern (e.g. frame_*.png → frame_NN.png).
   const baseName = sceneCfg.frames.replace(/^.*[\\/]/, '').replace(/\*\.png$/, '').replace(/\*$/, '');
-  let framePath = null;
-  const prefixMatch = list.find(f => f.startsWith(baseName) && /\.png$/i.test(f));
-  if (prefixMatch) framePath = dir + '/' + prefixMatch;
-  if (!framePath) {
+  // Filter + sort numerically so frame_2.png comes before frame_10.png.
+  const pngs = list.filter(f => f.startsWith(baseName) && /\.png$/i.test(f));
+  pngs.sort((a, b) => {
+    const na = parseInt(a.match(/(\d+)\.png$/i)?.[1] ?? '0', 10);
+    const nb = parseInt(b.match(/(\d+)\.png$/i)?.[1] ?? '0', 10);
+    if (na !== nb) return na - nb;
+    return a.localeCompare(b);
+  });
+  if (pngs.length === 0) {
     const any = list.find(f => /\.png$/i.test(f));
-    if (any) framePath = dir + '/' + any;
+    if (any) pngs.push(any);
   }
-  if (!framePath) return null;
-  return await loadImage(framePath).then(img => { state.spriteFrames[key] = img; return img; });
+  if (pngs.length === 0) return null;
+  const frames = [];
+  for (const f of pngs) {
+    const img = await loadImage(dir + '/' + f);
+    frames.push(img);
+  }
+  state.spriteFrameLists[key] = frames;
+  // Default playback state: paused, frame 0.
+  if (!state.spriteAnim[key]) {
+    state.spriteAnim[key] = { idx: 0, lastT: 0, playing: false };
+  }
+  return frames;
+}
+
+// ---------- animation preview (play button) ----------
+async function togglePlay(charConfig) {
+  const key = charConfig.id + '/' + state.sceneId;
+  // Make sure all frames are loaded.
+  await loadSpriteFrameList(charConfig, state.sceneId);
+  const anim = state.spriteAnim[key];
+  if (!anim) return;
+  anim.playing = !anim.playing;
+  anim.lastT = performance.now();
+  // Update spriteFrames cache to current frame immediately.
+  const frames = state.spriteFrameLists[key];
+  if (frames && frames.length) {
+    state.spriteFrames[key] = frames[anim.idx % frames.length];
+  }
+  if (anim.playing) startAnimTick();
+  renderOverlay(); // refresh play/pause icon
+}
+
+function startAnimTick() {
+  if (state._animTickHandle) return;
+  const tick = (t) => {
+    state._animTickHandle = requestAnimationFrame(tick);
+    let anyPlaying = false;
+    for (const key in state.spriteAnim) {
+      const anim = state.spriteAnim[key];
+      if (!anim.playing) continue;
+      anyPlaying = true;
+      const frames = state.spriteFrameLists[key];
+      if (!frames || frames.length < 2) { anim.playing = false; continue; }
+      // fps from sceneCfg if available, else 6.
+      const [charId, sceneId] = key.split('/');
+      const cfg = (state.story.scenes[sceneId]?.characters || []).find(c => c.id === charId);
+      const scfg = cfg?.scenes?.[sceneId];
+      const fps = (scfg && scfg.fps) || 6;
+      const dt = t - anim.lastT;
+      const step = Math.floor(dt / (1000 / fps));
+      if (step > 0) {
+        anim.idx = (anim.idx + step) % frames.length;
+        anim.lastT = t;
+        state.spriteFrames[key] = frames[anim.idx];
+      }
+    }
+    if (anyPlaying) renderPreview();
+    else state._animTickHandle = null;
+  };
+  state._animTickHandle = requestAnimationFrame(tick);
 }
 
 // ---------- status bar ----------
@@ -377,9 +457,30 @@ function renderOverlay() {
       div.dataset.key = 'sprite:' + c.id;
       const lbl = document.createElement('span'); lbl.className = 'label'; lbl.textContent = c.id;
       div.appendChild(lbl);
+      // Play/pause button — top-left of the sprite box. Previews the
+      // animation in real-time on the canvas. Doesn't initiate drag.
+      const playBtn = document.createElement('button');
+      playBtn.className = 'play-btn';
+      playBtn.title = 'Preview animation';
+      playBtn.textContent = '▶';
+      playBtn.addEventListener('pointerdown', (e) => { e.stopPropagation(); });
+      playBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        togglePlay(c);
+      });
+      div.appendChild(playBtn);
       const grip = document.createElement('span'); grip.className = 'resize'; grip.title = 'drag to resize';
       div.appendChild(grip);
       attachSpriteDrag(div, c);
+    }
+    // Reflect playback state on the play button (re-render safe —
+    // re-binds only the icon, keeps the click handler).
+    const playBtn = div.querySelector('.play-btn');
+    if (playBtn) {
+      const animKey = c.id + '/' + state.sceneId;
+      const anim = state.spriteAnim[animKey];
+      playBtn.textContent = (anim && anim.playing) ? '❚❚' : '▶';
+      playBtn.classList.toggle('playing', !!(anim && anim.playing));
     }
     div.style.left = r.x + 'px';
     div.style.top = r.y + 'px';

@@ -127,6 +127,16 @@
     position: absolute; right: -5px; bottom: -5px; width: 10px; height: 10px;
     background: #f0b760; border: 1px solid #0d1117; cursor: nwse-resize;
   }
+  .sprite-handle .play-btn {
+    position: absolute; top: -5px; left: -5px; width: 20px; height: 20px;
+    background: #f0b760; color: #0d1117; border: 1px solid #0d1117;
+    cursor: pointer; font-size: 10px; line-height: 1;
+    display: flex; align-items: center; justify-content: center;
+    padding: 0; border-radius: 2px;
+    z-index: 1;
+  }
+  .sprite-handle .play-btn:hover { background: #ffc97a; }
+  .sprite-handle .play-btn.playing { background: #6cba6c; }
 
   .hitbox-handle {
     position: absolute; box-sizing: border-box; outline: 1px solid #6cba6c;
