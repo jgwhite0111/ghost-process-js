@@ -44,6 +44,8 @@ SRC = "assets/sprites/thug/raw/i2v_clip_thug_talking.webp"
 OUT_DIR = "assets/sprites/thug/jailbreak"
 FRAME_W, FRAME_H = 180, 320
 N_FRAMES = 16
+HALO_RADIUS = 5  # pixels — erode the brown halo within this distance
+                   # of any transparent neighbour
 
 
 def green_to_skin(rgb: np.ndarray, mask: np.ndarray) -> np.ndarray:
@@ -108,9 +110,82 @@ def process_frame(arr: np.ndarray) -> np.ndarray:
         # the silhouette further.
         a_out = a.copy()
         a_out[spill] = 255
-        return np.concatenate([rgb, a_out[..., None]], axis=-1).astype(np.uint8)
+    else:
+        a_out = a.copy()
 
-    return np.concatenate([rgb, a[..., None]], axis=-1).astype(np.uint8)
+    # Halo erosion: any opaque pixel within HALO_RADIUS px of a
+    # transparent pixel is part of the brown halo outline and gets
+    # wiped to transparency. This erodes the post-conversion
+    # "brownscreen outline" so it doesn't read as a solid brown
+    # rim around the silhouette in-game.
+    #
+    # The 5px radius is implemented by checking each opaque pixel
+    # against a 5px-disk of its neighbours; if ANY neighbour is
+    # alpha=0 (or its converted-spill counterpart is) then this
+    # pixel is on the halo boundary and gets dropped.
+    #
+    # We use a simple but exact approach: scan ±HALO_RADIUS rows
+    # and columns, mark any opaque cell that has a transparent
+    # cell in that window. This avoids needing scipy's cKDTree or
+    # binary_dilation and runs in milliseconds for 180x320 frames.
+    a_out = erode_halo(a_out, radius=HALO_RADIUS)
+
+    return np.concatenate([rgb, a_out[..., None]], axis=-1).astype(np.uint8)
+
+
+def erode_halo(a: np.ndarray, radius: int = 5) -> np.ndarray:
+    """Return alpha with any opaque pixel that is within `radius`
+    pixels of an alpha=0 neighbour erased to alpha=0.
+
+    Algorithm: a pixel P at (r, c) is "halo" if there exists some
+    (dr, dc) with dr² + dc² <= radius² such that a[r+dr, c+dc] == 0.
+
+    Implemented with a 2D walk over the disk — for each radius
+    band we check the four arc points (and the full inner box on
+    radius=1) which is equivalent to a Euclidean disk thanks to
+    4-fold symmetry. For correctness we just iterate the inner
+    (2r+1)x(2r+1) box and check the squared-distance, which is
+    O(r²) per pixel = ~100 ops per pixel for r=5 = O(320k) per
+    180x320 frame. Fast enough at human iteration speed.
+    """
+    out = a.copy()
+    H, W = a.shape
+    # Pre-compute the integer (dr, dc) offsets that satisfy
+    # dr² + dc² <= radius². For radius=5 this is ~81 offsets.
+    offs = [(dr, dc)
+            for dr in range(-radius, radius + 1)
+            for dc in range(-radius, radius + 1)
+            if dr * dr + dc * dc <= radius * radius and (dr or dc)]
+    transparent = (a == 0)
+    for dr, dc in offs:
+        # transparent shifted by (dr, dc) on the original alpha
+        if dr < 0:
+            rows_t = slice(-dr, H)
+            rows_o = slice(0, H + dr)
+        elif dr > 0:
+            rows_t = slice(0, H - dr)
+            rows_o = slice(dr, H)
+        else:
+            rows_t = slice(0, H)
+            rows_o = slice(0, H)
+        if dc < 0:
+            cols_t = slice(-dc, W)
+            cols_o = slice(0, W + dc)
+        elif dc > 0:
+            cols_t = slice(0, W - dc)
+            cols_o = slice(dc, W)
+        else:
+            cols_t = slice(0, W)
+            cols_o = slice(0, W)
+        # Pixels that are opaque at (rows_o, cols_o) AND have a
+        # transparent pixel at offset (-dr, -dc) from them.
+        halo_here = transparent[rows_t, cols_t] & (a[rows_o, cols_o] > 0)
+        # Don't re-promote already-transparent pixel to opaque
+        # by setting just the cells we computed:
+        window = out[rows_o, cols_o]
+        window = np.where(halo_here, 0, window)
+        out[rows_o, cols_o] = window
+    return out
 
 
 def main():
