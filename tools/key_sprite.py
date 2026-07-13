@@ -132,13 +132,24 @@ def indices_search(indices, cur):
 
 
 def write_rgba(rgba_array, dst_path, size=None):
-    """Save RGBA numpy array as PNG, optionally resizing first."""
+    """Save RGBA numpy array as PNG, optionally resizing first.
+
+    When --size is set, uses ASPECT-PRESERVING shrink + paste-centred on a
+    transparent canvas. The figure keeps its source proportions; no edge
+    pixels are lost. Without --size, writes at source resolution.
+    """
     if size:
-        # cv2.resize is faster than PIL for batch ops; use INTER_LANCZOS4.
-        h, w = rgba_array.shape[:2]
         tw, th = size
+        h, w = rgba_array.shape[:2]
         if (w, h) != (tw, th):
-            rgba_array = cv2.resize(rgba_array, (tw, th), interpolation=cv2.INTER_LANCZOS4)
+            # Aspect-preserving: scale to fit, paste-centred on transparent canvas.
+            scale = min(tw / w, th / h)
+            nw, nh = max(1, int(round(w * scale))), max(1, int(round(h * scale)))
+            resized = cv2.resize(rgba_array, (nw, nh), interpolation=cv2.INTER_LANCZOS4)
+            canvas = np.zeros((th, tw, 4), dtype=rgba_array.dtype)
+            ox, oy = (tw - nw) // 2, (th - nh) // 2
+            canvas[oy:oy + nh, ox:ox + nw] = resized
+            rgba_array = canvas
     # PIL handles RGBA → PNG cleanly; cv2.imwrite drops the alpha on some builds.
     Image.fromarray(rgba_array, mode="RGBA").save(str(dst_path))
 
