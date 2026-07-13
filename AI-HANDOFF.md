@@ -44,6 +44,18 @@ tree right now: status, what shipped, what's dirty, what's open.
 This banner tells the next session how to start clean for a fresh
 music-design attempt. The previous shape (A+B medleys) is restored.
 
+### Note on skills (2026-07-13)
+
+User said *"i dont want to mess around with skills"*. Take this to
+mean: **do not load skills, do not create new ones, do not suggest
+skill-based workflows, do not save this session's work as a skill.**
+Existing skill files under `~/.hermes/skills/` (including
+`ghost-process-js-rebuild/SKILL.md`, referenced in the "suggested
+first read order" below) remain valid informational references —
+read them as plain markdown, do not engage the skills system to
+use them. Inline any useful content into this AI-HANDOFF.md or
+into committed code/docs instead.
+
 ### What happened this session
 
 User rejected the long-track rewrite as a failed experiment:
