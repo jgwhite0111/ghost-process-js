@@ -284,6 +284,18 @@
         {
           "file": "corp_office_b.mp3",
           "fadeAt": 37.3
+        },
+        {
+          "file": "corp_office_c.mp3",
+          "fadeAt": 42
+        },
+        {
+          "file": "corp_office_d.mp3",
+          "fadeAt": 50
+        },
+        {
+          "file": "corp_office_e.mp3",
+          "fadeAt": 22
         }
       ],
       "ink": "ink/corp_office.ink",

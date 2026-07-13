@@ -2567,66 +2567,404 @@ def _build_kabukicho_b_patterns():
     cfg["drum_pattern"] = drum_ev
 _build_kabukicho_b_patterns()
 
-# ---------- 6. corp_office_b — E.Piano moves from stabs to arpeggios ------
+# ---------- 6. corp_office_b — after-hours solo, intimate reveal ----------
+# Replaces the old E.Piano-stabs-to-arpeggios B-side (which the user flagged
+# as "too repetitive and not much of a complement to A"). The old B was just
+# A with a different texture; this new B is a DIFFERENT PHASE: A is daytime
+# build-to-climax, B is one person staying late — solo EP arpeggios over
+# halo pad swell, NO bass, NO drums. Spacious, intimate, slightly menacing
+# in its emptiness. Chord cycle slows to 5 chords × 4 bars each.
 SCENES_B["corp_office_b"] = {
     "name": "corp_office_b",
-    "bars": 20,
+    "bars": 20,                              # 5 chords × 4 bars
     "bpm": 92,
-    "lead": {"prog": 5, "vol": 85, "pan": 64, "reverb": 40, "mod_init": 0},  # EP
-    "bass": {"prog": 33, "vol": 85, "reverb": 15},
-    "pad":  {"prog": 94, "vol": 80, "pan": 64, "reverb": 75},
-    "drums": {"vol": 70, "reverb": 20},
+    "lead": {"prog": 5, "vol": 80, "pan": 64, "reverb": 70, "mod_init": 0},  # EP, more reverb
+    "bass": {"prog": 0, "vol": 0, "reverb": 0},    # SILENT channel
+    "pad":  {"prog": 94, "vol": 70, "pan": 64, "reverb": 95},   # Halo Pad at peak
+    "drums": {"vol": 0, "reverb": 0},         # NO drums — the silence is the point
+    "lead_vel_ramp": (50, 75),                # restrained — never gets loud
     "key_intervals": MINOR,
-    "root": 6,                               # F# minor (same)
-    "lead_mod_ramp": (0, 20),
-    # B-side chords: F#m → C#m → A → E (i, iv, bVI, bIII — melancholic cycle)
+    "root": 6,                               # F# minor
+    "lead_mod_ramp": (10, 35),
+    # Pad chords: same F#m family but with extensions (6th and 9th) for
+    # the late-night "alone in the building" harmonic color. Slow 5-chord
+    # cycle (4 bars each): F#m → Bm → C#m → A → Dmaj7 (resolves via bVI).
+    # The D major resolve is the "first hint of something off" — it lands
+    # where the listener expects to come back to F#m but doesn't.
     "pad_chords": [
-        (0,  [N(6,3), N(9,3), N(1,4), N(4,4)]),       # F#m
-        (4,  [N(1,3), N(4,3), N(8,3), N(11,3)]),      # C#m
-        (8,  [N(9,3), N(0,4), N(4,4), N(7,4)]),       # A
-        (12, [N(4,3), N(7,3), N(11,3), N(2,4)]),      # E
-        (16, [N(6,3), N(9,3), N(1,4), N(4,4)]),       # F#m (resolve)
+        (0,  [N(6,3), N(9,3), N(1,4), N(4,4)]),       # F#m  (bars 0-3)
+        (4,  [N(1,3), N(6,3), N(11,3), N(4,4)]),      # Bm9  (bars 4-7)
+        (8,  [N(4,3), N(9,3), N(1,4), N(6,4)]),       # C#m9 (bars 8-11)
+        (12, [N(9,3), N(2,4), N(6,4), N(11,4)]),      # A6   (bars 12-15)
+        (16, [N(2,3), N(7,3), N(4,4), N(7,4)]),       # Dmaj7 (bars 16-19, the deceptive hold)
     ],
-    # Restrained dynamic — pad droops slightly at end so the loop wrap
-    # doesn't slam. Stay low overall (no crescendo here — B is the calm).
-    "pad_vel_ramp": (60, 50, 20),
-    # Lead vel flat-soft (no crescendo; the EP stabs stay restrained).
-    "lead_vel_ramp": (70, 75),
+    # Pad expression already at peak (no crescendo — the calm is constant)
+    "pad_vel_ramp": (75, 85, 20),
+    # Pad breakdowns: NONE — the pad must hold throughout (silence elsewhere)
+    "pad_breakdowns": [],
+    "lead_pattern": [],
+    "bass_pattern": [],                       # silence is intentional
+    "drum_pattern": [],                       # silence is intentional
+    "cross_boundary_crash": False,
+}
+def _build_corp_office_b_patterns():
+    """corp_office_b: after-hours solo. EP arpeggios floating over halo
+    pad. NO bass, NO drums. The arpeggios use 9ths and 11ths for the
+    'alone in an empty building' mood — minor 7th intervals specifically
+    chosen to feel unsettled."""
+    bar = PPQ * BEATS_PER_BAR
+    eighth = PPQ // 2
+    cfg = SCENES_B["corp_office_b"]
+    lead_ev: list = []
+
+    # Chord roots for arpeggio voicing (mirrors pad_chords above)
+    chord_data = [
+        # (root_idx, [9th, 11th, 5th, 9th above])
+        (6, [11, 2, 4, 3]),    # F#m9: B-C#-E-F# (the 9 = G#)
+        (1, [11, 4, 1, 8]),    # Bm9: F#-A#-B-A# (=F# the b3 color)
+        (4, [9, 4, 11, 1]),    # C#m9: D#-A#-F#-G# (no root)
+        (9, [4, 11, 7, 9]),    # A6: A-E-D-A (6th color)
+        (2, [11, 9, 7, 2]),    # Dmaj7: D-A-C#-D (the deceptive landing)
+    ]
+
+    for b in range(cfg["bars"]):
+        t = b * bar
+        root_idx, intervals = chord_data[b // 4 % 5]
+        # Arpeggio: 4-note ascending + 4-note descending 8th-note pattern
+        # but transposed to a chord-tone scale so it sounds modal
+        notes = [N(root_idx, 4)] + [N(root_idx + i, 4) for i in intervals]
+        # 8th-note arpeggio up & down
+        seq = notes + notes[::-1]
+        for i, n in enumerate(seq):
+            lead_ev.append((t + i * eighth, [(n, eighth, -8)]))
+
+    cfg["lead_pattern"] = lead_ev
+    # Bass and drums intentionally empty (silence)
+_build_corp_office_b_patterns()
+
+# ---------- 6a. corp_office_c — paranoia phase, surveillance glitch ------
+# A-side is daytime build, B is intimate after-hours, C is "something's
+# wrong with the data" — the kit glitches, the bass enters with a
+# chromatic b2 approach (the "wrong note"), the pad's harmonic voicing
+# shifts to sharp 11ths (the "off" colour), and the EP plays the same
+# arpeggio as B but with a passing-tone dissonance once per bar — a
+# non-chord tone that throws the loop out of phase. This is the moment
+# of surveillance malfunction; nothing is loud, but everything is
+# slightly **wrong**.
+SCENES_B["corp_office_c"] = {
+    "name": "corp_office_c",
+    "bars": 20,                              # 5 chords × 4 bars
+    "bpm": 92,
+    "lead": {"prog": 5, "vol": 85, "pan": 64, "reverb": 45, "mod_init": 15},
+    "bass": {"prog": 33, "vol": 80, "reverb": 20},   # bass returns — but uneasy
+    "pad":  {"prog": 94, "vol": 85, "pan": 64, "reverb": 80},
+    "drums": {"vol": 50, "reverb": 25},      # quiet kit, glitches
+    "lead_vel_ramp": (60, 90),
+    "key_intervals": MINOR,
+    "root": 6,                               # F# minor
+    "lead_mod_ramp": (15, 40),
+    # Pad chords: same family but with sharp 11ths (the "off" colour).
+    # F#m7#11 → Bm7#11 → D7#11 → G7b9 → Cmaj7 (resolve to tonic brightness
+    # with a dim7 b9 colouring — the "surveillance glitch" harmonic).
+    "pad_chords": [
+        (0,  [N(6,3), N(9,3), N(1,4), N(3,4), N(10,3)]),  # F#m7#11 (added #11)
+        (4,  [N(1,3), N(4,3), N(8,3), N(10,3), N(2,4)]),  # Bm7#11
+        (8,  [N(2,3), N(6,3), N(9,3), N(0,4), N(3,4)]),   # D7#11
+        (12, [N(7,3), N(10,3), N(2,4), N(5,4), N(8,4)]),  # G7b9
+        (16, [N(0,3), N(4,3), N(7,3), N(11,3), N(2,4)]),  # Cmaj7 (weird rest)
+    ],
+    # Pad expression climbs through the paranoia — peaks at the G7b9
+    "pad_vel_ramp": (70, 105, 20),
+    # Pad breakdown on bars 18-20 — sweeps it down so D's silence lands clean
+    "pad_breakdowns": [(18, 20)],
     "lead_pattern": [],
     "bass_pattern": [],
     "drum_pattern": [],
     "cross_boundary_crash": False,
 }
-def _build_corp_office_b_patterns():
+def _build_corp_office_c_patterns():
+    """corp_office_c: surveillance glitch. Bass pedal with chromatic b2
+    approach, kit drops hits on 'wrong' beats, EP arpeggio with one
+    passing-tone dissonance per bar."""
+    import random
+    random.seed(7)
     bar = PPQ * BEATS_PER_BAR
     eighth = PPQ // 2
-    cfg = SCENES_B["corp_office_b"]
-    chord_roots = [6, 1, 9, 4, 6]
-    # B-side bass: same mechanical 8ths but with 5th added (vs A's root-only)
-    bass_ev = []
+    cfg = SCENES_B["corp_office_c"]
+    bass_ev: list = []
+    lead_ev: list = []
+    drum_ev: list = []
+
+    chord_data = [
+        # (root_idx, [9th, 11th, 5th, root])
+        (6, [11, 2, 4, 6]),
+        (1, [11, 4, 1, 8]),
+        (2, [11, 4, 9, 2]),   # D7
+        (7, [10, 5, 2, 7]),   # G7b9 (the b9 color)
+        (0, [4, 7, 0, 11]),   # Cmaj7 (the strange landing)
+    ]
+
+    # ----- BASS ------------------------------------------------------------
+    # bass pedal on root with chromatic b2 approach on beat 4 of every
+    # other bar (the "wrong note")
     for b in range(cfg["bars"]):
-        root = N(chord_roots[(b // 4) % 5], 1)
+        root_idx = chord_data[b // 4 % 5][0]
+        root = N(root_idx, 1)
+        # b2 approach = chromatic half-step below the NEXT chord's root
+        next_root_idx = chord_data[(b // 4 + 1) % 5][0]
+        approach = N(next_root_idx, 1) - 1 if next_root_idx > root_idx else N(next_root_idx, 1) + 1
+        t = b * bar
+        # 8th-note pulses on root
         for beat in range(4):
-            t = b * bar + beat * PPQ
-            bass_ev.append((t, [(root, eighth, 0), (root + 7, eighth, 0)]))
+            tt = t + beat * PPQ
+            if beat == 3 and (b % 2 == 1):
+                # Half-time chromatic approach on beat 4 of odd bars
+                bass_ev.append((tt, [(root, eighth, 0), (approach, eighth, 0)]))
+            else:
+                bass_ev.append((tt, [(root, eighth, 0), (root, eighth, 0)]))
     cfg["bass_pattern"] = bass_ev
-    # B-side lead: arpeggios (vs A's chord stabs) — flowing where A was stiff
-    lead_ev = []
+
+    # ----- LEAD ------------------------------------------------------------
+    # Same arpeggio shape as B but with one passing-tone dissonance per bar
+    # (a non-chord tone on beat 3+ that resolves downward)
     for b in range(cfg["bars"]):
         t = b * bar
-        root_idx = chord_roots[(b // 4) % 5]
-        arp = [N(root_idx, 4), N(root_idx + 3, 4), N(root_idx + 7, 4), N(root_idx + 3, 4)]
-        for i in range(8):  # 8 notes per bar at 8th note rate
-            lead_ev.append((t + i * eighth, [(arp[i % 4], eighth, -10)]))
+        root_idx, intervals = chord_data[b // 4 % 5]
+        notes = [N(root_idx, 4)] + [N(root_idx + i, 4) for i in intervals]
+        seq = notes + notes[::-1]
+        for i, n in enumerate(seq):
+            lead_ev.append((t + i * eighth, [(n, eighth, -8)]))
+        # Passing dissonance: a b6 above root, lands on bar 4 of every 4 bars
+        if b % 4 == 3:
+            lead_ev.append((b * bar + 3 * PPQ + eighth, [(N(root_idx + 8, 4), eighth, -3)]))
     cfg["lead_pattern"] = lead_ev
-    # Same minimal drums
-    drum_ev = []
+
+    # ----- DRUMS -----------------------------------------------------------
+    # Minimal kit with GLITCHES — kick missing on bar 16, brush snare on
+    # offbeats (beats 2+ of every bar, low velocity), NO hi-hats.
     for b in range(cfg["bars"]):
-        drum_ev.append((b * bar, KICK, 60))
+        t = b * bar
+        # Kick on bar 0 + every 4th bar (the "heartbeat" that drops out)
+        if b % 4 == 0:
+            drum_ev.append((t, KICK, 55))
+        # Brush snare on beats 2+4 (low velocity, the "static")
         for beat in (1, 3):
-            drum_ev.append((b * bar + beat * PPQ, SNARE, 45))
+            drum_ev.append((t + beat * PPQ, SNARE, 38))
+        # Glitch ghost hits — random brush on 16th-note offbeats
+        for e in range(2):
+            if random.random() < 0.4:
+                drum_ev.append((t + e * eighth + PPQ // 2, SNARE, 25))
+        # KICK MISSING on bar 16 — the silence = glitch event
     cfg["drum_pattern"] = drum_ev
-_build_corp_office_b_patterns()
+_build_corp_office_c_patterns()
+
+# ---------- 6b. corp_office_d — cliff-hanger, the silence ----------------
+# A is build, B is intimacy, C is paranoia, D is the moment the lights go
+# out. 8 bars total: a single sharp dim7 stab (F# dim7 → B dim7), 1 bar
+# COMPLETE SILENCE (no bass, no lead, no pad, no kit), then a single EP
+# note rings out alone for 6 bars — the alert tone that nobody answers.
+# This is the SCARE equivalent for corp_office: not a held chord, but the
+# AUDIENCE FORCED INTO SILENCE, then left with one held note and dread.
+SCENES_B["corp_office_d"] = {
+    "name": "corp_office_d",
+    "bars": 8,                               # 8 bars total but mostly sparse
+    "bpm": 92,
+    "lead": {"prog": 5, "vol": 75, "pan": 64, "reverb": 90, "mod_init": 0},  # EP alone
+    "bass": {"prog": 33, "vol": 70, "reverb": 30},   # brief bass only at start
+    "pad":  {"prog": 94, "vol": 85, "pan": 64, "reverb": 85},   # pad stabs at start only
+    "drums": {"vol": 0, "reverb": 0},         # NO kit — silence is the kit
+    "lead_vel_ramp": (70, 95),
+    "key_intervals": MINOR,
+    "root": 6,                               # F# minor
+    "lead_mod_ramp": (5, 25),                # gentle vibrato on the held note
+    # Pad chords: TWO dim7 stabs (F# dim7 → B dim7), then NOTHING.
+    # The bar-2 pad silence is the cliffhanger — listener hears ONLY the
+    # bass drone and the EP note.
+    "pad_chords": [
+        (0, [N(6,3), N(9,3), N(0,4), N(3,4)]),   # F# dim7: F#-A-C-Eb (bars 0-1)
+        (2, [N(1,3), N(4,3), N(7,3), N(10,3)]),  # B dim7: B-D-F-Ab (bar 2)
+        # bars 3-7: NO pad — silence
+    ],
+    "pad_breakdowns": [],                    # pad is intentionally cut at bar 3
+    "pad_vel_ramp": (90, 90, 2),             # flat at 90 then SILENCE
+    "lead_pattern": [],
+    "bass_pattern": [],
+    "drum_pattern": [],
+    "cross_boundary_crash": False,
+}
+def _build_corp_office_d_patterns():
+    """corp_office_d: cliff-hanger. Dim7 stabs cut to silence, then one
+    EP note rings out alone. Bass is a single drone that gets cut by the
+    silence. The held note rises slightly in pitch (mod 0→25) so it feels
+    like it's straining to be heard."""
+    bar = PPQ * BEATS_PER_BAR
+    eighth = PPQ // 2
+    cfg = SCENES_B["corp_office_d"]
+    bass_ev: list = []
+    lead_ev: list = []
+
+    # ----- BASS ------------------------------------------------------------
+    # Brief F#1 drone on bars 0-1, dies at bar 2, silence thereafter
+    bass_ev.append((0, [(N(6,1), PPQ * 4, 0), (N(6,0), PPQ * 4, 0)]))  # F#1 + F#0 (octave)
+    bass_ev.append((PPQ * 8, [(N(6,0), PPQ * 4, 0)]))                   # bar 2: dim7 bass
+    # bars 3-7: SILENCE
+    cfg["bass_pattern"] = bass_ev
+
+    # ----- LEAD ------------------------------------------------------------
+    # bars 0-2: EP joins the dim7 stabs (one stab per bar)
+    # bar 0: F# dim7 chord tones on beat 1
+    lead_ev.append((0, [(N(6,5), eighth, 0), (N(9,5), eighth, 0),
+                        (N(0,5), eighth, 0), (N(3,5), eighth, 0)]))
+    # bar 1: B dim7 chord tones on beat 1
+    lead_ev.append((PPQ * 4, [(N(1,5), eighth, 0), (N(4,5), eighth, 0),
+                              (N(7,5), eighth, 0), (N(10,5), eighth, 0)]))
+    # bar 2: dim7 pad stab, no lead (bass + pad only)
+    # bars 3-7: SINGLE held note — C#6 (the b3 of F# minor, the unbinding
+    # note). Held for 5 bars with rising CC1 modulation. The note trembles
+    # but doesn't resolve — the listener is left holding their breath.
+    lead_ev.append((PPQ * 12, [(N(4,6), PPQ * 20, -5)]))   # C#6 held bars 3-7 (20 quarter notes)
+    cfg["lead_pattern"] = lead_ev
+
+    # Drums deliberately empty (silence is the kit)
+_build_corp_office_d_patterns()
+
+# ---------- 6c. corp_office_e — recovery, loop seam ----------------------
+# Like chase_e: gradual recovery, then loop seam into A. Starts with the
+# C#6 held note that D ended on, held for 2 more bars as anchor, then
+# the kit comes back bar-by-bar (heartbeat kick → snare → brushes), bass
+# returns as 8ths at half volume, pad climbs. Last 4 bars (16-19) = A's
+# exact opening (stabs only, no bass, no drums) so the chase scene's
+# corp_office loop returns to A cleanly. 20 bars total, slight tempo
+# lift 92→96 to give a sense of "end of shift, locking up."
+SCENES_B["corp_office_e"] = {
+    "name": "corp_office_e",
+    "bars": 20,
+    "bpm": 92,
+    "lead": {"prog": 5, "vol": 75, "pan": 64, "reverb": 50, "mod_init": 0},
+    "bass": {"prog": 33, "vol": 80, "reverb": 15},
+    "pad":  {"prog": 94, "vol": 75, "pan": 64, "reverb": 80},
+    "drums": {"vol": 65, "reverb": 20},
+    "lead_vel_ramp": (60, 90),
+    "key_intervals": MINOR,
+    "root": 6,                               # F# minor
+    "tempo_changes": [(16, 96)],             # end of shift lift
+    "lead_mod_ramp": (0, 20),
+    # Pad chords: F#m family, SAME chord cycle as A — looping seam prep
+    "pad_chords": [
+        (0,  [N(6,3), N(9,3), N(1,4), N(4,4)]),       # F#m
+        (4,  [N(1,3), N(4,3), N(8,3), N(11,3)]),      # Bm
+        (8,  [N(4,3), N(8,3), N(11,3), N(3,4)]),      # C#m
+        (12, [N(6,3), N(9,3), N(1,4), N(4,4)]),       # F#m (back to A's home)
+        (16, [N(6,3), N(9,3), N(1,4), N(4,4)]),       # F#m (held for loop seam)
+    ],
+    # Pad ducks at bar 19 only — gives A's pad entry a clean start
+    "pad_breakdowns": [(19, 20)],
+    "pad_vel_ramp": (50, 100, 20),
+    "lead_pattern": [],
+    "bass_pattern": [],
+    "drum_pattern": [],
+    "cross_boundary_crash": True,            # crash on bar 19 = A's crash opening
+    "crash_velocity": 100,
+}
+def _build_corp_office_e_patterns():
+    """corp_office_e: gradual recovery to A's opening shape. bars 0-3
+    hold C#6 (the D-end note); bars 4-7 add pad swell; bars 8-11 add
+    bass; bars 12-15 add brush snare; bars 16-19 = A's opening (stabs
+    only with kick+snare). Loop seam back to A is invisible."""
+    import random
+    random.seed(13)
+    bar = PPQ * BEATS_PER_BAR
+    eighth = PPQ // 2
+    cfg = SCENES_B["corp_office_e"]
+    lead_ev: list = []
+    bass_ev: list = []
+    drum_ev: list = []
+
+    chord_roots = [6, 1, 4, 6, 6]    # same as A
+
+    # ----- LEAD ------------------------------------------------------------
+    # bars 0-3: hold C#6 (anchor from D)
+    lead_ev.append((0, [(N(4,6), PPQ * 16, -5)]))          # C#6 held bars 0-3
+    # bars 4-7: EP arpeggio returns (quieter version of B's arpeggio)
+    for b in range(4, 8):
+        t = b * bar
+        root_idx = chord_roots[(b - 4) % 5]
+        arp = [N(root_idx, 4), N(root_idx + 4, 4),
+               N(root_idx + 7, 4), N(root_idx + 4, 4)]
+        for i in range(8):
+            lead_ev.append((t + i * eighth, [(arp[i % 4], eighth, -5)]))
+    # bars 8-11: same arpeggio + chord stabs
+    for b in range(8, 12):
+        t = b * bar
+        root_idx = chord_roots[(b - 8) % 4]
+        arp = [N(root_idx, 5), N(root_idx + 3, 5), N(root_idx + 7, 5), N(root_idx + 10, 5)]
+        for i, n in enumerate(arp):
+            lead_ev.append((t + i * eighth, [(n, eighth, 0)]))
+        # stabs on 3+
+        chord_notes = [N(root_idx, 4), N(root_idx + 3, 4), N(root_idx + 7, 4)]
+        lead_ev.append((t + 2 * PPQ, [(n, eighth, 0) for n in chord_notes]))
+    # bars 12-15: arpeggio + stabs (matches A's bars 8-11)
+    for b in range(12, 16):
+        t = b * bar
+        root_idx = chord_roots[(b - 12) % 4]
+        arp = [N(root_idx, 5), N(root_idx + 3, 5), N(root_idx + 7, 5), N(root_idx + 10, 5)]
+        for i, n in enumerate(arp):
+            lead_ev.append((t + i * eighth, [(n, eighth, 0)]))
+        chord_notes = [N(root_idx, 4), N(root_idx + 3, 4), N(root_idx + 7, 4)]
+        lead_ev.append((t + 2 * PPQ, [(n, eighth, 0) for n in chord_notes]))
+    # bars 16-19: A's exact opening — STABS ONLY on beats 1+3, no arpeggio
+    for b in range(16, 20):
+        t = b * bar
+        root_idx = chord_roots[(b - 16) % 4]
+        chord_notes = [N(root_idx, 4), N(root_idx + 3, 4), N(root_idx + 7, 4)]
+        lead_ev.append((t, [(n, PPQ // 2, -5) for n in chord_notes]))
+        lead_ev.append((t + 2 * PPQ, [(n, PPQ // 2, -5) for n in chord_notes]))
+    cfg["lead_pattern"] = lead_ev
+
+    # ----- BASS ------------------------------------------------------------
+    # bars 0-3: silence (anchor holds alone)
+    # bars 4-7: bass enters on half-time (heartbeat — beat 1 only)
+    # bars 8-11: 8ths on root
+    # bars 12-15: 8ths + 5th (matches A's bars 12-15)
+    # bars 16-19: SILENT (matches A's bars 0-3 — stabs only)
+    for b in range(4, 8):
+        root_idx = chord_roots[(b - 4) % 5]
+        root = N(root_idx, 1)
+        bass_ev.append((b * bar, [(root, PPQ, 0), (root, PPQ * 3, 0)]))
+    for b in range(8, 12):
+        root_idx = chord_roots[(b - 8) % 4]
+        root = N(root_idx, 1)
+        for beat in range(4):
+            t = b * bar + beat * PPQ
+            bass_ev.append((t, [(root, eighth, 0), (root, eighth, 0)]))
+    for b in range(12, 16):
+        root_idx = chord_roots[(b - 12) % 4]
+        root = N(root_idx, 1)
+        fifth = root + 7
+        for beat in range(4):
+            t = b * bar + beat * PPQ
+            bass_ev.append((t, [(root, eighth, 0), (fifth, eighth, 0)]))
+    cfg["bass_pattern"] = bass_ev
+
+    # ----- DRUMS -----------------------------------------------------------
+    # bars 0-7: silent
+    # bars 8-11: kick on 1 only
+    # bars 12-15: kick + snare on 3
+    # bars 16-19: A's exact opening — kick 1+3, snare 2+4, NO hats
+    for b in range(8, 12):
+        drum_ev.append((b * bar, KICK, 60))
+    for b in range(12, 16):
+        drum_ev.append((b * bar, KICK, 65))
+        drum_ev.append((b * bar + 2 * PPQ, SNARE, 50))
+    for b in range(16, 20):
+        for beat in range(4):
+            t = b * bar + beat * PPQ
+            if beat in (0, 2):
+                drum_ev.append((t, KICK, 70 if beat == 0 else 60))
+            if beat in (1, 3):
+                drum_ev.append((t, SNARE, 55))
+    cfg["drum_pattern"] = drum_ev
+_build_corp_office_e_patterns()
 
 # ---------- 7. terminal_lab_b — Fantasia becomes aggressive, glitch erupt -
 SCENES_B["terminal_lab_b"] = {
@@ -2861,7 +3199,7 @@ MEDLEYS: dict[str, list[str]] = {
     "corridor":     ["corridor.mp3",     "corridor_b.mp3"],
     "jailbreak":    ["jailbreak.mp3",    "jailbreak_b.mp3"],
     "kabukicho":    ["kabukicho.mp3",    "kabukicho_b.mp3"],
-    "corp_office":  ["corp_office.mp3",  "corp_office_b.mp3"],
+    "corp_office":  ["corp_office.mp3",  "corp_office_b.mp3",  "corp_office_c.mp3",  "corp_office_d.mp3",  "corp_office_e.mp3"],
     "terminal_lab": ["terminal_lab.mp3", "terminal_lab_b.mp3"],
     "ship_engine":  ["ship_engine.mp3",  "ship_engine_b.mp3"],
 }

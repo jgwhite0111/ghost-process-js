@@ -45,15 +45,39 @@ python3 tools/make_scene_loop.py --list  # show all scenes
 | corridor     | `corridor.mp3` → `corridor_b.mp3`                                          | 60.5   |
 | jailbreak    | `jailbreak.mp3` → `jailbreak_b.mp3`                                        | 35.1   |
 | kabukicho    | `kabukicho.mp3` → `kabukicho_b.mp3`                                        | 31.4   |
-| corp_office  | `corp_office.mp3` → `corp_office_b.mp3`                                    | 37.3   |
+| **corp_office**  | `corp_office.mp3` → `corp_office_b.mp3` → `corp_office_c.mp3` → `corp_office_d.mp3` → `corp_office_e.mp3` | 37.3 / 42 / 50 / 22 |
 | terminal_lab | `terminal_lab.mp3` → `terminal_lab_b.mp3`                                  | 50.6   |
 | ship_engine  | `ship_engine.mp3` → `ship_engine_b.mp3`                                    | 51.7   |
 
-22 MP3s wired into `story.json` (intro_theme + 21 medley halves). 23 MIDIs on disk. `clinic_tension.mid` / `.mp3` are orphaned (not in `story.json` `next`).
+26 MP3s wired into `story.json` (intro_theme + 25 medley tracks across 9 scenes × up to 5 tracks each). 27 MIDIs on disk. `clinic_tension.mid` / `.mp3` are orphaned (not in `story.json` `next`).
 
 ## Recent work
 
-### 2026-07-13: chase 5-track medley experiment (uncommitted)
+### 2026-07-13: corp_office 5-track medley, B REPLACED
+
+The old corp_office B ("E.Piano moves from stabs to arpeggios") was the user's flagged as "too repetitive and not much of a complement to A" — the old B was just A with arpeggios substituted, which kept the same character. Replaced with a phase-based narrative arc: A=daytime build, B=after-hours solo, C=paranoia/glitch, D=cliff-hanger silence, E=recovery/loop seam. New B/C/D/E all designed as different *phases*, not just different textures (per `docs/MUSIC_BSIDE_GUIDE.md`).
+
+| Track | Bars × BPM | Character |
+|---|---|---|
+| `corp_office` (A) | 20 @ 92 | EP stabs → full band crescendo (existing) |
+| `corp_office_b` (B) — REPLACED | 20 @ 92 | After-hours solo: EP arpeggios only with halo pad swell, NO bass, NO drums. 5-chord cycle with extensions (m9, 6) ending on deceptive Dmaj7. |
+| `corp_office_c` (C) | 20 @ 92 | Paranoia / surveillance glitch: bass returns with chromatic b2 approach on beat 4 of odd bars; kit has brush-snr ghost hits on 16th offbeats; pad shifts to sharp 11ths (F#m7#11 → Bm7#11 → D7#11 → G7b9 → Cmaj7); EP plays one b6 passing dissonance per 4-bar phrase. KICK MISSING on bar 16 = glitch event. |
+| `corp_office_d` (D) | 8 @ 92 | Cliff-hanger: 2 dim7 stabs (F# dim7 → B dim7) on bars 0-2, then COMPLETE SILENCE for the held C#6 EP note on bars 3-7. Vibrato on the held note causes micro-silences (trembling). 23.2s rendered. |
+| `corp_office_e` (E) | 20 @ 92→96 | Recovery: bars 0-3 hold C#6 anchor from D; bars 4-7 EP arpeggio returns; bars 8-11 bass+kit enter; bars 16-19 = A's exact opening (stabs only, kick 1+3, snare 2+4) for invisible loop seam. Slight tempo lift 92→96 = "end of shift". |
+
+Per-track peak levels (FFmpeg EBU R128): A=existing → B=-25.9dB (intimate quiet) → C=-17.3dB (band returns, uneasy) → D=-16.6dB (dim7 stabs only) → E=-30.6dB→build. The drop into B is intentional — B is the "alone in the empty office" beat.
+
+Total corp_office scene duration ~2:31 (up from ~1:30 with old A+B). E's last 4 bars = A's bars 0-3 = invisible loop seam.
+
+Smoke test passed: A→B→C→D→E crossfades all complete cleanly via `window.MusicHandler._crossfadeToNext()`; readyState=4 on all tracks.
+
+Files touched:
+- `tools/make_scene_loop.py` — `SCENES_B["corp_office_b"]` rewritten + new `["corp_office_c"]` / `["corp_office_d"]` / `["corp_office_e"]` with pattern builders
+- `tools/make_scene_loop.py` MEDLEYS dict — `corp_office` now lists 5 tracks
+- `story.json` — corp_office.music extended to 5 entries (fadeAt 37.3 / 42 / 50 / 22)
+- New assets: `corp_office_c.mp3` (55.5s) / `corp_office_d.mp3` (23.2s) / `corp_office_e.mp3` (44.0s) + `.mid` sources; `corp_office_b.mp3` / `.mid` overwritten in place (new design)
+
+### 2026-07-13: chase 5-track medley experiment (committed as `310784b`)
 
 The chase scene got too repetitive at 2 tracks (A+B), and stretching songs longer made them feel slow/padded. New design: 5-track A+B+C+D+E with a narrative arc instead of pure duration-extension.
 
@@ -82,7 +106,7 @@ Files touched:
 
 ## Key files
 
-- `tools/make_scene_loop.py` — 9 SCENES + 12 SCENES_B (medleys; chase has C/D/E added)
+- `tools/make_scene_loop.py` — 9 SCENES + 14 SCENES_B (medleys; chase & corp_office have 5-track medleys)
 - `tools/render-midi.sh` — FluidSynth + sc55.sf2 (silenceremove trailing-trim)
 - `tools/test_full_chain.py` — smoke test
 - `tools/gen_asset.py` — image-gen pipeline (style bible + Bayer dither)
