@@ -24,9 +24,14 @@ To regenerate the `transparent_sprites/` from the MP4:
 python3 tools/key_sprite.py \
     --src raw/i2v_clip_android_chase.mp4 \
     --out raw/transparent_sprites/ \
-    --bg black \
+    --bg black --black-threshold 5 \
     --start 1 --end 141 --keyframes 16
 ```
+
+Note on threshold: default `--black-threshold 20` eats the figure's
+dark uniform + hair (sprite pixels at V<20). The chase figure has lots
+of dark clothing, so threshold 5 preserves them while still keying
+the pure-black BG (corner sample is exactly V=0).
 
 ## Why no processed/ subdir?
 
