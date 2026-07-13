@@ -2490,6 +2490,84 @@ def _build_ship_engine_b_patterns():
 _build_ship_engine_b_patterns()
 
 
+# ---------- 9. alley_confrontation_b — tranquil counter-melody at full pad ---
+# A-side: 16 bars @ 90 BPM, F#dim7→C7b9→A#dim7→F7b9 walking bass, Pad 4
+# Choir on ch0, FX 6 Goblin on ch2 whisper. B-side complements: same BPM,
+# same chord cycle (F# Phrygian center, root 30 = F#1), same patches — but
+# pad is already at peak from bar 0, bass drone on F# holds the floor, and
+# a counter-melody enters UP an octave at bar 4 with a calmer 4th-mode
+# Phrygian pull. Result: when crossfade lands ~bar 8 (halfway through A),
+# the listener hears the Choir pad swell up and a melodic voice join in
+# over the dim7 cycle — the "confrontation" continues but feels held/
+# sustained rather than tense.
+SCENES_B["alley_confrontation_b"] = {
+    "name": "alley_confrontation_b",
+    "bars": 16,                                 # same bar count as A (47.7s)
+    "bpm": 90,                                  # same BPM as A
+    "lead": {"prog": 91, "vol": 85, "pan": 64, "reverb": 80, "mod_init": 30},  # Pad 4 (Choir) — same as A
+    "bass": {"prog": 35, "vol": 75, "reverb": 25},  # Fretless Bass — same as A
+    "pad":  {"prog": 54, "vol": 90, "pan": 64, "reverb": 95},  # Synth Choir — warmer than A's pad (was 100=SFX)
+    "drums": {"vol": 0, "reverb": 0},           # no percussion (matches A)
+    # Pad already at peak (no ramp). Chord cycle follows A's diminished
+    # walk: F#dim7 (bar 0-3) → C7b9 (bar 4-7) → A#dim7 (bar 8-11) →
+    # F7b9 (bar 12-15). B-side holds the same chord for 4 bars each —
+    # the "stillness" of confrontation rather than the walking-bass push.
+    "pad_chords": [
+        (0,   [N(6,3), N(9,3), N(0,4), N(3,4)]),       # F#dim7 (bar 0-3)
+        (PPQ*16, [N(0,3), N(4,3), N(10,3), N(1,4)]),   # C7b9   (bar 4-7)
+        (PPQ*32, [N(10,2), N(1,3), N(6,3), N(8,3)]),   # A#dim7 (bar 8-11)
+        (PPQ*48, [N(5,3), N(9,3), N(2,4), N(4,4)]),    # F7b9   (bar 12-15)
+    ],
+    "pad_vel_ramp": (85, 95, 16),                # already at peak, gentle swell
+    "key_intervals": PHRYGIAN,                   # F# Phrygian (matches A's dim7 center)
+    "root": 6,                                   # F# = semitone 6 from C
+    # Bass: F# drone on bars 0-3 (matches A's first chord), then gentle
+    # 5th motion every 2 bars through the cycle. Higher vel than A's
+    # walking bass to keep signal above the -50dB silenceremove threshold
+    # during pad decay.
+    "bass_pattern": [
+        # bars 0-3: F# drone (octave doubling for warmth)
+        (0, [(N(6,1), PPQ*16, 0), (N(6,2), PPQ*16, 0)]),
+        # bars 4-7: C drone (with low F# 5th color)
+        (PPQ*16, [(N(0,1), PPQ*16, 0), (N(0,2), PPQ*16, 0)]),
+        # bars 8-11: A# drone
+        (PPQ*32, [(N(10,1), PPQ*16, 0), (N(10,2), PPQ*16, 0)]),
+        # bars 12-15: F drone (root of F7b9)
+        (PPQ*48, [(N(5,1), PPQ*16, 0), (N(5,2), PPQ*16, 0)]),
+    ],
+    # COUNTER-MELODY: Choir pad sustains a slow melodic arc. Enters at
+    # bar 4 (after the F#dim7 opening dissonance resolves to C7b9) so
+    # the B-side opens with the drone alone — same shape as cold_open_b
+    # but on a tighter dim7 cycle. Climbs Eb5 → F#5 → A5 in 4-bar
+    # phrases, descends G5 → F#5 across the last 4 bars for the fade.
+    # Vel ramp 75→105 keeps the counter audible over the held bass.
+    "lead_vel_ramp": (75, 105),
+    "lead_mod_ramp": (30, 60),
+    "lead_pattern": [
+        # bars 4-7 (tick 16-31): first melodic phrase over C7b9
+        (PPQ*16, [
+            (N(3,5), PPQ*8, -5),                    # Eb5 (the bII pull)
+            (N(5,5), PPQ*8, 0),                     # F#5 (root)
+        ]),
+        # bars 8-11 (tick 32-47): climb to A5 over A#dim7
+        (PPQ*32, [
+            (N(3,5), PPQ*8, 0),                     # Eb5
+            (N(9,5), PPQ*8, 3),                     # A5 (the 5th, highest point)
+            (N(7,5), PPQ*8, 0),                     # G5
+        ]),
+        # bars 12-15 (tick 48-63): descend back over F7b9, settle on F#
+        (PPQ*48, [
+            (N(7,5), PPQ*8, -3),                    # G5
+            (N(5,5), PPQ*8, -5),                    # F#5
+            (N(6,5), PPQ*8, -8),                    # Gb5 (Phrygian b2 ghost note, then resolve)
+            (N(5,5), PPQ*8, -10),                   # F#5 held (tail)
+        ]),
+    ],
+    "pad_breakdowns": [],
+    "cross_boundary_crash": False,                # no drums
+    "drum_pattern": [],
+}
+
 # -----------------------------------------------------------------------------
 # MEDLEY map — which scenes have a B-side, and where to fade
 #
@@ -2497,6 +2575,7 @@ _build_ship_engine_b_patterns()
 # Omit fadeAt to default to halfway through A's loop length.
 # -----------------------------------------------------------------------------
 MEDLEYS: dict[str, list[str]] = {
+    "alley":        ["alley_confrontation.mp3", "alley_confrontation_b.mp3"],
     "cold_open":    ["cold_open.mp3",    "cold_open_b.mp3"],
     "chase":        ["chase.mp3",        "chase_b.mp3"],
     "corridor":     ["corridor.mp3",     "corridor_b.mp3"],

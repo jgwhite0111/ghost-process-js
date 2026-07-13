@@ -67,7 +67,15 @@
       "kind": "ink",
       "bg": "scene_alley",
       "bgPalette": "alley",
-      "music": "alley_confrontation.mp3",
+      "music": [
+        {
+          "file": "alley_confrontation.mp3"
+        },
+        {
+          "file": "alley_confrontation_b.mp3",
+          "fadeAt": 23.8
+        }
+      ],
       "ink": "ink/alley.ink",
       "start_node": "Start",
       "characters": [
