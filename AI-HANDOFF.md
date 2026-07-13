@@ -152,65 +152,38 @@ runtime draw) all trust the saved value directly.
 **v0.2.31 (cf162c4)** — Now superseded by v0.2.32. Don't read its
 commit body as ground truth; it's the wrong design.
 
-### Working tree state (run `git status -s` to confirm)
+### Working tree state (run `git status -s` to confirm, as of 2026-07-13)
 
 ```
-39 entries: 12 untracked (??), 18 deleted (D), 9 modified (M)
+19 entries: 2 untracked (??), 17 modified (M)
 ```
 
 **Untracked (new files, not yet committed):**
 
-- `assets/backgrounds/_deleted/` — archive dir. Contains
-  `scene_corridor.png` (the v2 background, displaced by v3).
-- `assets/backgrounds/scene_intro_v2.png` / `_v3.png` / `_v4.png`
-  and matching `.prompt.json` sidecars — title-screen iteration
-  candidates. **`story.json` uses `scene_intro_v11` (already
-  committed)**, so v2/v3/v4 are NOT in active use. They are
-  brainstorm artifacts from the user iterating on title-screen
-  composition. Either `git rm` them after visual confirmation or
-  leave on disk — the user is iterating rapidly.
-- `assets/sprites/_deleted/eidolon_return/` — archive dir. Contains
-  the 16 frame PNGs of the old eidolon_return character (replaced
-  by the android over time). Safe to leave on disk; can be
-  `git clean`d if the user confirms.
-- `ink/corp_office.ink`, `ink/kabukicho.ink`, `ink/ship_engine.ink`,
-  `ink/terminal_lab.ink` — NEW Ink source files for the four scenes
-  whose names show up in `story.json` but were missing
-  on-disk narration. **Verify these are used by `story.json` (they
-  probably reference them in their knot definitions)**; if yes,
-  commit them. If they're orphaned, delete.
+- `assets/sprites/android/corridor/README.md` — documents the
+  `corridor/raw/` + `corridor/processed/` contract. New since last
+  handoff. **Commit it** (or treat it as a WIP note alongside
+  `HANDOFF_SPRITES.md`).
+- `assets/sprites/android/corridor/raw/` — 141 PNGs + `i2v_clip_*.mp4`
+  + `sprite_extractor.py` + `transparent_sprites/`. New canonical source
+  location per the untracked README. See the 2026-07-13 banner for the
+  duplicate-path decision the user needs to make before this can land.
 
 **Modified (M):**
 
-- `ink/alley.ink`, `ink/chase.ink`, `ink/cold_open.ink`,
-  `ink/corridor.ink`, `ink/jailbreak.ink` — Ink source edits.
-  Probably dialogue edits that landed before the user paused. Don't
-  commit blindly; read the diffs (start with `git diff ink/alley.ink`)
-  and verify the changes are intentional.
-- `src/runtime/hitbox.js`, `src/runtime/music.js` — runtime edits.
-  `src/runtime/hitbox.js` and `src/runtime/music.js` are normally
-  **not edited between major session resets** (they're stable).
-  Read the diffs; might be intentional fixes from the parallel
-  session that didn't get committed, or might be carry-over from
-  earlier work.
-- `tools/test_full_chain.py` — test script edits. Read the diff;
-  verify it's not breaking the smoke test.
-- `story.json` — the dirty file. Check `git diff story.json | head -40`;
-  may have placement tweaks, scene additions, or speaker label
-  fixes. The current `alley.android.placementY` is `1.07883...`,
-  intentionally past the edge (this is the v0.2.32/2.33 design —
-  values > 1 are allowed for cinematic closeups).
+- 16× `assets/sprites/android/corridor/idle_*.png` — v17 cyan-restored
+  strip + v19 sleeve animation. Active WIP per `HANDOFF_SPRITES.md`.
+- `src/runtime/sprites.js` — likely v0.2.41 hold-range +
+  cyan-ball despill guard (commit 617249f). Uncommitted from the
+  parallel session that landed v0.2.41.
 
-**Deleted (D) — files staged for removal:**
-
-- `assets/backgrounds/scene_corridor.png` — superseded.
-- `assets/sprites/android/eidolon_return/idle_01.png` …
-  `idle_16.png` — character replaced.
-- `ink/eidolon_return.ink` — Ink source replaced.
-
-All deleted files are in the corresponding `_deleted/` archive dir on
-disk, so commit is non-destructive. If commit removes a file the user
-wants to restore, the archive is one `mv` away.
+**No more deleted files.** The 18 staged deletes listed in the
+2026-07-08 banner (`scene_corridor.png`, 16× `eidolon_return/idle_*`,
+`eidolon_return.ink`) were either committed in the intervening 14
+commits or moved to `_deleted/` archives. The 142 staged
+`_raw_source/frame_*` deletes were rolled back during the 2026-07-13
+cleanup session because `HANDOFF_SPRITES.md` and
+`_diagnostics/README.md` still reference the old path.
 
 ### Verification
 
@@ -388,6 +361,74 @@ sitting unused, `rm` them or move to `ink/_drafts/`.
   If `session_search` returns "database disk image is malformed",
   see `references/state-db-recovery.md` in the handoff-carryover-
   cleanup skill.
+
+---
+
+## Update (2026-07-13) — dead-asset cleanup session
+
+User directive: *"get rid of any useless shit in the project, im fed up
+of you leaving youre shite around like a toddler"*. Six deliberate
+audits, four commits, two skipped, one rollback.
+
+### Commits landed
+
+```
+03387e0  tools: remove obsolete bass-iteration intermediates
+2b7620e  sprites: archive .scratch/ brainstorm dir to _deleted/.scratch_archive/
+dded4b9  sprites: commit android_scene_sprite_sources_20260711 diagnostic reference
+4b2b3e2  audio: drop unbound smoky_club_intro.mp3
+```
+
+### Audit + decision table
+
+| Item | Verdict | Reason |
+|---|---|---|
+| `tools/preview_bass_fix.py`, `swap_slap_to_fingered.py`, `swap_synth_bass_to_slap.py` | **DELETED (03387e0)** | Old handoff §"Walking bassline pass" called them obsolete intermediates. Zero importers. |
+| `assets/sprites/android/.scratch/` (v7/v8/v9/v10/v12 + REJECTED v11 silhouette) | **ARCHIVED to `_deleted/.scratch_archive/` (2b7620e)** | Zero references in code/json/md/ink. Path rename keeps contents recoverable if v19 needs an earlier strip as fallback. |
+| `assets/sprites/android/_diagnostics/android_scene_sprite_sources_20260711.png` | **COMMITTED (dded4b9)** | Diagnostic reference for v6/v17/v19 audit trail; matches existing two PNGs in the same dir. |
+| `assets/audio/smoky_club_intro.mp3` (2.7 MB) | **DELETED (4b2b3e2)** | Generated but never wired. Grep across `story.json`, `ink/`, `src/`, `tools/` returns zero references. The `.mid` source is still committed (07ee831) so re-render is trivial. |
+| `ink/corp_office.ink`, `kabukicho.ink`, `ship_engine.ink`, `terminal_lab.ink` | **NOT TOUCHED — already committed in 2d5d641** | Old handoff §"Untracked" was stale info; verified with a script that walks `story.json` and confirms all four are referenced by scene definitions. |
+
+### Skipped on purpose — surfaces for next session
+
+| Item | Why skipped | What next session should do |
+|---|---|---|
+| 16× `assets/sprites/android/corridor/idle_*.png` modified | Active WIP — v17 cyan-restored strip + v19 sleeve animation per HANDOFF_SPRITES.md | Read `git diff` on each; v6 baseline + v17/v19 work is in flight |
+| `src/runtime/sprites.js` modified | Likely v0.2.41 hold-range + cyan-ball despill guard per 617249f | Verify intent against current sprite playback |
+| `assets/sprites/android/corridor/README.md` untracked | Documents the `raw/` + `processed/` contract; new since last handoff update | **Commit it** once the next agent decides if `raw/` is the new canonical path (it duplicates content of `_raw_source/`) |
+| `assets/sprites/android/corridor/raw/` (141 frames + MP4 + sprite_extractor.py + transparent_sprites/) | Untracked but documented as canonical source by the untracked README | **Decide**: (a) commit it as the new canonical path and migrate HANDOFF_SPRITES.md references, or (b) `git rm` the staged `_raw_source/` deletes and update HANDOFF_SPRITES.md to point at `corridor/raw/` |
+| `_raw_source/` (142 staged deletes, restored during this session) | **WAS rolled back** when I found HANDOFF_SPRITES.md:16,26,68,354 and _diagnostics/README.md:24 still reference `assets/sprites/android/_raw_source/`. Committing the deletes would orphan those doc paths. | See above — this is a 3-way mess between two locations and two docs. User decision needed before any commit. |
+
+### Headline decision the next session needs from the user
+
+**The corridor sprite source path is duplicated and the docs disagree:**
+
+- `assets/sprites/android/_raw_source/frame_001..141.png` — tracked in git, referenced by HANDOFF_SPRITES.md as canonical
+- `assets/sprites/android/corridor/raw/frame_001..141.png` — untracked, referenced by `corridor/README.md` (untracked) as canonical
+
+These are likely **duplicates** (both have `frame_001..141`, both have the MP4 or its equivalent, both have a `transparent_sprites/` subdir). Before any commit on either side, the user needs to pick one path and the agent updates both docs to match. Until then, both copies stay on disk + the 141 staged deletes stay staged.
+
+### Verification
+
+```
+$ python3 tools/test_full_chain.py
+VISITED: ['intro', 'alley', 'chase', 'kabukicho', 'corp_office', 'corridor',
+         'jailbreak', 'terminal_lab', 'ship_engine', 'alley']
+ERRORS: []
+```
+
+10 scenes, 0 errors. Smoke test still passes after the cleanup. No
+runtime code was touched (only `tools/`, `assets/sprites/android/`,
+and `assets/audio/`).
+
+### State after this session
+
+```
+HEAD = 4b2b3e2 (audio: drop unbound smoky_club_intro.mp3)
+Branch: main
+Sync: ahead of origin/main by 10 commits (was 6, +4 from cleanup)
+Working tree: 19 dirty (16 corridor sprite WIP + src/runtime/sprites.js + 2 untracked at corridor/)
+```
 
 ---
 
