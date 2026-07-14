@@ -194,3 +194,23 @@ Files touched:
 - `docs/MUSIC_GRID.md` — function references updated
 - `assets/audio/alley_confrontation_b/c/d/e.{mid,mp3}` — regenerated, served by Express on :8765
 
+
+---
+
+## Correction: kabukicho_d was NOT intentional design
+
+The 2026-07-14 entry marked kabukicho_d as "intentional design (dread ring-out)" — that was wrong. User reported "part d in kabukicho" as too quiet twice in a row. Real audit on 2026-07-14 (RMS per 2-second window on rendered MP3):
+
+- **Before:** 96% of track below -40dB; body at -92dB (essentially silent)
+- **Energy distribution:** 80% sub-bass, 7% low-mid, 0.5% high-mid — bass dominated, sax barely present
+- **Two bugs:**
+  1. `schedule_note_sequence` iterates `[(note, dur)]` sequentially with `cursor += dur`. Writing `[(C5, 76beats), (E5, 76beats)]` put E5 at bar 20 (off the loop), so only one of two intended held notes played.
+  2. A single 76-beat continuous note_on in FluidSynth's Tenor Sax patch (prog 65) attenuates to silence over time.
+
+**Fix (commit 46b38ae):** Sparse 4-bar sax motif `D5 → F5 → E5 → G5` with eighth-rest breaths, repeated 5x across 20 bars. Short 2-beat notes per phrase keep the patch from fading. Half-note bass descent through each 4-bar group. Pad swells every 4 bars. No drums.
+
+**Result:** Sax dominant at 70-80% of spectral peak (D5=72%, E5=79%, G5=21% of peak); body RMS -38 to -49dB sustained across 0-50s; only natural reverb tail before loop seam falls below -50dB. Ghost-scene character preserved (no drums, sparse rests, dim7 pads). Verified in editor: row 3 (kabukicho_d) plays, highlights, and produces audible output.
+
+**Lesson:** "Audibly empty" ≠ "intentionally sparse." Check the rendered MP3 with RMS windows + FFT band energy before accepting a sparse design verdict. The per-bar MIDI note count was 5/19 bars for the lead (one held note + stab) — looked fine on paper but produced -92dB silence in audio.
+
+**Other sparse tracks still flagged but not yet rewritten** (audit, not action): jailbreak_d (0-58s oscillates -50/-54dB then loud at 60s), terminal_lab_c/e (4-second silence gaps between hits), jailbreak_c (alternating -20/-60dB), kabukicho_c/e (last 16s mostly -46 to -53dB). Address in a separate turn.
