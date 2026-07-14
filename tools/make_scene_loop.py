@@ -4859,11 +4859,15 @@ SCENES_B["alley_confrontation_b"] = {
     # walk: F#dim7 (bar 0-3) → C7b9 (bar 4-7) → A#dim7 (bar 8-11) →
     # F7b9 (bar 12-15). B-side holds the same chord for 4 bars each —
     # the "stillness" of confrontation rather than the walking-bass push.
+    # FIX 2026-07-14: pad_chords values are BARS (not ticks).
+    # Previously PPQ*16/PPQ*32/PPQ*48 — but schedule_held_pad multiplies the
+    # start value by `bar` (= PPQ * BEATS_PER_BAR = 384) so PPQ*16 became
+    # bar 1536 (a 92-min tick offset), leaving bars 13-23 silent in the MP3.
     "pad_chords": [
-        (0,   [N(6,3), N(9,3), N(0,4), N(3,4)]),       # F#dim7 (bar 0-3)
-        (PPQ*16, [N(0,3), N(4,3), N(10,3), N(1,4)]),   # C7b9   (bar 4-7)
-        (PPQ*32, [N(10,2), N(1,3), N(6,3), N(8,3)]),   # A#dim7 (bar 8-11)
-        (PPQ*48, [N(5,3), N(9,3), N(2,4), N(4,4)]),    # F7b9   (bar 12-15)
+        (0,  [N(6,3), N(9,3), N(0,4), N(3,4)]),       # F#dim7 (bar 0-3)
+        (4,  [N(0,3), N(4,3), N(10,3), N(1,4)]),      # C7b9   (bar 4-7)
+        (8,  [N(10,2), N(1,3), N(6,3), N(8,3)]),      # A#dim7 (bar 8-11)
+        (12, [N(5,3), N(9,3), N(2,4), N(4,4)]),       # F7b9   (bar 12-15)
     ],
     "pad_vel_ramp": (85, 95, 16),                # already at peak, gentle swell
     "key_intervals": PHRYGIAN,                   # F# Phrygian (matches A's dim7 center)
@@ -4937,11 +4941,14 @@ SCENES_B["alley_confrontation_c"] = {
     "lead_mod_ramp": (30, 70),
     "key_intervals": PHRYGIAN,
     "root": 6,                                 # F# Phrygian
+    # FIX 2026-07-14: pad_chords values are BARS, not ticks.
+    # Previously PPQ*16/32/48 — schedule_held_pad multiplies by `bar=384`
+    # so PPQ*16 became bar 1536, leaving bars 13-23 silent.
     "pad_chords": [
-        (0,    [N(6,3), N(9,3), N(0,4), N(3,4)]),       # F#dim7
-        (PPQ*16, [N(0,3), N(4,3), N(10,3), N(1,4)]),   # C7b9
-        (PPQ*32, [N(10,2), N(1,3), N(6,3), N(8,3)]),   # A#dim7
-        (PPQ*48, [N(5,3), N(9,3), N(2,4), N(4,4)]),    # F7b9
+        (0,  [N(6,3), N(9,3), N(0,4), N(3,4)]),       # F#dim7
+        (4,  [N(0,3), N(4,3), N(10,3), N(1,4)]),      # C7b9
+        (8,  [N(10,2), N(1,3), N(6,3), N(8,3)]),      # A#dim7
+        (12, [N(5,3), N(9,3), N(2,4), N(4,4)]),       # F7b9
     ],
     "pad_vel_ramp": (85, 95, 16),
     "lead_pattern": [],
@@ -5041,11 +5048,14 @@ SCENES_B["alley_confrontation_e"] = {
     "lead_mod_ramp": (110, 30),                  # vibrato decays as alley recovers
     "key_intervals": PHRYGIAN,
     "root": 6,                                 # F# Phrygian
+    # FIX 2026-07-14: pad_chords values are BARS, not ticks.
+    # Previously PPQ*16/32/48 — schedule_held_pad multiplies by `bar=384`
+    # so PPQ*16 became bar 1536, leaving bars 13-23 silent.
     "pad_chords": [
-        (0,    [N(6,3), N(9,3), N(0,4), N(3,4)]),       # F#dim7 (return to A)
-        (PPQ*16, [N(0,3), N(4,3), N(10,3), N(1,4)]),   # C7b9
-        (PPQ*32, [N(10,2), N(1,3), N(6,3), N(8,3)]),   # A#dim7
-        (PPQ*48, [N(5,3), N(9,3), N(2,4), N(4,4)]),    # F7b9 (seam)
+        (0,  [N(6,3), N(9,3), N(0,4), N(3,4)]),       # F#dim7 (return to A)
+        (4,  [N(0,3), N(4,3), N(10,3), N(1,4)]),      # C7b9
+        (8,  [N(10,2), N(1,3), N(6,3), N(8,3)]),      # A#dim7
+        (12, [N(5,3), N(9,3), N(2,4), N(4,4)]),       # F7b9 (seam)
     ],
     "pad_vel_ramp": (60, 90, 16),
     "lead_pattern": [],
