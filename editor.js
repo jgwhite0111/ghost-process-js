@@ -1020,7 +1020,7 @@ function renderRight() {
     right.appendChild(makeField('bgPalette', 'Palette', makePlaceholder()));
     fillAsync($('#right .field[data-key="bgPalette"] .ctrl'), makePalettePicker(sc));
     right.appendChild(makeField('music', 'Music (assets/audio/*)', makePlaceholder()));
-    fillAsync($('#right .field[data-key="music"] .ctrl'), makeMusicPicker(sc));
+    fillAsync($('#right .field[data-key="music"] .ctrl'), makeMusicEditor(sc));
     right.appendChild(makeField('ink', 'Ink file', makeTextInput(sc.ink || '', v => { sc.ink = v; markDirty(); })));
     // --- Scene tasks (per-scene, surfaced as toast hints + auto-completion) ---
     right.appendChild(makeTasksPanel(sc));
@@ -1349,17 +1349,358 @@ async function makePalettePicker(sc) {
   sel.onchange = () => { sc.bgPalette = sel.value || null; markDirty(); };
   return sel;
 }
-async function makeMusicPicker(sc) {
-  const sel = document.createElement('select');
+async function makeMusicEditor(sc) {
   const files = await listDir('assets/audio');
   const audio = files.filter(f => /\.(mp3|mid|ogg)$/i.test(f));
-  const noBg = document.createElement('option'); noBg.value = ''; noBg.textContent = '— none —'; sel.appendChild(noBg);
-  for (const f of audio) {
-    const o = document.createElement('option'); o.value = f; o.textContent = f; sel.appendChild(o);
+
+  // Determine current mode from sc.music. A string (or single-track
+  // shape) is "single"; an Array is "medley"; null/undefined is empty.
+  const detectMode = () => {
+    if (Array.isArray(sc.music)) return 'medley';
+    if (typeof sc.music === 'string' && sc.music) return 'single';
+    if (sc.music && typeof sc.music === 'object') return 'single'; // single-track object form
+    return 'empty';
+  };
+  // Mutable working copy. The MedleyEditor mutates this list in place,
+  // and we write it back to sc.music on any change.
+  const wrap = document.createElement('div');
+
+  // --- mode selector (only shown when there's content) ---
+  const modeRow = document.createElement('div');
+  modeRow.className = 'music-mode';
+  modeRow.appendChild(modeBtn('Single track', 'single'));
+  modeRow.appendChild(modeBtn('Medley (queue)', 'medley'));
+  wrap.appendChild(modeRow);
+
+  function modeBtn(label, mode) {
+    const b = document.createElement('button');
+    b.textContent = label;
+    b.onclick = () => {
+      const cur = detectMode();
+      if (cur === mode) return;
+      // Convert: single → medley (wrap in array), medley → single
+      // (collapse to first track), empty → leave empty until picker
+      // changes.
+      if (mode === 'medley') {
+        if (cur === 'single') {
+          sc.music = [{ file: typeof sc.music === 'string' ? sc.music : sc.music.file }];
+        } else {
+          sc.music = [];
+        }
+      } else {
+        if (cur === 'medley') {
+          sc.music = sc.music[0]?.file || '';
+        } else {
+          sc.music = '';
+        }
+      }
+      markDirty();
+      render();
+    };
+    return b;
   }
-  sel.value = sc.music || '';
-  sel.onchange = () => { sc.music = sel.value || null; markDirty(); };
-  return sel;
+
+  function syncModeButtons() {
+    const cur = detectMode();
+    [...modeRow.children].forEach((b, i) => {
+      b.classList.toggle('active', (i === 0 && cur === 'single') || (i === 1 && cur === 'medley'));
+    });
+  }
+
+  // --- single-track picker ---
+  const singleWrap = document.createElement('div');
+  const singleSel = document.createElement('select');
+  const noBg = document.createElement('option'); noBg.value = ''; noBg.textContent = '— none —'; singleSel.appendChild(noBg);
+  for (const f of audio) {
+    const o = document.createElement('option'); o.value = f; o.textContent = f; singleSel.appendChild(o);
+  }
+  // Set initial value — works whether sc.music is a string OR a
+  // single-track object (legacy medley-of-1 form).
+  const initSingle = typeof sc.music === 'string'
+    ? sc.music
+    : (sc.music && typeof sc.music === 'object' && !Array.isArray(sc.music) ? sc.music.file : '');
+  singleSel.value = initSingle || '';
+  singleSel.onchange = () => { sc.music = singleSel.value || null; markDirty(); };
+  singleWrap.appendChild(singleSel);
+  // Single-track preview button — lets the user audition the chosen
+  // file without entering medley mode.
+  const singlePlay = document.createElement('button');
+  singlePlay.textContent = '▶ Play';
+  singlePlay.style.cssText = 'margin-top:4px;font-size:11px;padding:3px 10px';
+  singlePlay.onclick = () => {
+    if (!singleSel.value) return;
+    QueuePlayer.playOne('assets/audio/' + singleSel.value);
+  };
+  singleWrap.appendChild(singlePlay);
+
+  // --- medley editor ---
+  const medleyWrap = document.createElement('div');
+  medleyWrap.style.display = 'none';
+
+  const head = document.createElement('div');
+  head.className = 'medley-head';
+  const headLabel = document.createElement('span');
+  headLabel.className = 'label';
+  head.appendChild(headLabel);
+  const playAllBtn = document.createElement('button');
+  playAllBtn.textContent = '▶ Play queue';
+  playAllBtn.onclick = () => QueuePlayer.playQueue(getMedley());
+  head.appendChild(playAllBtn);
+  const stopBtn = document.createElement('button');
+  stopBtn.textContent = '⏹ Stop';
+  stopBtn.onclick = () => QueuePlayer.stop();
+  head.appendChild(stopBtn);
+  medleyWrap.appendChild(head);
+
+  const list = document.createElement('ul');
+  list.className = 'medley-list';
+  medleyWrap.appendChild(list);
+
+  const addRow = document.createElement('div');
+  addRow.className = 'medley-add';
+  const addSel = document.createElement('select');
+  const addDef = document.createElement('option'); addDef.value = ''; addDef.textContent = '— pick track —'; addSel.appendChild(addDef);
+  for (const f of audio) {
+    const o = document.createElement('option'); o.value = f; o.textContent = f; addSel.appendChild(o);
+  }
+  addRow.appendChild(addSel);
+  const addBtn = document.createElement('button');
+  addBtn.textContent = '+ Add';
+  addBtn.onclick = () => {
+    if (!addSel.value) return;
+    const tracks = getMedley();
+    tracks.push({ file: addSel.value });
+    writeMedley(tracks);
+    addSel.value = '';
+    renderList();
+  };
+  addRow.appendChild(addBtn);
+  medleyWrap.appendChild(addRow);
+
+  const status = document.createElement('div');
+  status.className = 'medley-status';
+  status.innerHTML = '<span>idle</span>';
+  medleyWrap.appendChild(status);
+
+  function getMedley() {
+    if (Array.isArray(sc.music)) return sc.music;
+    // Normalise to a working array if we're in single/empty mode but
+    // the user added a track. Should not happen given the UI, but be
+    // defensive against manual edits.
+    sc.music = [];
+    return sc.music;
+  }
+  function writeMedley(tracks) {
+    sc.music = tracks;
+    markDirty();
+  }
+
+  function renderList() {
+    const tracks = getMedley();
+    list.innerHTML = '';
+    headLabel.textContent = tracks.length === 0
+      ? 'medley — 0 tracks'
+      : `medley — ${tracks.length} track${tracks.length === 1 ? '' : 's'}`;
+    tracks.forEach((t, i) => {
+      const li = document.createElement('li');
+      li.className = 'medley-row';
+      const idx = document.createElement('span');
+      idx.className = 'idx'; idx.textContent = (i + 1) + '.';
+      li.appendChild(idx);
+
+      const sel = document.createElement('select');
+      for (const f of audio) {
+        const o = document.createElement('option'); o.value = f; o.textContent = f; sel.appendChild(o);
+      }
+      sel.value = t.file || '';
+      sel.onchange = () => { t.file = sel.value; markDirty(); };
+      li.appendChild(sel);
+
+      const fadeAt = document.createElement('input');
+      fadeAt.type = 'number'; fadeAt.step = '0.1'; fadeAt.min = '0';
+      fadeAt.placeholder = 'fadeAt s';
+      fadeAt.value = (t.fadeAt !== undefined && t.fadeAt !== null) ? t.fadeAt : '';
+      fadeAt.title = 'crossfade into NEXT track at this many seconds (blank = auto)';
+      fadeAt.onchange = () => {
+        if (fadeAt.value === '') {
+          delete t.fadeAt;
+        } else {
+          t.fadeAt = parseFloat(fadeAt.value);
+        }
+        markDirty();
+      };
+      li.appendChild(fadeAt);
+
+      const up = document.createElement('button');
+      up.className = 'icon-btn'; up.textContent = '↑'; up.title = 'move up';
+      up.disabled = i === 0;
+      up.onclick = () => { moveTrack(i, i - 1); };
+      li.appendChild(up);
+
+      const down = document.createElement('button');
+      down.className = 'icon-btn'; down.textContent = '↓'; down.title = 'move down';
+      down.disabled = i === tracks.length - 1;
+      down.onclick = () => { moveTrack(i, i + 1); };
+      li.appendChild(down);
+
+      const playBtn = document.createElement('button');
+      playBtn.className = 'icon-btn play'; playBtn.textContent = '▶'; playBtn.title = 'play this track';
+      playBtn.onclick = () => QueuePlayer.playOne('assets/audio/' + t.file);
+      li.appendChild(playBtn);
+
+      // We need a 7th cell for delete — adjust the grid template via inline style.
+      li.style.gridTemplateColumns = '22px 1fr 56px 22px 22px 22px 22px';
+      const del = document.createElement('button');
+      del.className = 'icon-btn danger'; del.textContent = '✕'; del.title = 'remove';
+      del.onclick = () => {
+        tracks.splice(i, 1);
+        writeMedley(tracks);
+        renderList();
+      };
+      li.appendChild(del);
+
+      list.appendChild(li);
+    });
+  }
+
+  function moveTrack(from, to) {
+    if (to < 0 || to >= getMedley().length) return;
+    const tracks = getMedley();
+    const [t] = tracks.splice(from, 1);
+    tracks.splice(to, 0, t);
+    writeMedley(tracks);
+    renderList();
+  }
+
+  function render() {
+    const cur = detectMode();
+    syncModeButtons();
+    if (cur === 'medley') {
+      singleWrap.style.display = 'none';
+      medleyWrap.style.display = '';
+      renderList();
+    } else {
+      medleyWrap.style.display = 'none';
+      singleWrap.style.display = '';
+      // Refresh singleSel.value in case sc.music changed via the
+      // mode toggle (single→medley→single round-trip).
+      const v = typeof sc.music === 'string'
+        ? sc.music
+        : (sc.music && typeof sc.music === 'object' && !Array.isArray(sc.music) ? sc.music.file : '');
+      singleSel.value = v || '';
+    }
+  }
+
+  wrap.appendChild(singleWrap);
+  wrap.appendChild(medleyWrap);
+
+  // Subscribe to QueuePlayer status changes to highlight the
+  // currently-playing row + show progress text.
+  QueuePlayer.onStatus((s) => {
+    // Update row highlights
+    [...list.children].forEach((row, i) => {
+      row.classList.toggle('playing', s.mode === 'queue' && s.index === i);
+    });
+    if (s.mode === 'idle') {
+      status.classList.remove('now-playing');
+      status.innerHTML = '<span>idle</span>';
+    } else if (s.mode === 'one') {
+      status.classList.add('now-playing');
+      status.innerHTML = `<span>▶</span><span class="progress">${escapeHtml(s.file)}</span>`;
+    } else if (s.mode === 'queue') {
+      status.classList.add('now-playing');
+      const file = getMedley()[s.index]?.file || '?';
+      status.innerHTML = `<span>▶</span><span class="progress">${s.index + 1}/${getMedley().length} — ${escapeHtml(file)}</span>`;
+    }
+  });
+
+  render();
+  return wrap;
+}
+
+// ---------- sequential queue player (editor-only) ----------
+// Plays scene music tracks one-after-another. Unlike the in-game
+// MusicHandler (which crossfades by fadeAt in real time), this just
+// waits for each track to end before starting the next. The user
+// wants to audition each track in isolation while iterating on
+// story.json — not rehearse the crossfade timing.
+const QueuePlayer = (() => {
+  const listeners = new Set();
+  let state = { mode: 'idle', index: -1, file: null };
+  let currentAudio = null;
+  let onEndedNext = null;
+
+  function emit() {
+    for (const fn of listeners) fn(state);
+  }
+  function setState(s) {
+    state = s;
+    emit();
+  }
+  function stopInternal() {
+    if (onEndedNext) { clearTimeout(onEndedNext); onEndedNext = null; }
+    if (currentAudio) {
+      try { currentAudio.pause(); } catch (e) {}
+      currentAudio = null;
+    }
+  }
+  return {
+    onStatus(fn) { listeners.add(fn); fn(state); return () => listeners.delete(fn); },
+    playOne(src) {
+      stopInternal();
+      const a = new Audio(src);
+      currentAudio = a;
+      setState({ mode: 'one', index: -1, file: src.split('/').pop() });
+      a.play().catch((e) => {
+        // Browser blocked autoplay — usually means the user hasn't
+        // interacted with the editor yet. The play button click
+        // counts as the gesture though; this catch is for edge cases.
+        console.warn('audio play() rejected:', e);
+      });
+      a.onended = () => {
+        if (currentAudio === a) {
+          currentAudio = null;
+          setState({ mode: 'idle', index: -1, file: null });
+        }
+      };
+    },
+    playQueue(tracks) {
+      stopInternal();
+      if (!tracks || tracks.length === 0) return;
+      const playIndex = (i) => {
+        if (i >= tracks.length) {
+          currentAudio = null;
+          setState({ mode: 'idle', index: -1, file: null });
+          return;
+        }
+        const t = tracks[i];
+        const a = new Audio('assets/audio/' + t.file);
+        currentAudio = a;
+        setState({ mode: 'queue', index: i, file: t.file });
+        a.play().catch((e) => {
+          console.warn('audio play() rejected:', e);
+          // Skip to next track so we don't silently hang the queue.
+          onEndedNext = setTimeout(() => playIndex(i + 1), 200);
+        });
+        a.onended = () => {
+          if (currentAudio === a) currentAudio = null;
+          playIndex(i + 1);
+        };
+      };
+      playIndex(0);
+    },
+    stop() {
+      stopInternal();
+      setState({ mode: 'idle', index: -1, file: null });
+    },
+    _state() { return state; },
+  };
+})();
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
 }
 async function makeIconPicker(it) {
   const wrap = document.createElement('div');

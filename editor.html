@@ -200,6 +200,58 @@
     padding: 6px; display: flex; align-items: center; justify-content: center;
     min-height: 64px; }
   .icon-preview img { max-width: 100%; max-height: 96px; image-rendering: pixelated; }
+
+  /* ---------- music queue editor ---------- */
+  .music-mode { display: flex; gap: 4px; margin-bottom: 6px; }
+  .music-mode button { flex: 1; font-size: 11px; padding: 4px 6px; }
+  .music-mode button.active { background: #1f4d80; border-color: #3470bd; color: #cce6ff; }
+
+  .medley-head { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
+  .medley-head .label { color: #6c7280; font-size: 11px; flex: 1; }
+  .medley-head button { font-size: 11px; padding: 3px 8px; }
+
+  .medley-list { list-style: none; margin: 0 0 6px; padding: 0;
+    max-height: 220px; overflow-y: auto; border: 1px solid #252b31;
+    border-radius: 3px; background: #0a0e12; }
+  .medley-list:empty::after {
+    content: 'no tracks — add one below';
+    display: block; padding: 10px; color: #6c7280;
+    font-style: italic; font-size: 11px; text-align: center;
+  }
+  .medley-row {
+    display: grid; grid-template-columns: 22px 1fr 56px 22px 22px 22px;
+    gap: 4px; align-items: center; padding: 4px 6px;
+    border-bottom: 1px solid #161b20;
+  }
+  .medley-row:last-child { border-bottom: none; }
+  .medley-row.playing { background: #1f4d80; }
+  .medley-row .idx { color: #6c7280; font-size: 11px; text-align: center; }
+  .medley-row select { padding: 2px 4px; font-size: 11px; min-width: 0; }
+  .medley-row input[type=number] { padding: 2px 4px; font-size: 11px;
+    text-align: right; }
+  .medley-row .icon-btn {
+    background: #161b22; border: 1px solid #30363d; border-radius: 3px;
+    color: #d9dde3; cursor: pointer; padding: 0; width: 22px; height: 22px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; line-height: 1;
+  }
+  .medley-row .icon-btn:hover { background: #2a313c; }
+  .medley-row .icon-btn.play { color: #6cba6c; }
+  .medley-row .icon-btn.danger:hover { background: #4d1d1d; border-color: #6e2929; }
+  .medley-row .icon-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+  .medley-row.playing .icon-btn.play { background: #6cba6c; color: #0d1117; }
+
+  .medley-add { display: flex; gap: 4px; margin-bottom: 6px; }
+  .medley-add select { flex: 1; }
+  .medley-add button { font-size: 11px; padding: 4px 10px; }
+
+  .medley-status {
+    margin-top: 4px; padding: 5px 8px; background: #0a0e12;
+    border: 1px solid #252b31; border-radius: 3px; font-size: 11px;
+    color: #6c7280; display: flex; align-items: center; gap: 6px;
+  }
+  .medley-status.now-playing { color: #6cba6c; border-color: #2a4d2a; }
+  .medley-status .progress { flex: 1; color: #d9dde3; }
 </style>
 </head>
 <body>
