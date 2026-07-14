@@ -65,7 +65,7 @@ These song shapes are powered by 4 composer extensions in `tools/make_scene_loop
 
 ## Adding a new scene
 
-The composer keeps `schedule_phrase`, `schedule_drums`, `schedule_held_pad`, `compose` as the only places that emit MIDI events. To give a new scene a real shape:
+The composer keeps `schedule_note_sequence`, `schedule_drums`, `schedule_pad_chord_block`, `compose` as the only places that emit MIDI events. To give a new scene a real shape:
 
 1. Pick a 4-bar-chunk song arc and lay it out in bar-band terms: `intro (0-3)`, `build (4-7)`, `peak (8-11)`, `break (12-15)`, `rebuild (16-19)`, `release (20-23)`.
 2. Add `lead_vel_ramp` / `bass_vel_ramp` if the line should change volume across the loop.

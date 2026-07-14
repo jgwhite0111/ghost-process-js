@@ -237,7 +237,7 @@ def setup_channels(cfg: dict) -> list[Event]:
     return ev
 
 
-def schedule_held_pad(cfg: dict) -> list[Event]:
+def schedule_pad_chord_block(cfg: dict) -> list[Event]:
     """Hold pad chord(s) across their bar ranges, release at LOOP_TICKS - 1.
 
     `cfg["pad_chords"]` is a list of (start_bar, [notes]) tuples. The
@@ -252,9 +252,13 @@ def schedule_held_pad(cfg: dict) -> list[Event]:
     ev: list[Event] = []
     bar = PPQ * BEATS_PER_BAR
     loop_ticks = cfg["bars"] * bar
-    for start_bar, notes in cfg["pad_chords"]:
+    chord_starts = [int(start_bar * bar) for start_bar, _ in cfg["pad_chords"]]
+    for i, (start_bar, notes) in enumerate(cfg["pad_chords"]):
         t_on = int(start_bar * bar)
-        t_off = loop_ticks - 1
+        # A chord owns the range up to the next chord.  The old composer held
+        # every chord to the end of the loop, so each change merely piled a
+        # new harmony on top of all previous ones.
+        t_off = chord_starts[i + 1] - 1 if i + 1 < len(chord_starts) else loop_ticks - 1
         for n in notes:
             ev.append(note_on(CH_PAD, n, 70, t_on))
             ev.append(note_off(CH_PAD, n, t_off))
@@ -284,7 +288,7 @@ def schedule_held_pad(cfg: dict) -> list[Event]:
     return ev
 
 
-def schedule_phrase(cfg: dict, channel: int, phrases: list, base_vel: int = 80,
+def schedule_note_sequence(cfg: dict, channel: int, phrases: list, base_vel: int = 80,
                     mod_ramp: tuple = (0, 0), vel_ramp: tuple | None = None) -> list[Event]:
     """Schedule a single-channel melodic phrase.
 
@@ -305,24 +309,29 @@ def schedule_phrase(cfg: dict, channel: int, phrases: list, base_vel: int = 80,
             val = int(mod_ramp[0] + (mod_ramp[1] - mod_ramp[0]) * frac)
             ev.append(cc(channel, 1, val, t))
     for start, notes in phrases:
-        # Compute the per-note base velocity, scaled by vel_ramp if any.
-        if vel_ramp is None or vel_ramp[0] == vel_ramp[1]:
-            scaled_base = base_vel
-        else:
-            frac = start / max(1, loop_ticks)
-            scaled_base = int(vel_ramp[0] + (vel_ramp[1] - vel_ramp[0]) * frac)
+        # Pattern entries are sequential phrases.  Their note durations advance
+        # a local cursor; treating every tuple as if it began at `start` stacked
+        # the whole phrase into one chord and left the rest of the section bare.
+        cursor = start
         for note_info in notes:
             if len(note_info) == 2:
                 key, dur = note_info
                 vdelta = 0
             else:
                 key, dur, vdelta = note_info
-            v = max(20, min(127, scaled_base + vdelta))
-            if key is None:
-                # rest — no note_on, but advance the cursor by dur
-                continue
-            ev.append(note_on(channel, key, v, start))
-            ev.append(note_off(channel, key, start + dur - 1))
+            if cursor >= loop_ticks:
+                break
+            dur = min(dur, loop_ticks - cursor)
+            if key is not None:
+                if vel_ramp is None or vel_ramp[0] == vel_ramp[1]:
+                    scaled_base = base_vel
+                else:
+                    frac = cursor / max(1, loop_ticks)
+                    scaled_base = int(vel_ramp[0] + (vel_ramp[1] - vel_ramp[0]) * frac)
+                v = max(20, min(127, scaled_base + vdelta))
+                ev.append(note_on(channel, key, v, cursor))
+                ev.append(note_off(channel, key, cursor + dur - 1))
+            cursor += dur
     return ev
 
 
@@ -387,13 +396,13 @@ def compose(cfg: dict) -> list[Event]:
     ev: list[Event] = []
     ev += setup_channels(cfg)
     if cfg.get("pad"):
-        ev += schedule_held_pad(cfg)
+        ev += schedule_pad_chord_block(cfg)
     if cfg.get("bass"):
-        ev += schedule_phrase(cfg, CH_BASS, cfg["bass_pattern"],
+        ev += schedule_note_sequence(cfg, CH_BASS, cfg["bass_pattern"],
                               base_vel=cfg["bass"].get("vol", 85),
                               vel_ramp=cfg.get("bass_vel_ramp"))
     if cfg.get("lead"):
-        ev += schedule_phrase(cfg, CH_LEAD, cfg["lead_pattern"],
+        ev += schedule_note_sequence(cfg, CH_LEAD, cfg["lead_pattern"],
                               base_vel=cfg["lead"].get("vol", 90),
                               mod_ramp=cfg.get("lead_mod_ramp", (0, 0)),
                               vel_ramp=cfg.get("lead_vel_ramp"))
@@ -4837,87 +4846,94 @@ def _build_ship_engine_e_patterns():
     cfg["drum_pattern"] = [(t, n, v) for t, notes in drum_ev for n, _, v in notes]
 _build_ship_engine_e_patterns()
 
-# ---------- 9. alley_confrontation_b — tranquil counter-melody at full pad ---
+# ---------- 9. alley_confrontation_b — the confrontation, ACTUALLY a tune -
 # A-side: 16 bars @ 90 BPM, F#dim7→C7b9→A#dim7→F7b9 walking bass, Pad 4
-# Choir on ch0, FX 6 Goblin on ch2 whisper. B-side complements: same BPM,
-# same chord cycle (F# Phrygian center, root 30 = F#1), same patches — but
-# pad is already at peak from bar 0, bass drone on F# holds the floor, and
-# a counter-melody enters UP an octave at bar 4 with a calmer 4th-mode
-# Phrygian pull. Result: when crossfade lands ~bar 8 (halfway through A),
-# the listener hears the Choir pad swell up and a melodic voice join in
-# over the dim7 cycle — the "confrontation" continues but feels held/
-# sustained rather than tense.
+# Choir on ch0. The lead is a connected F#-Phrygian melody that runs
+# through ALL 16 bars — no empty 4-bar gaps. Bass drone holds the floor
+# while a counter-melody enters at bar 4 with a calmer Phrygian pull and
+# builds to A5 across the cycle. REWRITE 2026-07-14: the previous
+# version had only 3 explicit lead entries at bars 4/8/12, leaving bars
+# 0-3, 5-7, 9-11, 13-15 silent because the composer used to stack all
+# phrase notes at `start`. Even after fixing the composer, the explicit
+# entries covered only 12 of 16 bars. Now the lead is a continuous
+# 8th-note melodic line throughout the entire 16-bar loop.
 SCENES_B["alley_confrontation_b"] = {
     "name": "alley_confrontation_b",
-    "bars": 16,                                 # same bar count as A (47.7s)
-    "bpm": 90,                                  # same BPM as A
-    "lead": {"prog": 91, "vol": 85, "pan": 64, "reverb": 80, "mod_init": 30},  # Pad 4 (Choir) — same as A
-    "bass": {"prog": 35, "vol": 75, "reverb": 25},  # Fretless Bass — same as A
-    "pad":  {"prog": 54, "vol": 90, "pan": 64, "reverb": 95},  # Synth Choir — warmer than A's pad (was 100=SFX)
-    "drums": {"vol": 0, "reverb": 0},           # no percussion (matches A)
-    # Pad already at peak (no ramp). Chord cycle follows A's diminished
-    # walk: F#dim7 (bar 0-3) → C7b9 (bar 4-7) → A#dim7 (bar 8-11) →
-    # F7b9 (bar 12-15). B-side holds the same chord for 4 bars each —
-    # the "stillness" of confrontation rather than the walking-bass push.
-    # FIX 2026-07-14: pad_chords values are BARS (not ticks).
-    # Previously PPQ*16/PPQ*32/PPQ*48 — but schedule_held_pad multiplies the
-    # start value by `bar` (= PPQ * BEATS_PER_BAR = 384) so PPQ*16 became
-    # bar 1536 (a 92-min tick offset), leaving bars 13-23 silent in the MP3.
+    "bars": 16,
+    "bpm": 90,
+    "lead": {"prog": 91, "vol": 88, "pan": 64, "reverb": 80, "mod_init": 30},
+    "bass": {"prog": 35, "vol": 78, "reverb": 25},
+    "pad":  {"prog": 54, "vol": 82, "pan": 64, "reverb": 90},
+    "drums": {"vol": 36, "reverb": 38},
+    "lead_vel_ramp": (82, 102),
+    "lead_mod_ramp": (30, 56),
+    "key_intervals": PHRYGIAN,
+    "root": 6,
     "pad_chords": [
         (0,  [N(6,3), N(9,3), N(0,4), N(3,4)]),       # F#dim7 (bar 0-3)
         (4,  [N(0,3), N(4,3), N(10,3), N(1,4)]),      # C7b9   (bar 4-7)
         (8,  [N(10,2), N(1,3), N(6,3), N(8,3)]),      # A#dim7 (bar 8-11)
         (12, [N(5,3), N(9,3), N(2,4), N(4,4)]),       # F7b9   (bar 12-15)
     ],
-    "pad_vel_ramp": (85, 95, 16),                # already at peak, gentle swell
-    "key_intervals": PHRYGIAN,                   # F# Phrygian (matches A's dim7 center)
-    "root": 6,                                   # F# = semitone 6 from C
-    # Bass: F# drone on bars 0-3 (matches A's first chord), then gentle
-    # 5th motion every 2 bars through the cycle. Higher vel than A's
-    # walking bass to keep signal above the -50dB silenceremove threshold
-    # during pad decay.
-    "bass_pattern": [
-        # bars 0-3: F# drone (octave doubling for warmth)
-        (0, [(N(6,1), PPQ*16, 0), (N(6,2), PPQ*16, 0)]),
-        # bars 4-7: C drone (with low F# 5th color)
-        (PPQ*16, [(N(0,1), PPQ*16, 0), (N(0,2), PPQ*16, 0)]),
-        # bars 8-11: A# drone
-        (PPQ*32, [(N(10,1), PPQ*16, 0), (N(10,2), PPQ*16, 0)]),
-        # bars 12-15: F drone (root of F7b9)
-        (PPQ*48, [(N(5,1), PPQ*16, 0), (N(5,2), PPQ*16, 0)]),
-    ],
-    # COUNTER-MELODY: Choir pad sustains a slow melodic arc. Enters at
-    # bar 4 (after the F#dim7 opening dissonance resolves to C7b9) so
-    # the B-side opens with the drone alone — same shape as cold_open_b
-    # but on a tighter dim7 cycle. Climbs Eb5 → F#5 → A5 in 4-bar
-    # phrases, descends G5 → F#5 across the last 4 bars for the fade.
-    # Vel ramp 75→105 keeps the counter audible over the held bass.
-    "lead_vel_ramp": (75, 105),
-    "lead_mod_ramp": (30, 60),
-    "lead_pattern": [
-        # bars 4-7 (tick 16-31): first melodic phrase over C7b9
-        (PPQ*16, [
-            (N(3,5), PPQ*8, -5),                    # Eb5 (the bII pull)
-            (N(5,5), PPQ*8, 0),                     # F#5 (root)
-        ]),
-        # bars 8-11 (tick 32-47): climb to A5 over A#dim7
-        (PPQ*32, [
-            (N(3,5), PPQ*8, 0),                     # Eb5
-            (N(9,5), PPQ*8, 3),                     # A5 (the 5th, highest point)
-            (N(7,5), PPQ*8, 0),                     # G5
-        ]),
-        # bars 12-15 (tick 48-63): descend back over F7b9, settle on F#
-        (PPQ*48, [
-            (N(7,5), PPQ*8, -3),                    # G5
-            (N(5,5), PPQ*8, -5),                    # F#5
-            (N(6,5), PPQ*8, -8),                    # Gb5 (Phrygian b2 ghost note, then resolve)
-            (N(5,5), PPQ*8, -10),                   # F#5 held (tail)
-        ]),
-    ],
-    "pad_breakdowns": [],
-    "cross_boundary_crash": False,                # no drums
-    "drum_pattern": [],
+    "pad_vel_ramp": (76, 92, 16),
+    "bass_pattern": [], "lead_pattern": [], "drum_pattern": [],
 }
+
+def _build_alley_confrontation_b_patterns():
+    """Connected Choir pad melody over the F# Phrygian dim7 cycle.
+
+    Each of the 16 bars gets a full 4-note melodic phrase (4 quarters
+    or 8 eighths), so every bar carries a recognisable tune — no
+    empty 4-bar windows like the old 3-entry pattern."""
+    cfg = SCENES_B["alley_confrontation_b"]
+    bar = PPQ * BEATS_PER_BAR
+    eighth = PPQ // 2
+    lead_ev, bass_ev, drum_ev = [], [], []
+    # Phrygian-friendly melody that walks the dim7 cycle.  Each row
+    # is 16 notes (one bar of 8th notes).  Climbs in bars 0-7, peaks
+    # in bars 8-11, descends in bars 12-15.
+    melody = [
+        # bars 0-3 over F#dim7 (lower register, drone-set)
+        [N(6,4),N(8,4),N(9,4),N(8,4), N(6,4),N(8,4),N(9,4),N(11,4),
+         N(9,4),N(6,4),N(3,5),N(1,5), N(0,5),N(3,5),N(1,5),N(0,5)],
+        [N(1,5),N(0,5),N(10,4),N(8,4), N(9,4),N(11,4),N(0,5),N(3,5),
+         N(1,5),N(3,5),N(5,5),N(3,5), N(1,5),N(0,5),N(10,4),N(8,4)],
+        # bars 4-7 over C7b9 (climbing register, counter-melody starts)
+        [N(8,4),N(9,4),N(11,4),N(0,5), N(3,5),N(1,5),N(0,5),N(10,4),
+         N(8,4),N(10,4),N(0,5),N(1,5), N(3,5),N(5,5),N(3,5),N(1,5)],
+        [N(0,5),N(3,5),N(5,5),N(3,5), N(1,5),N(0,5),N(10,4),N(8,4),
+         N(6,4),N(8,4),N(9,4),N(8,4), N(6,4),N(8,4),N(9,4),N(11,4)],
+        # bars 8-11 over A#dim7 (high register, climax build)
+        [N(10,4),N(1,5),N(3,5),N(6,5), N(8,5),N(6,5),N(3,5),N(1,5),
+         N(10,4),N(1,5),N(6,5),N(8,5), N(6,5),N(3,5),N(1,5),N(10,4)],
+        [N(1,5),N(3,5),N(6,5),N(8,5), N(6,5),N(3,5),N(1,5),N(10,4),
+         N(8,4),N(6,4),N(5,4),N(3,4), N(5,4),N(6,4),N(8,4),N(6,4)],
+        # bars 12-15 over F7b9 (descend back toward F#5 anchor)
+        [N(5,5),N(4,5),N(2,5),N(0,5), N(9,4),N(0,5),N(2,5),N(4,5),
+         N(5,5),N(4,5),N(2,5),N(0,5), N(9,4),N(8,4),N(6,4),N(5,4)],
+        [N(3,5),N(5,5),N(6,5),N(8,5), N(6,5),N(5,5),N(3,5),N(1,5),
+         N(0,5),N(1,5),N(3,5),N(1,5), N(0,5),N(10,4),N(8,4),N(6,4)],
+    ]
+    bass_roots = [N(6,1), N(6,1), N(6,1), N(6,1),
+                  N(0,2), N(0,2), N(0,2), N(0,2),
+                  N(10,1), N(10,1), N(10,1), N(10,1),
+                  N(5,1),  N(5,1),  N(5,1),  N(5,1)]
+    bass_fifths = [N(0,2)]*4 + [N(6,2)]*4 + [N(3,2)]*4 + [N(10,2)]*4
+    # Pad_vel ramp rolls over 16 bars (4 reps of 4-bar dim7 cycle)
+    for b in range(16):
+        lead_ev.append((b*bar, [(n, eighth, 3 if i in (0,4,8,12) else 0)
+                                for i,n in enumerate(melody[b % 8])]))
+        r = bass_roots[b]; f = bass_fifths[b]
+        bass_line = [r, f, r+12, f, r, f, r+12, f]
+        bass_ev.append((b*bar, [(n, eighth, -3 if i % 2 else 0)
+                                for i,n in enumerate(bass_line)]))
+        # Restrained pulse: kick on 1+3, brush-snare on 2+4
+        drum_ev += [(b*bar, 36, 36), (b*bar+PPQ*2, 36, 30),
+                    (b*bar+PPQ, 38, 28), (b*bar+PPQ*3, 38, 30)]
+    cfg["lead_pattern"] = lead_ev
+    cfg["bass_pattern"] = bass_ev
+    cfg["drum_pattern"] = drum_ev
+_build_alley_confrontation_b_patterns()
 
 # -----------------------------------------------------------------------------
 # MEDLEY map — which scenes have a B-side, and where to fade
@@ -4925,181 +4941,144 @@ SCENES_B["alley_confrontation_b"] = {
 # fadeAt = seconds into scene entry when crossfade from A→B starts.
 # Omit fadeAt to default to halfway through A's loop length.
 # -----------------------------------------------------------------------------
-# ---------- 9c. alley_confrontation_c — dim7 walk one more cycle -----
-# 16 bars @ 90 BPM. The confrontation continues. Pad walks the dim7
-# cycle one more rotation: F#dim7 → C7b9 → A#dim7 → F7b9. Lead
-# (Choir Pad) extends the melodic arc into a held high note at the end.
+# ---------- 9c. alley_confrontation_c — gathering menace ---------------
+# 16 bars @ 90 BPM. A connected F#-Phrygian choir melody runs through all
+# four chord regions while the bass moves on every beat. This is the tense
+# escalation of the alley family, not an arrangement of isolated stabs.
 SCENES_B["alley_confrontation_c"] = {
     "name": "alley_confrontation_c",
     "bars": 16,
     "bpm": 90,
-    "lead": {"prog": 91, "vol": 85, "pan": 64, "reverb": 85, "mod_init": 30},
-    "bass": {"prog": 35, "vol": 75, "reverb": 30},
-    "pad":  {"prog": 54, "vol": 90, "pan": 64, "reverb": 100},
-    "drums": {"vol": 0, "reverb": 0},
-    "lead_vel_ramp": (80, 110),
-    "lead_mod_ramp": (30, 70),
+    "lead": {"prog": 91, "vol": 94, "pan": 64, "reverb": 76, "mod_init": 24},
+    "bass": {"prog": 35, "vol": 82, "reverb": 25},
+    "pad":  {"prog": 54, "vol": 76, "pan": 64, "reverb": 88},
+    "drums": {"vol": 42, "reverb": 45},
+    "lead_vel_ramp": (84, 106),
+    "lead_mod_ramp": (24, 54),
     "key_intervals": PHRYGIAN,
-    "root": 6,                                 # F# Phrygian
-    # FIX 2026-07-14: pad_chords values are BARS, not ticks.
-    # Previously PPQ*16/32/48 — schedule_held_pad multiplies by `bar=384`
-    # so PPQ*16 became bar 1536, leaving bars 13-23 silent.
+    "root": 6,
     "pad_chords": [
-        (0,  [N(6,3), N(9,3), N(0,4), N(3,4)]),       # F#dim7
-        (4,  [N(0,3), N(4,3), N(10,3), N(1,4)]),      # C7b9
-        (8,  [N(10,2), N(1,3), N(6,3), N(8,3)]),      # A#dim7
-        (12, [N(5,3), N(9,3), N(2,4), N(4,4)]),       # F7b9
+        (0,  [N(6,3), N(9,3), N(0,4), N(3,4)]),
+        (4,  [N(0,3), N(4,3), N(10,3), N(1,4)]),
+        (8,  [N(10,2), N(1,3), N(6,3), N(8,3)]),
+        (12, [N(5,3), N(9,3), N(2,4), N(4,4)]),
     ],
-    "pad_vel_ramp": (85, 95, 16),
-    "lead_pattern": [],
-    "bass_pattern": [],
-    "drum_pattern": [],
+    "pad_vel_ramp": (72, 88, 16),
+    "lead_pattern": [], "bass_pattern": [], "drum_pattern": [],
 }
 
 def _build_alley_confrontation_c_patterns():
-    """Dim7 walk one more rotation, melodic arc climbs to A5."""
+    """Connected melodic escalation over the alley diminished cycle."""
     cfg = SCENES_B["alley_confrontation_c"]
     bar = PPQ * BEATS_PER_BAR
-    bass_ev = []
-    lead_ev = []
-    # Bass: same drone cycle, with 5th color on C7b9 and F7b9
-    bass_ev.append((0, [(N(6,1), PPQ*16, 0), (N(6,2), PPQ*16, 0)]))         # F# drone
-    bass_ev.append((PPQ*16, [(N(0,1), PPQ*16, 0), (N(6,2), PPQ*16, 0)]))      # C drone + F# 5th
-    bass_ev.append((PPQ*32, [(N(10,1), PPQ*16, 0), (N(10,2), PPQ*16, 0)]))   # A# drone
-    bass_ev.append((PPQ*48, [(N(5,1), PPQ*16, 0), (N(0,2), PPQ*16, 0)]))      # F drone + C 5th
-    cfg["bass_pattern"] = bass_ev
-    # Lead: extended melodic arc — climbs Eb5→F#5→A5 then descends to F#5
-    lead_ev.append((PPQ*16, [
-        (N(3,5), PPQ*8, -5),                    # Eb5
-        (N(5,5), PPQ*8, 0),                     # F#5
-    ]))
-    lead_ev.append((PPQ*32, [
-        (N(3,5), PPQ*8, 0),                     # Eb5
-        (N(9,5), PPQ*8, 3),                     # A5 (climax)
-        (N(7,5), PPQ*8, 0),                     # G5
-    ]))
-    lead_ev.append((PPQ*48, [
-        (N(7,5), PPQ*8, -3),                    # G5
-        (N(5,5), PPQ*8, -5),                    # F#5
-        (N(3,5), PPQ*8, -8),                    # Eb5
-        (N(5,5), PPQ*8, -10),                   # F#5 held (tail)
-    ]))
-    cfg["lead_pattern"] = lead_ev
+    eighth = PPQ // 2
+    lead_ev, bass_ev, drum_ev = [], [], []
+    phrases = [
+        [N(6,4),N(8,4),N(9,4),N(0,5), N(11,4),N(9,4),N(8,4),N(6,4),
+         N(3,5),N(1,5),N(0,5),N(8,4), N(6,4),N(8,4),N(9,4),N(11,4)],
+        [N(0,5),N(1,5),N(4,5),N(3,5), N(1,5),N(0,5),N(10,4),N(8,4),
+         N(6,4),N(8,4),N(10,4),N(1,5), N(0,5),N(10,4),N(8,4),N(6,4)],
+        [N(10,4),N(1,5),N(3,5),N(6,5), N(8,5),N(6,5),N(3,5),N(1,5),
+         N(10,4),N(1,5),N(6,5),N(8,5), N(6,5),N(3,5),N(1,5),N(10,4)],
+        [N(5,5),N(4,5),N(2,5),N(0,5), N(9,4),N(0,5),N(2,5),N(4,5),
+         N(5,5),N(4,5),N(2,5),N(0,5), N(9,4),N(8,4),N(6,4),N(5,4)],
+    ]
+    roots = [(N(6,1),N(0,2)), (N(0,2),N(6,2)),
+             (N(10,1),N(5,2)), (N(5,1),N(0,2))]
+    for section in range(4):
+        for local_bar in range(4):
+            b = section * 4 + local_bar
+            notes = phrases[section][local_bar*4:(local_bar+1)*4]
+            lead_ev.append((b*bar, [(n, PPQ, (i in (0,3))*4) for i,n in enumerate(notes)]))
+            r, fifth = roots[section]
+            bass_line = [r, fifth, r+12, fifth, r, fifth, r+12, fifth]
+            bass_ev.append((b*bar, [(n, eighth, -4 if i%2 else 0) for i,n in enumerate(bass_line)]))
+            drum_ev += [(b*bar,36,38),(b*bar+PPQ*2,36,32),
+                        (b*bar+PPQ,38,30),(b*bar+PPQ*3,38,32)]
+    cfg["lead_pattern"], cfg["bass_pattern"], cfg["drum_pattern"] = lead_ev, bass_ev, drum_ev
 _build_alley_confrontation_c_patterns()
 
-# ---------- 9d. alley_confrontation_d — single low drone, the silence -
-# 16 bars @ 90 BPM. Pad goes silent after bar 0 (dim7 stab). ONE held
-# low F#2 with heavy vibrato rings out alone. The alley is empty.
+# ---------- 9d. alley_confrontation_d — pursuit pulse ------------------
+# The former 20-bar single drone is replaced by an 8-bar tense pursuit cue:
+# a low ostinato and a complete, repeating choir melody with no empty bars.
 SCENES_B["alley_confrontation_d"] = {
-    "name": "alley_confrontation_d",
-    "bars": 20,
-    "bpm": 90,
-    "lead": {"prog": 91, "vol": 80, "pan": 64, "reverb": 95, "mod_init": 0},
-    "bass": {"prog": 35, "vol": 60, "reverb": 60},
-    "pad":  {"prog": 54, "vol": 25, "pan": 64, "reverb": 100},
-    "drums": {"vol": 0, "reverb": 0},
-    "lead_vel_ramp": (90, 100),
-    "lead_mod_ramp": (0, 110),
-    "key_intervals": PHRYGIAN,
-    "root": 6,                                 # F# Phrygian (anchor)
+    "name": "alley_confrontation_d", "bars": 8, "bpm": 96,
+    "lead": {"prog": 91, "vol": 96, "pan": 68, "reverb": 70, "mod_init": 18},
+    "bass": {"prog": 35, "vol": 88, "reverb": 20},
+    "pad": {"prog": 54, "vol": 72, "pan": 58, "reverb": 82},
+    "drums": {"vol": 52, "reverb": 38},
+    "lead_vel_ramp": (88,108), "lead_mod_ramp": (18,42),
+    "key_intervals": PHRYGIAN, "root": 6,
     "pad_chords": [
-        (0, [N(5,3), N(8,3), N(11,3), N(2,4)]),        # F dim7 (bar 0 only)
+        (0,[N(6,3),N(9,3),N(0,4),N(3,4)]),
+        (2,[N(5,3),N(8,3),N(11,3),N(2,4)]),
+        (4,[N(1,3),N(4,3),N(7,3),N(10,3)]),
+        (6,[N(0,3),N(4,3),N(10,3),N(1,4)]),
     ],
-    "pad_breakdowns": [(1, 15)],
-    "pad_vel_ramp": (40, 20, 16),
-    "lead_pattern": [],
-    "bass_pattern": [],
-    "drum_pattern": [],
+    "pad_vel_ramp": (68,84,8),
+    "lead_pattern": [], "bass_pattern": [], "drum_pattern": [],
 }
 
 def _build_alley_confrontation_d_patterns():
-    """Single low F# drone with heavy vibrato, silence otherwise."""
-    cfg = SCENES_B["alley_confrontation_d"]
-    bar = PPQ * BEATS_PER_BAR
-    bass_ev = []
-    lead_ev = []
-    # Bar 0: F dim7 stab
-    lead_ev.append((0, [
-        (N(5,4), PPQ, 0), (N(8,4), PPQ, 0),
-        (N(11,4), PPQ, 0), (N(2,5), PPQ, 0),
-    ]))
-    # Bars 1-15: held F#2 with heavy vibrato
-    lead_ev.append((PPQ*4, [(N(6,2), PPQ*76, 0)]))
-    cfg["lead_pattern"] = lead_ev
-    # Bass: F#1 drone for bar 0, then silence
-    bass_ev.append((0, [(N(6,1), PPQ*4, 0)]))
-    bass_ev.append((PPQ*4, [(None, PPQ*76, 0)]))
-    cfg["bass_pattern"] = bass_ev
+    """Eight bars of connected pursuit melody and heartbeat ostinato."""
+    cfg=SCENES_B["alley_confrontation_d"]; bar=PPQ*BEATS_PER_BAR; eighth=PPQ//2
+    lead_ev=[]; bass_ev=[]; drum_ev=[]
+    melody=[
+      [N(6,4),N(8,4),N(9,4),N(8,4),N(6,4),N(3,5),N(1,5),N(0,5)],
+      [N(8,4),N(9,4),N(11,4),N(0,5),N(3,5),N(1,5),N(0,5),N(8,4)],
+      [N(5,4),N(8,4),N(11,4),N(2,5),N(5,5),N(2,5),N(11,4),N(8,4)],
+      [N(5,4),N(4,4),N(2,4),N(4,4),N(5,4),N(8,4),N(11,4),N(2,5)],
+      [N(1,5),N(4,5),N(7,5),N(10,5),N(7,5),N(4,5),N(1,5),N(10,4)],
+      [N(7,4),N(10,4),N(1,5),N(4,5),N(7,5),N(4,5),N(1,5),N(10,4)],
+      [N(0,5),N(1,5),N(4,5),N(10,4),N(8,4),N(6,4),N(5,4),N(4,4)],
+      [N(3,5),N(1,5),N(0,5),N(10,4),N(8,4),N(6,4),N(5,4),N(6,4)],
+    ]
+    bass_roots=[N(6,1),N(6,1),N(5,1),N(5,1),N(1,1),N(1,1),N(0,2),N(0,2)]
+    for b in range(8):
+        lead_ev.append((b*bar,[(n,eighth,5 if i in (0,4) else 0) for i,n in enumerate(melody[b])]))
+        r=bass_roots[b]; bass_ev.append((b*bar,[(n,eighth,0) for n in [r,r+12,r,r+7,r,r+12,r+7,r]]))
+        drum_ev += [(b*bar,36,48),(b*bar+PPQ*2,36,42),(b*bar+PPQ,38,36),(b*bar+PPQ*3,38,38)]
+        for i in range(8): drum_ev.append((b*bar+i*eighth,42,25 if i%2 else 32))
+    cfg["lead_pattern"],cfg["bass_pattern"],cfg["drum_pattern"]=lead_ev,bass_ev,drum_ev
 _build_alley_confrontation_d_patterns()
 
-# ---------- 9e. alley_confrontation_e — recovery, dim7 walk returns -----
-# 16 bars @ 90 BPM. Held F#2 continues from D for bars 0-1, then dim7
-# walk returns at bar 2 with A's opening shape. Last 4 bars mirror A's
-# opening chord cycle for seamless loop.
+# ---------- 9e. alley_confrontation_e — release and loop seam ----------
+# A 16-bar answer to C/D. The melody descends and resolves but remains active
+# in every bar; walking bass and a restrained pulse lead cleanly back to A.
 SCENES_B["alley_confrontation_e"] = {
-    "name": "alley_confrontation_e",
-    "bars": 16,
-    "bpm": 90,
-    "lead": {"prog": 91, "vol": 85, "pan": 64, "reverb": 85, "mod_init": 30},
-    "bass": {"prog": 35, "vol": 75, "reverb": 25},
-    "pad":  {"prog": 54, "vol": 90, "pan": 64, "reverb": 95},
-    "drums": {"vol": 0, "reverb": 0},
-    "lead_vel_ramp": (75, 100),
-    "lead_mod_ramp": (110, 30),                  # vibrato decays as alley recovers
-    "key_intervals": PHRYGIAN,
-    "root": 6,                                 # F# Phrygian
-    # FIX 2026-07-14: pad_chords values are BARS, not ticks.
-    # Previously PPQ*16/32/48 — schedule_held_pad multiplies by `bar=384`
-    # so PPQ*16 became bar 1536, leaving bars 13-23 silent.
-    "pad_chords": [
-        (0,  [N(6,3), N(9,3), N(0,4), N(3,4)]),       # F#dim7 (return to A)
-        (4,  [N(0,3), N(4,3), N(10,3), N(1,4)]),      # C7b9
-        (8,  [N(10,2), N(1,3), N(6,3), N(8,3)]),      # A#dim7
-        (12, [N(5,3), N(9,3), N(2,4), N(4,4)]),       # F7b9 (seam)
+    "name":"alley_confrontation_e","bars":16,"bpm":90,
+    "lead":{"prog":91,"vol":92,"pan":64,"reverb":78,"mod_init":30},
+    "bass":{"prog":35,"vol":82,"reverb":25},
+    "pad":{"prog":54,"vol":78,"pan":64,"reverb":90},
+    "drums":{"vol":42,"reverb":42},
+    "lead_vel_ramp":(100,82),"lead_mod_ramp":(48,24),
+    "key_intervals":PHRYGIAN,"root":6,
+    "pad_chords":[
+      (0,[N(10,2),N(1,3),N(6,3),N(8,3)]),
+      (4,[N(5,3),N(9,3),N(2,4),N(4,4)]),
+      (8,[N(0,3),N(4,3),N(10,3),N(1,4)]),
+      (12,[N(6,3),N(9,3),N(0,4),N(3,4)]),
     ],
-    "pad_vel_ramp": (60, 90, 16),
-    "lead_pattern": [],
-    "bass_pattern": [],
-    "drum_pattern": [],
+    "pad_vel_ramp":(82,72,16),
+    "lead_pattern":[],"bass_pattern":[],"drum_pattern":[],
 }
 
 def _build_alley_confrontation_e_patterns():
-    """Recovery: held F#2 fades, dim7 walk returns, loop seam."""
-    cfg = SCENES_B["alley_confrontation_e"]
-    bar = PPQ * BEATS_PER_BAR
-    bass_ev = []
-    lead_ev = []
-    # Bars 0-1: F# drone fading
-    bass_ev.append((0, [(N(6,2), PPQ*8, -10)]))
-    # Bars 2-5: F# drone returns
-    bass_ev.append((PPQ*8, [(N(6,1), PPQ*16, 0), (N(6,2), PPQ*16, 0)]))
-    # Bars 6-9: C drone
-    bass_ev.append((PPQ*24, [(N(0,1), PPQ*16, 0), (N(0,2), PPQ*16, 0)]))
-    # Bars 10-13: A# drone
-    bass_ev.append((PPQ*40, [(N(10,1), PPQ*16, 0), (N(10,2), PPQ*16, 0)]))
-    # Bars 14-15: F drone (seam to A)
-    bass_ev.append((PPQ*56, [(N(5,1), PPQ*8, 0), (N(5,2), PPQ*8, 0)]))
-    cfg["bass_pattern"] = bass_ev
-    # Lead: held F#2 fades, melodic arc returns at bar 4
-    lead_ev.append((0, [(N(6,2), PPQ*8, -10)]))           # bars 0-1: F#2 fading
-    lead_ev.append((PPQ*16, [
-        (N(3,5), PPQ*8, -5),                              # bars 4-5: Eb5
-        (N(5,5), PPQ*8, 0),                               # F#5
-    ]))
-    lead_ev.append((PPQ*32, [
-        (N(3,5), PPQ*8, 0),                               # bars 8-9: Eb5
-        (N(9,5), PPQ*8, 3),                               # A5
-        (N(7,5), PPQ*8, 0),                               # G5
-    ]))
-    lead_ev.append((PPQ*48, [
-        (N(7,5), PPQ*8, -3),                              # bars 12-13: G5
-        (N(5,5), PPQ*8, -5),                              # F#5
-    ]))
-    lead_ev.append((PPQ*56, [
-        (N(6,5), PPQ*4, -8),                              # bars 14-15: Gb5 ghost
-        (N(5,5), PPQ*4, -10),                             # F#5 held (seam)
-    ]))
-    cfg["lead_pattern"] = lead_ev
+    """Descending answer phrase; continuous through the A-loop seam."""
+    cfg=SCENES_B["alley_confrontation_e"]; bar=PPQ*BEATS_PER_BAR; eighth=PPQ//2
+    lead_ev=[]; bass_ev=[]; drum_ev=[]
+    phrase=[N(8,5),N(6,5),N(3,5),N(1,5),N(10,4),N(1,5),N(3,5),N(6,5),
+            N(5,5),N(4,5),N(2,5),N(0,5),N(9,4),N(0,5),N(2,5),N(4,5),
+            N(3,5),N(1,5),N(0,5),N(10,4),N(8,4),N(10,4),N(1,5),N(0,5),
+            N(9,4),N(8,4),N(6,4),N(5,4),N(6,4),N(8,4),N(9,4),N(6,4)]
+    roots=[N(10,1),N(5,1),N(0,2),N(6,1)]
+    for b in range(16):
+        p=phrase[(b%8)*4:(b%8+1)*4]
+        if b>=8: p=[n-12 if n>84 else n for n in p]
+        lead_ev.append((b*bar,[(n,PPQ,3 if i==0 else 0) for i,n in enumerate(p)]))
+        r=roots[b//4]; bass_ev.append((b*bar,[(n,eighth,-3 if i%2 else 0) for i,n in enumerate([r,r+7,r+12,r+7,r,r+7,r+12,r+7])]))
+        drum_ev += [(b*bar,36,36),(b*bar+PPQ*2,36,30),(b*bar+PPQ,38,28),(b*bar+PPQ*3,38,30)]
+    cfg["lead_pattern"],cfg["bass_pattern"],cfg["drum_pattern"]=lead_ev,bass_ev,drum_ev
 _build_alley_confrontation_e_patterns()
 
 MEDLEYS: dict[str, list[str]] = {

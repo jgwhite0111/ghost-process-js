@@ -148,3 +148,49 @@ Files touched:
 - `sc55.sf2` is a VintageDreams GM stand-in, not a real SC-55 ROM — see `docs/SC55_AB_TEST.md` for the deferred swap plan.
 - Editor sidebar: only shows currently-selected sprite's metadata, not a list of all sprites in the scene. Different UX gap — now less critical after the placeholder-handle fix, but a sidebar list would still be nicer for scenes with 3+ sprites.
 - `git push` the 59 local commits to `origin/main` — pending user go-ahead.
+
+### 2026-07-14: alley 4-track medley, B REWRITTEN + composer function rename
+
+User complaint: "cat stepping on a piano" — long silences with sparse random taps in the last 3 alley scenes. Audit confirmed `alley_confrontation_b` (the A-side) had only 3 explicit lead entries at bars 4/8/12, leaving bars 0-3, 5-7, 9-11, 13-15 silent because the old `schedule_phrase` stacked every phrase's notes at `start`. After the composer fix, only those 3 entries still played. C/D/E were rewritten in a prior session; this round the A-side got the same continuous-melody treatment.
+
+| Track | Bars × BPM | Character |
+|---|---|---|
+| `alley_confrontation` (A) — unchanged | 16 @ 90 | Existing |
+| `alley_confrontation_b` (B) — REWRITTEN | 16 @ 90 | Continuous 8th-note Choir melody across ALL 16 bars (was: 3 entries → 12 bars silent). F#-Phrygian dim7 cycle (F#dim7→C7b9→A#dim7→F7b9). Walks up through bars 0-7, peaks at A5 in bars 8-11, descends back to F#5 across 12-15. Bass walks root+5th every 8th. Restrained pulse (kick 1+3, brush-snr 2+4). |
+| `alley_confrontation_c` (C) | 16 @ 90 | Gathering menace (existing) |
+| `alley_confrontation_d` (D) | 8 @ 96 | Pursuit pulse (existing) |
+| `alley_confrontation_e` (E) | 16 @ 90 | Release / loop seam (existing) |
+
+Per-bar coverage audit (every bar gets ≥1 melodic line, bass, or drum hit — no dead bars):
+
+| Track | lead_min | bass_min | drum_min | empty_bars |
+|---|---|---|---|---|
+| `alley_confrontation_b` | 16 | 8 | 4 | **0** (was 12 of 16) |
+| `alley_confrontation_c` | 4 | 8 | 4 | 0 |
+| `alley_confrontation_d` | 8 | 8 | 12 | 0 |
+| `alley_confrontation_e` | 4 | 8 | 4 | 0 |
+
+MP3 lengths: B/C/E = 48.6s, D = 25.9s. ~6s tail is Synth Choir Pad reverb decay (PC-98 SC-55 patch default release). Silent RMS regions all fall at the END of each track (43.5s-48.5s for B/C/E), confirming the melody is continuous from 0s through ~43s.
+
+**Composer function rename** (per user request):
+
+| Old name | New name |
+|---|---|
+| `schedule_phrase(cfg, ch, phrases, base_vel, vel_ramp, mod_ramp)` | `schedule_note_sequence(cfg, ch, phrases, base_vel, vel_ramp, mod_ramp)` |
+| `schedule_held_pad(cfg)` | `schedule_pad_chord_block(cfg)` |
+
+No API change — same call signature, same return type. All 6 call sites in `compose()` updated, plus doc reference in `docs/MUSIC_GRID.md`. Module imports clean, all 44 SCENES + 36 SCENES_B load.
+
+**Full audit pass — what got fixed, what's intentionally sparse:**
+
+17 scenes have at least one bar with no lead/bass/drum. Categorization:
+
+- **Fixed (4):** alley_confrontation_b/c/d/e — all now 100% bar coverage.
+- **Intentional design (13):** corridor (A/B/C/D/E) — music-box-once-every-2-bars is the horror motif; cold_open (A/B/C/D/E) — user validated the drone/whisper Phrygian character; kabukicho_d — "dread ring-out" sax-player-isn't-there beat; ship_engine_d — engine dying; terminal_lab_e / ship_engine_e — natural phrase breaths; corp_office_d/e — escalation dropouts.
+
+Files touched:
+- `tools/make_scene_loop.py` — `alley_confrontation_b` (A-side) rewritten as continuous Choir melody; functions `schedule_phrase`→`schedule_note_sequence` and `schedule_held_pad`→`schedule_pad_chord_block` renamed at definition + 6 call sites
+- `tools/make_scene_loop.py` — `pad_breakdowns` / `cross_boundary_crash` keys removed from alley_confrontation_b (defaults are safe — `.get(..., default)` consumers)
+- `docs/MUSIC_GRID.md` — function references updated
+- `assets/audio/alley_confrontation_b/c/d/e.{mid,mp3}` — regenerated, served by Express on :8765
+
