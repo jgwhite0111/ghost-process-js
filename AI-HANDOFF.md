@@ -9,9 +9,9 @@ PC-98 / late-80s cyberpunk horror visual novel, point-and-click, mature (no moe)
 ## State
 
 ```
-HEAD:    ab2362a AI-HANDOFF: correct kabukicho_d classification (was wrong)
-Branch:  main, 75 commits ahead of origin/main
-Tree:    dirty — see "Recent work" below (sparse-pattern + monotony audit batch, uncommitted)
+HEAD:    29bdec0 audio: sparse-pattern + monotony audit batch
+Branch:  main, 76 commits ahead of origin/main
+Tree:    clean — sparse-pattern + monotony audit batch committed (see Recent work)
 Server:  http://localhost:8765 (node server.js, PID from prior session)
 Python:  3.11.6 (no pip module; use `pip→python3.11` or `uv`)
 ```
