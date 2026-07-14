@@ -1545,7 +1545,10 @@ async function makeMusicEditor(sc) {
 
       const playBtn = document.createElement('button');
       playBtn.className = 'icon-btn play'; playBtn.textContent = '▶'; playBtn.title = 'play this track';
-      playBtn.onclick = () => QueuePlayer.playOne('assets/audio/' + t.file);
+      // Pass the row index so the status subscriber can highlight this row
+      // even when playing a single track (mode='one') — previously the
+      // highlight was only applied in mode='queue'.
+      playBtn.onclick = () => QueuePlayer.playOne('assets/audio/' + t.file, { medleyIndex: i });
       li.appendChild(playBtn);
 
       // We need a 7th cell for delete — adjust the grid template via inline style.
@@ -1597,9 +1600,12 @@ async function makeMusicEditor(sc) {
   // Subscribe to QueuePlayer status changes to highlight the
   // currently-playing row + show progress text.
   QueuePlayer.onStatus((s) => {
-    // Update row highlights
+    // Update row highlights. Both queue mode (s.index = current queue index)
+    // and one mode (s.index = the row's medleyIndex if known, else -1) light
+    // up the matching row. index === -1 means no row should highlight (e.g.
+    // single-track preview button).
     [...list.children].forEach((row, i) => {
-      row.classList.toggle('playing', s.mode === 'queue' && s.index === i);
+      row.classList.toggle('playing', s.index === i);
     });
     if (s.mode === 'idle') {
       status.classList.remove('now-playing');
@@ -1646,11 +1652,19 @@ const QueuePlayer = (() => {
   }
   return {
     onStatus(fn) { listeners.add(fn); fn(state); return () => listeners.delete(fn); },
-    playOne(src) {
+    playOne(src, opts = {}) {
       stopInternal();
       const a = new Audio(src);
       currentAudio = a;
-      setState({ mode: 'one', index: -1, file: src.split('/').pop() });
+      // medleyIndex (optional): the row index in the current medley that
+      // owns this file. Reported to status subscribers so the row can be
+      // highlighted even when we're not in queue mode. -1 = no row (e.g.
+      // the single-track preview button).
+      setState({
+        mode: 'one',
+        index: typeof opts.medleyIndex === 'number' ? opts.medleyIndex : -1,
+        file: src.split('/').pop()
+      });
       a.play().catch((e) => {
         // Browser blocked autoplay — usually means the user hasn't
         // interacted with the editor yet. The play button click
