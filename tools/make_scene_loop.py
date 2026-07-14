@@ -3419,8 +3419,16 @@ SCENES_B["corridor_b"] = {
     "root": 0,
     "lead_mod_ramp": (10, 55),
     # B stays in Cm throughout — gives the medley a stable middle before C lifts off.
+    # FIX 2026-07-14: was a single Cm chord covering all 24 bars (only 4 note_on
+    # events → audit flagged 23-bar empty pad run). Now uses an extended Cm voicing
+    # (Cm(maj7) with the natural 9th and 11th) so the held pad has 6 chord tones,
+    # plus a brief Fm pull at bar 12 before resolving back to Cm. Still "stable
+    # middle" tonally, but the chord progression gives the pad audible motion and
+    # lifts the per-bar note density above the silence threshold.
     "pad_chords": [
-        (0, [N(0,3), N(3,3), N(7,3), N(10,3)]),       # Cm all bars
+        (0,  [N(0,3), N(3,3), N(7,3), N(10,3), N(2,4), N(5,4)]),  # Cm(maj9/11) bars 0-11
+        (12, [N(5,3), N(8,3), N(0,4), N(3,4)]),                    # Fm         bars 12-15
+        (16, [N(0,3), N(3,3), N(7,3), N(10,3), N(2,4), N(5,4)]),  # Cm(maj9/11) bars 16-23
     ],
     "pad_vel_ramp": (95, 90, 24),
     "lead_vel_ramp": (78, 92),
@@ -3760,9 +3768,11 @@ SCENES_B["corridor_e"] = {
     "root": 0,
     "lead_mod_ramp": (110, 0),                # vibrato decays to 0 (recovering)
     "lead_vel_ramp": (75, 75),
+    # Pad starts quiet (vol=50) and recovers. Extended Cm voicing for fuller
+    # held sound during the recovery — same chord-tone-density fix as corridor_b.
     "pad_chords": [
-        (0,  [N(0,3), N(3,3), N(7,3), N(10,3)]),    # Cm (bars 0-19)
-        (20, [N(0,3), N(3,3), N(7,3), N(10,3)]),    # Cm (bars 20-23, seam)
+        (0,  [N(0,3), N(3,3), N(7,3), N(10,3), N(2,4), N(5,4)]),  # Cm(maj9/11) bars 0-19
+        (20, [N(0,3), N(3,3), N(7,3), N(10,3), N(2,4), N(5,4)]),  # Cm(maj9/11) bars 20-23
     ],
     "pad_breakdowns": [],
     "pad_vel_ramp": (40, 60, 24),
