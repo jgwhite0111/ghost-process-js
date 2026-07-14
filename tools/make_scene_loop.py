@@ -5129,6 +5129,61 @@ def render_midi(name: str) -> Path:
     print(f"[make_scene_loop] wrote {out} ({len(raw)} bytes, "
           f"{cfg['bars']} bars @ {cfg['bpm']} BPM, "
           f"loop ≈ {loop_seconds:.1f}s)")
+    # Post-write per-bar density check (catches sparse regressions early).
+    # Counts note_on events on each non-drum channel per bar. Prints one
+    # line per channel with min/max bars hit so a single glance shows
+    # whether any channel has empty bars. The COMBINED line sums lead
+    # + bass + pad note-ons per bar — any bar with 0 across all three
+    # is genuinely silent (no melody, no bass, no pad). Drum hits are
+    # NOT counted here (they're on ch=9 and excluded).
+    try:
+        import mido
+        mid = mido.MidiFile(str(out))
+        bar_ticks = PPQ * BEATS_PER_BAR
+        ch_events = {0: [], 1: [], 2: []}  # lead, bass, pad
+        for tr in mid.tracks:
+            t = 0
+            for msg in tr:
+                t += msg.time
+                if msg.type == 'note_on' and msg.channel in ch_events and msg.velocity > 0:
+                    ch_events[msg.channel].append(t)
+        role = {0: 'lead', 1: 'bass', 2: 'pad'}
+        per_channel_counts = {}
+        for ch, events in ch_events.items():
+            if not events:
+                continue
+            counts = [0] * cfg["bars"]
+            for t in events:
+                b = int(t // bar_ticks)
+                if 0 <= b < cfg["bars"]:
+                    counts[b] += 1
+            per_channel_counts[ch] = counts
+            non_zero = sum(1 for c in counts if c > 0)
+            empty = [i for i, c in enumerate(counts) if c == 0]
+            msg = f"  ch={ch} ({role[ch]:<4}) bars hit: {non_zero}/{cfg['bars']} min={min(counts)} max={max(counts)}"
+            if empty:
+                msg += f" EMPTY: {empty}"
+            print(msg)
+        # Combined: any melody/bass/pad activity per bar
+        if per_channel_counts:
+            combined = [sum(per_channel_counts[ch][b] if b < len(per_channel_counts[ch]) else 0
+                            for ch in per_channel_counts)
+                        for b in range(cfg["bars"])]
+            non_zero = sum(1 for c in combined if c > 0)
+            empty = [i for i, c in enumerate(combined) if c == 0]
+            longest = 0; cur = 0
+            for c in combined:
+                if c == 0:
+                    cur += 1
+                    if cur > longest: longest = cur
+                else:
+                    cur = 0
+            msg = f"  COMBINED (lead+bass+pad) bars hit: {non_zero}/{cfg['bars']} longest_empty_run={longest}"
+            if empty:
+                msg += f" EMPTY: {empty}"
+            print(msg)
+    except ImportError:
+        pass  # mido is dev-only; not a render dependency
     return out
 
 
