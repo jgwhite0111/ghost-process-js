@@ -9,9 +9,9 @@ PC-98 / late-80s cyberpunk horror visual novel, point-and-click, mature (no moe)
 ## State
 
 ```
-HEAD:    9c83959 docs: update AI-HANDOFF for new session
-Branch:  main, 59 commits ahead of origin/main
-Tree:    dirty — see "Recent work" below (chase A+B+C+D+E medley experiment, uncommitted)
+HEAD:    ab2362a AI-HANDOFF: correct kabukicho_d classification (was wrong)
+Branch:  main, 75 commits ahead of origin/main
+Tree:    dirty — see "Recent work" below (sparse-pattern + monotony audit batch, uncommitted)
 Server:  http://localhost:8765 (node server.js, PID from prior session)
 Python:  3.11.6 (no pip module; use `pip→python3.11` or `uv`)
 ```
@@ -214,3 +214,42 @@ The 2026-07-14 entry marked kabukicho_d as "intentional design (dread ring-out)"
 **Lesson:** "Audibly empty" ≠ "intentionally sparse." Check the rendered MP3 with RMS windows + FFT band energy before accepting a sparse design verdict. The per-bar MIDI note count was 5/19 bars for the lead (one held note + stab) — looked fine on paper but produced -92dB silence in audio.
 
 **Other sparse tracks still flagged but not yet rewritten** (audit, not action): jailbreak_d (0-58s oscillates -50/-54dB then loud at 60s), terminal_lab_c/e (4-second silence gaps between hits), jailbreak_c (alternating -20/-60dB), kabukicho_c/e (last 16s mostly -46 to -53dB). Address in a separate turn.
+
+### 2026-07-14: sparse-pattern + monotony audit batch (UNCOMMITTED in working tree)
+
+Picking up the audit list above + the user's "still spartan and repetitive" complaint on corridor_c, ran the four-layer diagnostic pipeline (MIDI per-bar, RMS-by-window, FFT band-energy, monotony) on every offender. Two bug classes surfaced across 5 scenes:
+
+**Class 1: pitfall 43 — drum `vdelta=0` silently muted KICK/SNARE.**
+`schedule_drums` interprets the third tuple element as RAW velocity (not a delta against base_vel like `schedule_note_sequence` does). The builders for `jailbreak_c/e`, `terminal_lab_c`, and `ship_engine_c` all wrote KICK/SNARE with `vdelta=0`, producing velocity-0 note-ons that FluidSynth skips. HAT entries used `vdelta=-15` against base 128 → 113, so they played normally, masking the bug. Per-scene note-on count on ch=9 showed only HAT (note 42). Fix: rewrote each builder to use the flat `(t, NOTE, abs_vel)` shape that chase already used (no vdelta). All KICK/SNARE/HAT now audible.
+
+**Class 2: pitfall 41 — single held note ≠ "ghost scene" feel.**
+`terminal_lab_d` (held D5 for 92 beats) and `ship_engine_d` (held D5 with descending drone) both had note counts that LOOKED healthy on paper but produced flat RMS the listener reads as silence. Replacement pattern: breathing melodic motifs with rests, version-controlled random offsets, and pad swells as breath punctuation. `terminal_lab_d` got a 23-bar stuttered arpeggio pattern with deterministic `random.Random(20260714)` seed. `ship_engine_d` got descending held-note chain (D5→C#5→C5→B4 over 16 bars) plus irregular sputter chords at bars 3/6/10/14 plus 4 pad swells (was: complete silence after bar 0).
+
+**Class 3: user's "spartan and repetitive" — `corridor_c` bars 16-23.**
+The "too correct descending scales, recorder student practising" section was literally the same `[10,7,3,0]` arpeggio repeated 4× in bars 16-19, with bars 20-23 only carrying 5 PPQ*2 notes with vel ramping to -8. Fixed: each of bars 16-19 now has a distinct contour (rhythm shift, octave jump, triplet-feel, Bb-C-Bb-C stutter). Bars 20-23 wound down into a clean Cm quarter-note pulse into held-C5 tail instead of evaporate.
+
+**Class 4: pitfall 26 — single-pitch repetition, `chase_b` lead.**
+chase_b's lead was `for b in range(cfg["bars"]): for i in range(8): lead_ev.append((t + i * eighth, [(N(2,4), eighth, -15)]))` — exact same E4 pulse on every 8th for 24 bars with a 4-bar descending accent every 4 bars. `lead_longest_repeat` would have been ~192 hits of the same pitch. Replacement: rotating 6-motif ostinato (one motif per 4-bar section, with a -1 = "rest" token for call-and-response phrasing), velocity alternation per section.
+
+**Class 5: cosmetic comment rename (pitfall 45 footnote fix).**
+Several functions had `# HALF-TIME —` comments that matched the `HALF` substring inside `HALF-TIME` (the dangerous word). After the rename, file still had comments like "N(2,4)-TIME" — that's the pitfall 45 footnote clean-up. No audio change, just removed the footgun risk for any future HALF rename. Affected: `_build_chase_patterns` (×2), `chase_d` header, `chase_e` SCENES_B comment + `_build_chase_e_patterns` header.
+
+Per-track render-verify (via `python3 tools/make_scene_loop.py <scene>`, post-write density check):
+
+| Track | lead bars hit | bass bars hit | pad bars hit | COMBINED longest_empty_run |
+|---|---|---|---|---|
+| `jailbreak_c` | 12/24 | 12/24 | 3/24 | 1 (intentional gaps) |
+| `jailbreak_e` | 12/24 | 24/24 | 3/24 | 0 |
+| `terminal_lab_c` | 6/24 | 7/24 | 3/24 | 3 (intentional KICK-MISSING bars) |
+| `terminal_lab_d` | 24/24 | 24/24 | 2/24 | 0 |
+| `chase_b` | 24/24 | 24/24 | 6/24 | 0 |
+| `corridor_c` | 23/24 | 13/24 | 5/24 | 0 (bar 13 = scare beat) |
+| `ship_engine_c` | 9/24 | 24/24 | 3/24 | 0 |
+| `ship_engine_d` | 9/16 | 4/16 | 4/16 | 1 (intentional sputter gaps) |
+
+Files touched (uncommitted):
+- `tools/make_scene_loop.py` — drum builder rewrites (jailbreak_c/e, terminal_lab_c, ship_engine_c), terminal_lab_d lead rewrite, ship_engine_d SCENES_B dict + builder rewrite, chase_b lead rewrite, corridor_c bars 16-23 lead rewrite, HALF→N(2,4) cosmetic comment rename
+- `assets/audio/{jailbreak_c,jailbreak_e,terminal_lab_c,terminal_lab_d,chase_b,corridor_c,ship_engine_c,ship_engine_d}.{mid,mp3}` — all regenerated from current source
+- `assets/audio/{chase,chase_c,chase_d,chase_e}.mid` — bit-different from HEAD (cosmetic source comment rename shifted track delta-time slightly during render) — MP3 unchanged
+
+**Audit next steps** (still unfixed): terminal_lab_c/e (4-second silence gaps between hits), jailbreak_d (0-58s oscillates -50/-54dB then loud at 60s), jailbreak_c gaps are now mid-band (audible) but COMBINED longest_empty_run=1 remains — user should listen and decide if the held-note silence is acceptable.
