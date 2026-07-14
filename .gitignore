@@ -7,3 +7,5 @@ node_modules/
 .tmp.*
 # Local dev artifacts — never committed.
 *.local
+__pycache__/
+*.pyc
