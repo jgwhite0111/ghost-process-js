@@ -1540,41 +1540,91 @@ SCENES_B["kabukicho_d"] = {
     "name": "kabukicho_d",
     "bars": 20,
     "bpm": 90,
-    "lead": {"prog": 65, "vol": 90, "pan": 64, "reverb": 90, "mod_init": 0},   # Tenor Sax
-    "bass": {"prog": 33, "vol": 60, "reverb": 60},
-    "pad":  {"prog": 89, "vol": 30, "pan": 64, "reverb": 100},
+    # 2026-07-14 fix: the original "one held C5 sax for 15 bars" produced
+    # an audibly empty track (RMS -44dB, sax at 0.3% of spectral peak).
+    # Two problems: (a) a single continuous note_on in FluidSynth's Tenor
+    # Sax patch attenuates over time (long-held notes fade to silence),
+    # and (b) the bass drowned out the sax anyway. Replaced with a sparse
+    # 4-bar sax phrase that breathes — D5 → F5 → E5 → G5 → F5 → D5 motif
+    # with rests, layered over the breathing pad. The held-note feel is
+    # preserved by overlapping the next phrase before the previous ends.
+    "lead": {"prog": 65, "vol": 105, "pan": 64, "reverb": 70, "mod_init": 0},   # Tenor Sax
+    "bass": {"prog": 33, "vol": 50, "reverb": 30},                               # quiet, in background
+    "pad":  {"prog": 89, "vol": 40, "pan": 64, "reverb": 90},                    # low swell bed
     "drums": {"vol": 0, "reverb": 0},                                          # no kit
     "lead_mod_ramp": (0, 110),
     "lead_vel_ramp": (95, 105),
     "key_intervals": MINOR,
     "root": 5,                                 # F minor (anchor)
+    # Pad swells: gentle breathing pattern with rests to keep it sparse
     "pad_chords": [
-        (0, [N(4,3), N(7,3), N(10,3), N(1,4)]),       # F# dim7 (bar 0 only)
+        (0,  [N(4,3), N(7,3), N(10,3), N(1,4)]),    # F# dim7 (bar 0 stab)
+        (1,  [N(5,3), N(9,3), N(0,4), N(4,4)]),     # Gdim7  (bars 1-3)
+        (4,  [N(5,3), N(9,3), N(0,4), N(4,4)]),     # Gdim7  (bars 4-7)
+        (8,  [N(3,3), N(7,3), N(10,3), N(2,4)]),    # Ebdim7 (bars 8-11)
+        (12, [N(4,3), N(7,3), N(10,3), N(1,4)]),    # F#dim7 (bars 12-15)
+        (16, [N(5,3), N(8,3), N(0,4), N(3,4)]),     # Gm7    (bars 16-19)
     ],
-    "pad_breakdowns": [(1, 15)],
-    "pad_vel_ramp": (40, 20, 16),
+    "pad_breakdowns": [],                            # never go fully silent
+    "pad_vel_ramp": (45, 35, 20),
     "lead_pattern": [],
     "bass_pattern": [],
     "drum_pattern": [],
 }
 
 def _build_kabukicho_d_patterns():
-    """Single note ring-out: F# dim7 stab, then held C5 with heavy vibrato."""
+    """Ghost-scene sparse sax melody + breathing pad + quiet bass.
+
+    The original was a single held C5 sax for 15 bars which produced a
+    track dominated by sub-bass hum at ~-44dB with the sax at ~0.3%
+    of the spectral peak. New design: a sparse 4-bar sax motif with
+    rests, repeating with slight variation across the loop. Each
+    phrase is short (2-4 beats) so the Tenor Sax patch doesn't fade.
+    """
     cfg = SCENES_B["kabukicho_d"]
     bar = PPQ * BEATS_PER_BAR
+    eighth = PPQ // 2
+    quarter = PPQ
+    half = PPQ * 2
     bass_ev = []
     lead_ev = []
     # Bar 0: F# dim7 stab (F#-A-C-Eb)
     lead_ev.append((0, [
-        (N(6,5), PPQ, 0), (N(9,5), PPQ, 0),
-        (N(0,6), PPQ, 0), (N(3,6), PPQ, 0),
+        (N(6,5), quarter, 0), (N(9,5), quarter, 0),
+        (N(0,6), quarter, 0), (N(3,6), quarter, 0),
     ]))
-    # Bars 1-15: single held C5 with heavy vibrato
-    lead_ev.append((PPQ*4, [(N(0,5), PPQ*76, 0)]))
+    # Sparse sax motif: D5, F5, E5, G5 with rests between phrases.
+    motif = [
+        (N(2,5), half),     # D5
+        (None,   eighth),   # rest
+        (N(5,5), half),     # F5
+        (None,   eighth),   # rest
+        (N(4,5), half),     # E5
+        (None,   eighth),   # rest
+        (N(7,5), half),     # G5
+        (None,   quarter),  # rest
+    ]
+    # Four repeats across bars 1-15 (each instance starts at the bar)
+    for i in range(0, 16, 4):
+        start = bar * (i + 1)
+        lead_ev.append((start, motif))
+    # Final 4 bars (16-19): slight variation
+    final_motif = [
+        (N(2,5), half), (N(5,5), half),       # D5, F5
+        (None,   eighth),
+        (N(7,5), half), (N(4,5), half),       # G5, E5
+        (None,   quarter),
+    ]
+    lead_ev.append((bar * 16, final_motif))
     cfg["lead_pattern"] = lead_ev
-    # Bass: F2 drone for bar 0, then silence
+    # Bass: F2 drone bar 0, then sparse half-note descent through each
+    # 4-bar motif group. Short notes keep the sax on top.
     bass_ev.append((0, [(N(5,1), PPQ*4, 0)]))
-    bass_ev.append((PPQ*4, [(None, PPQ*76, 0)]))
+    for bar_num in range(1, 16):
+        semis = [5, 4, 3, 2, 1, 0][(bar_num - 1) % 6]
+        bass_ev.append((bar * bar_num, [(N(semis, 1), half, 0)]))
+    # Bars 16-19: return to root F2 held for 4 bars
+    bass_ev.append((bar * 16, [(N(5,1), PPQ * 12, 0)]))
     cfg["bass_pattern"] = bass_ev
 _build_kabukicho_d_patterns()
 
