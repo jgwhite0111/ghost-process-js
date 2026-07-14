@@ -1083,31 +1083,64 @@ SCENES_B["jailbreak_d"] = {
 }
 
 def _build_jailbreak_d_patterns():
-    """Caught glimpse: heartbeat kit, sub-octave bass drone, held A5."""
+    """Caught glimpse: heartbeat kit, sub-octave bass drone, sparse lead motif.
+
+    2026-07-14 pitfall 41: previous version held A5 for 60 beats straight.
+    FluidSynth attenuates continuous held notes to silence (~-65dB by bar 5).
+    Replaced with a sparse saxophone-like breath motif: short A5 phrases at
+    irregular bars (1, 4, 6, 9, 12) with eighth-rest gaps that keep each note
+    short enough to remain audible. The "caught glimpse" feel is preserved —
+    the listener hears the figure disappearing and reappearing, the way a
+    distant voice carries through a wall and then disappears."""
     cfg = SCENES_B["jailbreak_d"]
     bar = PPQ * BEATS_PER_BAR
+    EIGHTH = PPQ // 2
+    QUARTER = PPQ
     bass_ev = []
     lead_ev = []
     drum_ev = []
-    # Bass: A1 drone throughout
-    bass_ev.append((0, [(N(9,1), PPQ*64, 0)]))
-    cfg["bass_pattern"] = bass_ev
-    # Lead: single held A5 with heavy vibrato, descends at the end
-    lead_ev.append((0, [(N(9,5), PPQ*60, 0)]))          # A5 held for 15 bars
-    # bar 15-16: bend down a half-step (the voice catches)
-    lead_ev.append((PPQ*60, [
-        (N(8,5), PPQ*4, -5),                            # Ab5 at the end
-    ]))
-    cfg["lead_pattern"] = lead_ev
+    # Bass: A1 drone broken into 4-bar cells with 1-bar rests between, so
+    # the drone doesn't attenuate into silence. A1 + bb3 ghost every other
+    # bar instead of pure A1 for entire 64 beats.
+    bass_pattern = [
+        (0, [(N(9,1), PPQ*8, 0), (N(2,2), EIGHTH, -10)]),      # bars 0-1: A1 + Bb2 ghost
+        (PPQ*12, [(None, PPQ*4, 0)]),                            # bars 3: rest
+        (PPQ*16, [(N(9,1), PPQ*8, 0), (N(2,2), EIGHTH, -10)]),  # bars 4-5: A1 + Bb2
+        (PPQ*28, [(None, PPQ*4, 0)]),                            # bars 7: rest
+        (PPQ*32, [(N(9,1), PPQ*8, 0), (N(2,2), EIGHTH, -10)]),  # bars 8-9: A1 + Bb2
+        (PPQ*44, [(None, PPQ*4, 0)]),                            # bars 11: rest
+        (PPQ*48, [(N(9,1), PPQ*8, 0), (N(2,2), EIGHTH, -10)]),  # bars 12-13: A1 + Bb2
+        (PPQ*60, [(N(9,1), PPQ*4, 0)]),                          # bars 15: A1 (sets up the bend)
+    ]
+    cfg["bass_pattern"] = bass_pattern
+    # Lead: 5 sparse 2-beat phrases with random-feeling placement.
+    # Each phrase is short (max 2 beats) so FluidSynth keeps each note
+    # audible. Replaces the 60-beat held note that attenuated to silence.
+    lead_phrases = [
+        (PPQ*4,   [(N(9,5), QUARTER, 0), (None, EIGHTH, 0), (N(9,5), EIGHTH, -5)]),    # bar 1: A5 stutter
+        (PPQ*16,  [(N(9,5), EIGHTH, 0), (None, QUARTER, 0), (N(11,5), EIGHTH, 0)]),     # bar 4: A5 + B5
+        (PPQ*24,  [(N(9,5), QUARTER, 0)]),                                              # bar 6: A5 alone
+        (PPQ*36,  [(N(9,5), EIGHTH, 0), (N(11,5), EIGHTH, 0)]),                          # bar 9: A5 + B5
+        (PPQ*48,  [(N(9,5), QUARTER, 0), (N(7,5), EIGHTH, -3)]),                          # bar 12: A5 + G5
+        (PPQ*56,  [(N(9,5), EIGHTH, 0)]),                                                # bar 14: A5 final breath
+        # bars 15-16: bend down a half-step (the voice catches)
+        (PPQ*60,  [(N(8,5), PPQ*4, -5)]),                                                # bar 15: Ab5 descent
+    ]
+    cfg["lead_pattern"] = lead_phrases
     # Drums: heartbeat only — kick on 1, snare on 3, ghost ride
+    # 2026-07-14 bug: previous version used vdelta which produced
+    # velocity 0/negative (silent note_on) for KICK/SNARE/RIDE. Now
+    # using direct absolute velocities.
+    # "Heartbeat" feel: very quiet kit at vel 60. Lead+pad+bass carry
+    # the rest of the dread.
     KICK = 36; SNARE = 38; RIDE = 51
     for b in range(16):
         t = b * bar
-        drum_ev.append((t, [(KICK, QUARTER, -10)]))
-        drum_ev.append((t + PPQ*2, [(SNARE, QUARTER, -10)]))
-        drum_ev.append((t + PPQ, [(RIDE, EIGHTH, -25)]))
-        drum_ev.append((t + PPQ*3, [(RIDE, EIGHTH, -25)]))
-    cfg["drum_pattern"] = [(t, n, v) for t, notes in drum_ev for n, _, v in notes]
+        drum_ev.append((t, KICK, 60))               # kick on 1
+        drum_ev.append((t + PPQ*2, SNARE, 55))        # snare on 3 (quiet)
+        drum_ev.append((t + PPQ, RIDE, 65))           # ride 2 (heartbeat ghost)
+        drum_ev.append((t + PPQ*3, RIDE, 65))         # ride 4 (heartbeat ghost)
+    cfg["drum_pattern"] = list(drum_ev)
 _build_jailbreak_d_patterns()
 
 # ---------- 4e. jailbreak_e — escape acceleration, loop seam ----------
@@ -2232,7 +2265,12 @@ def _build_terminal_lab_c_patterns():
         (N(11,1), EIGHTH, 0), (N(9,2), EIGHTH, 0),
     ]))
     cfg["bass_pattern"] = bass_ev
-    # Lead: Bm arpeggios with "wrong" notes (chromatic b2, E natural over Bm)
+    # Lead: Bm arpeggios with "wrong" notes (chromatic b2, E natural over Bm).
+    # This is intentionally sparse — "glitching chaos with kit skips + wrong
+    # notes" — so the lead plays at bars 0, 4, 8, 12, 16, 20 with 4-bar gaps
+    # between. Drums fill all 24 bars (except bar 16 KICK-MISSING, the glitch
+    # event). The 4-bar gap is part of the design: the listener notices
+    # phrases disappearing, then re-appearing with wrong notes. Don't fill.
     lead_ev.append((0, [
         (N(11,4), EIGHTH, -5), (N(3,5), EIGHTH, 0),
         (N(6,5), EIGHTH, 3), (N(3,5), EIGHTH, 0),
@@ -2514,26 +2552,36 @@ def _build_terminal_lab_e_patterns():
     cfg["lead_pattern"] = lead_ev
     # Drums: kit returns bar-by-bar
     KICK = 36; SNARE = 38; HAT = 42; RIDE = 51
+    # Drums: kit returns bar-by-bar.
+    # 2026-07-14 bug: terminal_lab_e drum builder used vdelta in
+    # `drum_ev.append((t, [(NOTE, dur, vdelta)]))` but `schedule_drums`
+    # interprets the third element as RAW velocity (not a delta).
+    # Bars 4-7 KICK vel=-10, SNARE vel=-10 → silent; bars 8-11 KICK
+    # vel=-5 (mostly silent), SNARE vel=-5 (mostly silent); HAT in
+    # bars 12-23 vel=-10 against base 128 = 118 (audible, masked the
+    # bug). Fix: rewrote each entry to use the flat `(t, NOTE, abs_vel)`
+    # shape that chase already used, with absolute velocity values.
+    KICK = 36; SNARE = 38; HAT = 42; RIDE = 51
     # bars 0-3: silence (post-scare)
-    # bars 4-7: kick on 1 only (recovery heartbeat)
+    # bars 4-7: kick on 1 only (recovery heartbeat) — vel 65 (quiet)
     for b in range(4, 8):
         t = b * bar
-        drum_ev.append((t, [(KICK, QUARTER, -10)]))
-    # bars 8-11: add snare on 3
+        drum_ev.append((t, KICK, 65))
+    # bars 8-11: kick on 1 + snare on 3 — vel 75/70
     for b in range(8, 12):
         t = b * bar
-        drum_ev.append((t, [(KICK, QUARTER, -5)]))
-        drum_ev.append((t + PPQ*2, [(SNARE, QUARTER, -5)]))
-    # bars 12-23: full 4-on-floor
+        drum_ev.append((t, KICK, 75))
+        drum_ev.append((t + PPQ*2, SNARE, 70))
+    # bars 12-23: full 4-on-floor (KICK vel 95, SNARE 85, HAT 75)
     for b in range(12, 24):
         t = b * bar
         for beat in range(4):
-            drum_ev.append((t + beat * PPQ, [(KICK, EIGHTH, 0)]))
-        drum_ev.append((t + PPQ, [(SNARE, EIGHTH, 0)]))
-        drum_ev.append((t + PPQ*3, [(SNARE, EIGHTH, 0)]))
+            drum_ev.append((t + beat * PPQ, KICK, 95))
+        drum_ev.append((t + PPQ, SNARE, 85))
+        drum_ev.append((t + PPQ*3, SNARE, 85))
         for e in range(8):
-            drum_ev.append((t + e * EIGHTH, [(HAT, PPQ//4, -10)]))
-    cfg["drum_pattern"] = [(t, n, v) for t, notes in drum_ev for n, _, v in notes]
+            drum_ev.append((t + e * EIGHTH, HAT, 75))
+    cfg["drum_pattern"] = list(drum_ev)
 _build_terminal_lab_e_patterns()
 
 # ---------- 8. ship_engine — mechanical space-station, low pulse ---------
