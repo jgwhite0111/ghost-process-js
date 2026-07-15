@@ -9,13 +9,18 @@
 // Coordinates are tested in canvas-space (pageToCanvasCoords converts
 // pointer events on the way in), then matched against the hitbox rect.
 
-const EYE_SVG =
+const EYE_CURSOR_SVG =
     '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">' +
     '<path d="M2 16 Q16 4 30 16 Q16 28 2 16 Z" fill="white" stroke="black" stroke-width="1.5"/>' +
     '<circle cx="16" cy="16" r="5" fill="black"/>' +
     '<circle cx="17" cy="14" r="1.5" fill="white"/>' +
     '</svg>';
-window.EYE_CURSOR = "url('data:image/svg+xml;utf8," + EYE_SVG + "') 0 0, default";
+const HAND_CURSOR_SVG =
+    '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">' +
+    '<path d="M10 27c-2-3-5-7-5-9 0-1 1-2 2-2 1 0 2 1 3 2V7c0-2 3-2 3 0v7-5c0-2 3-2 3 0v5-4c0-2 3-2 3 0v5-3c0-2 3-2 3 0v8c0 3-2 5-4 7Z" fill="white" stroke="black" stroke-width="1.5" stroke-linejoin="round"/>' +
+    '</svg>';
+window.EYE_CURSOR = "url('data:image/svg+xml;utf8," + EYE_CURSOR_SVG + "') 0 0, default";
+window.HAND_CURSOR = "url('data:image/svg+xml;utf8," + HAND_CURSOR_SVG + "') 7 2, pointer";
 
 class HitboxLayer {
     constructor({ canvas, sceneId, sceneConfig, onTrigger }) {
@@ -54,11 +59,17 @@ class HitboxLayer {
 
         this._labels = {};
         for (let i = 0; i < this.hitboxes.length; i++) {
-            const lbl = this._createLabel(this.hitboxes[i]);
-            if (this._alwaysVisible) lbl.setAttribute('title-screen', '');
-            this._labels[i] = lbl;
+            const hb = this.hitboxes[i];
+            // Button/control hitboxes render their own visible text inside a
+            // semantic <button>. They deliberately do not get the exploration
+            // label used by item and ordinary interactive regions.
+            if (hb.type !== 'button') {
+                const lbl = this._createLabel(hb);
+                if (this._alwaysVisible) lbl.setAttribute('title-screen', '');
+                this._labels[i] = lbl;
+            }
             this._hitboxEls = this._hitboxEls || [];
-            this._hitboxEls[i] = this._createHitboxDiv(this.hitboxes[i], i);
+            this._hitboxEls[i] = this._createHitboxDiv(hb, i);
         }
         this._hoveredIdx = null;
         this._restoreBaselineLabels();
@@ -85,18 +96,28 @@ class HitboxLayer {
     }
 
     _createHitboxDiv(hb, idx) {
-        const el = document.createElement('div');
-        el.className = 'hitbox';
+        const isButton = hb.type === 'button';
+        const el = document.createElement(isButton ? 'button' : 'div');
+        el.className = isButton ? 'hitbox hitbox-button' : 'hitbox';
+        if (isButton) {
+            el.type = 'button';
+            el.textContent = hb.label || hb.target || 'CONTINUE';
+            el.setAttribute('aria-label', el.textContent);
+        }
         el.style.cssText = [
             'position:absolute',
-            'cursor:' + window.EYE_CURSOR,
+            'cursor:' + (isButton ? window.HAND_CURSOR : window.EYE_CURSOR),
             'left:' + (hb.x * 100) + '%',
             'top:' + (hb.y * 100) + '%',
             'width:' + (hb.w * 100) + '%',
             'height:' + (hb.h * 100) + '%'
         ].join(';');
         const self = this;
-        el.addEventListener('pointerdown', function (e) { self._handleDomDown(e, hb, idx); });
+        // Controls use click so keyboard activation works as well as pointer
+        // activation. Exploration hitboxes retain pointerdown timing.
+        el.addEventListener(isButton ? 'click' : 'pointerdown', function (e) {
+            self._handleDomDown(e, hb, idx);
+        });
         el.addEventListener('pointerenter', function () { self._setHovered(idx, hb); });
         el.addEventListener('pointerleave', function () { self._setHovered(null, null); });
         this.overlay.appendChild(el);
@@ -110,7 +131,7 @@ class HitboxLayer {
             this.canvas.style.cursor = '';
             this._restoreBaselineLabels();
         } else {
-            this.canvas.style.cursor = window.EYE_CURSOR;
+            this.canvas.style.cursor = hb?.type === 'button' ? window.HAND_CURSOR : window.EYE_CURSOR;
             for (const i in this._labels) this._labels[i].style.opacity = (i == idx) ? '1' : '0';
         }
     }
@@ -171,7 +192,7 @@ class HitboxLayer {
         const { x, y } = window.Runtime.pageToCanvasCoords(this.canvas, e.clientX, e.clientY);
         const hb = this._hitTest(x, y);
         if (hb) {
-            this.canvas.style.cursor = window.EYE_CURSOR;
+            this.canvas.style.cursor = hb.type === 'button' ? window.HAND_CURSOR : window.EYE_CURSOR;
             const idx = this.hitboxes.indexOf(hb);
             if (idx !== this._hoveredIdx) {
                 this._hoveredIdx = idx;

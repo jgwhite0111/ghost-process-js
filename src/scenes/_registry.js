@@ -74,9 +74,9 @@ window.SCENE_CLASSES.intro = class extends window.Scene {
         // click anywhere — so even a click on the title-screen
         // background or the PRESS START label itself unlocks it.
         //
-        // On PRESS START click: set volume to 0.7 (corrects the
-        // volume=0 that the blocked-autoplay path left behind), hide
-        // the PRESS START label, and start a 5s timer to navigate.
+        // On PRESS START click: leave playback initiation to the base scene's
+        // load-time attempt / MusicHandler's first-gesture fallback, set the
+        // intended volume, hide the control, and start a 5s timer to navigate.
         // This gives the intro theme 5 full seconds of clean
         // un-interrupted playback before the crossfade into the
         // alley music begins.
@@ -99,14 +99,10 @@ window.SCENE_CLASSES.intro = class extends window.Scene {
         };
         this._triggerHitbox = (hb, pageX, pageY) => {
             pressStartHb = hb || pressStartHb;
-            // Resume the intro theme at full volume immediately. This
-            // is the user gesture that unlocks audio if the boot-time
-            // play() was blocked, and it falls through to a no-op if
-            // music is already playing.
+            // Do not call play() here. Scene.start() already attempted it on
+            // title load, and MusicHandler owns the standards-compliant
+            // capture-phase first-gesture retry when autoplay is blocked.
             const introAudio = music._pendingResume || music.music;
-            if (introAudio && introAudio.paused) {
-                try { introAudio.play().catch(() => {}); } catch (e) {}
-            }
             if (introAudio) introAudio.volume = 0.7;
             // Hide PRESS START so it can't be re-pressed.
             const ov = this.hitboxLayer?.overlay;

@@ -161,6 +161,7 @@ test('overlay tracks canvas resize events and destroy removes its retained liste
 
     const detachedOverlay = layer.overlay;
     layer.destroy();
+    assert.equal(env.window.listenerCount('game:inventory-changed'), 0);
     assert.equal(env.window.listenerCount('game:canvas-resized'), 0);
     assert.equal(detachedOverlay.parentElement, null);
     assert.equal(env.parent.children.includes(detachedOverlay), false);
@@ -168,6 +169,44 @@ test('overlay tracks canvas resize events and destroy removes its retained liste
     env.canvas.rect = { left: 1, top: 2, width: 3, height: 4 };
     assert.doesNotThrow(() => env.window.dispatchEvent({ type: 'game:canvas-resized' }));
     assert.equal(detachedOverlay.style.width, '320px', 'detached overlay is no longer synchronized');
+});
+
+test('button hitbox is a semantic control with hand cursor and no item label visuals', () => {
+    const env = loadHitboxLayer();
+    const triggers = [];
+    const buttonHitbox = {
+        x: 0.35, y: 0.55, w: 0.3, h: 0.08,
+        type: 'button', label: 'PRESS START', target: 'cold_open',
+    };
+    const layer = new env.HitboxLayer({
+        canvas: env.canvas,
+        sceneId: 'intro',
+        sceneConfig: { kind: 'title', hitboxes: [buttonHitbox] },
+        onTrigger: (hb) => triggers.push(hb),
+    });
+
+    const control = layer._hitboxEls[0];
+    assert.equal(control.tagName, 'BUTTON');
+    assert.equal(control.type, 'button');
+    assert.equal(control.className, 'hitbox hitbox-button');
+    assert.equal(control.textContent, 'PRESS START');
+    assert.match(control.style.cssText, /cursor:url\('data:image\/svg\+xml;utf8,<svg[^;]+pointer/);
+    assert.equal(control.style.cssText.includes(env.window.EYE_CURSOR), false);
+    assert.equal(Object.keys(layer._labels).length, 0, 'button does not create an eye/item label');
+
+    control.dispatch('pointerenter');
+    assert.equal(env.canvas.style.cursor, env.window.HAND_CURSOR);
+    control.dispatch('click');
+    assert.deepEqual(triggers, [buttonHitbox]);
+
+    const css = fs.readFileSync(path.join(ROOT, 'styles.css'), 'utf8');
+    assert.match(css, /\.hitbox:not\(\.hitbox-button\):hover\s*\{/);
+    const buttonRule = css.match(/\.hitbox-button\s*\{([^}]*)\}/s)?.[1] || '';
+    const buttonHoverRule = css.match(/\.hitbox-button:hover,[^{]*\{([^}]*)\}/s)?.[1] || '';
+    assert.doesNotMatch(buttonRule, /dashed/);
+    assert.doesNotMatch(buttonHoverRule, /dashed/);
+
+    layer.destroy();
 });
 
 test('ink item labels return to inventory-aware baseline after both hover exit paths', () => {

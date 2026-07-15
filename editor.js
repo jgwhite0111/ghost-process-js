@@ -745,17 +745,25 @@ function renderOverlay() {
 
   for (let i = 0; i < (sc.hitboxes || []).length; i++) {
     const hb = sc.hitboxes[i];
+    const isButton = hb.type === 'button';
     const r = hitboxRectPx(hb);
     let div = draggingKey === dragKey({ kind: 'move', targetKind: 'hitbox', ref: hb }) ? oldNodes.get('hitbox:' + i) : null;
     if (!div) {
       div = document.createElement('div');
       div.className = 'hitbox-handle';
       div.dataset.key = 'hitbox:' + i;
-      const lbl = document.createElement('span'); lbl.className = 'label'; lbl.textContent = hb.item || ('hb[' + i + ']');
+      const lbl = document.createElement('span'); lbl.className = 'label';
       div.appendChild(lbl);
       const grip = document.createElement('span'); grip.className = 'resize'; grip.title = 'drag to resize';
       div.appendChild(grip);
       attachHitboxDrag(div, hb, i);
+    }
+    div.classList.toggle('button-control', isButton);
+    const lbl = div.querySelector('.label');
+    if (lbl) {
+      lbl.textContent = isButton
+        ? `button: ${hb.label || hb.target || 'control'}${hb.target ? ` → ${hb.target}` : ''}`
+        : (hb.item || hb.label || hb.target || ('hb[' + i + ']'));
     }
     div.style.left = r.x + 'px';
     div.style.top = r.y + 'px';
@@ -1269,12 +1277,35 @@ function renderRight() {
 
   if (state.selected?.kind === 'hitbox') {
     const hb = state.selected.ref;
-    right.appendChild(makeField('header', `Hitbox — ${hb.item || '(no item)'}`));
-    right.appendChild(makeField('item', 'Linked item',
-      makeSelect(hb.item || '', Object.keys(state.story.items || {}).map(k => [k, k]),
-        v => { hb.item = v || null; markDirty(); renderAll(); })));
+    const isButton = hb.type === 'button';
+    right.appendChild(makeField('header', isButton
+      ? `Button control — ${hb.label || hb.target || '(unnamed)'}`
+      : `Hitbox — ${hb.item || hb.label || '(interactive)'}`));
+    right.appendChild(makeField('type', 'Presentation / type',
+      makeSelect(isButton ? 'button' : 'interactive', [
+        ['interactive', 'Item / interactive (eye affordance)'],
+        ['button', 'Button / control (hand cursor)'],
+      ], v => {
+        if (v === 'button') {
+          hb.type = 'button';
+          delete hb.item;
+        } else {
+          delete hb.type;
+        }
+        markDirty();
+        renderAll();
+      })));
+    if (!isButton) {
+      right.appendChild(makeField('item', 'Linked item',
+        makeSelect(hb.item || '', Object.keys(state.story.items || {}).map(k => [k, k]),
+          v => { hb.item = v || null; markDirty(); renderAll(); })));
+    }
     right.appendChild(makeField('label', 'Label',
       makeTextInput(hb.label || '', v => { hb.label = v; markDirty(); renderAll(); })));
+    if (isButton) {
+      right.appendChild(makeField('target', 'Target scene',
+        makeTextInput(hb.target || '', v => { hb.target = v; markDirty(); renderAll(); })));
+    }
     const row = document.createElement('div'); row.className = 'row';
     row.appendChild(makeField('x', 'x', makeNumberInput(hb.x, v => { hb.x = v; markDirty(); renderAll(); }, 0, 1, 0.01, 'hb.x')));
     row.appendChild(makeField('y', 'y', makeNumberInput(hb.y, v => { hb.y = v; markDirty(); renderAll(); }, 0, 1, 0.01, 'hb.y')));

@@ -33,6 +33,7 @@
           "y": 0.55,
           "w": 0.3,
           "h": 0.08,
+          "type": "button",
           "target": "cold_open",
           "label": "PRESS START",
           "label_size": "22px",

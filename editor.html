@@ -171,14 +171,24 @@
   }
   .hitbox-handle.selected { background: rgba(108,186,108,0.18); box-shadow: 0 0 0 1px #6cba6c; }
   .hitbox-handle.dragging { cursor: grabbing; }
+  .hitbox-handle.button-control {
+    outline-color: #70dcff;
+    background: rgba(112,220,255,0.12);
+  }
+  .hitbox-handle.button-control.selected {
+    background: rgba(112,220,255,0.22);
+    box-shadow: 0 0 0 1px #70dcff;
+  }
   .hitbox-handle .label {
     position: absolute; top: -16px; left: 0; font-size: 10px; color: #6cba6c;
     background: #0d1117; padding: 0 4px;
   }
+  .hitbox-handle.button-control .label { color: #70dcff; }
   .hitbox-handle .resize {
     position: absolute; right: -5px; bottom: -5px; width: 10px; height: 10px;
     background: #6cba6c; border: 1px solid #0d1117; cursor: nwse-resize;
   }
+  .hitbox-handle.button-control .resize { background: #70dcff; }
 
   #draw-preview { position: absolute; border: 1px dashed #6cba6c;
     background: rgba(108,186,108,0.1); box-sizing: border-box;
