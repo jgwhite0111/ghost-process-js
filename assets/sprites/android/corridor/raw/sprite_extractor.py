@@ -28,6 +28,7 @@ Layout:
     frame_01.png .. frame_16.png
 """
 
+import argparse
 import cv2
 import numpy as np
 from PIL import Image
@@ -47,6 +48,16 @@ KEY_MODE = "green"
 KEY_SIMILARITY = 0.42
 KEY_SPILL_SIM = 0.10
 
+# End-cap on the source MP4: skip the last N frames when picking
+# keyframes. The corridor clip's last ~10 frames show a laser splash
+# exiting the canvas with a hard edge — those picks (frame_16 in the
+# old linspace(1, total-2, 16)) were visibly wrong. Trimming the
+# sample range to "MP4 idx 1..129" puts the 16 picks inside the
+# well-formed arc and shifts every keyframe earlier by 1-9 frames.
+# Override per-scene with --end-offset N if a future sprite has a
+# different tail length to discard.
+DEFAULT_END_OFFSET = 12
+
 
 def chroma_key_green(rgb: np.ndarray, similarity: float, spill_similarity: float):
     """Green-screen BG removal. Returns (rgba, keep_mask, despill_mask).
@@ -59,7 +70,15 @@ def chroma_key_green(rgb: np.ndarray, similarity: float, spill_similarity: float
     raise NotImplementedError("Use _chroma_key_pil inline in extract_frames().")
 
 
-def extract_frames():
+def extract_frames(end_offset=None):
+    """Extract N_FRAMES evenly-spaced keyframes from SRC_MP4.
+
+    `end_offset` discards the last N source frames (default
+    DEFAULT_END_OFFSET). The original linspace(1, total-2, 16) sweep
+    ended on the very last MP4 frame, which for the corridor clip
+    shows the laser splash exiting the canvas. Use this knob to keep
+    the picker inside the well-formed arc.
+    """
     cap = cv2.VideoCapture(str(SRC_MP4))
     if not cap.isOpened():
         sys.exit(f"FAIL: cannot open {SRC_MP4}")
@@ -70,8 +89,14 @@ def extract_frames():
     src_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     print(f"Source MP4: {src_w}x{src_h}, {total} frames, {src_fps:.2f} fps")
 
-    # Pick 16 evenly-spaced source frames (skip the very first which can be setup).
-    indices = np.linspace(1, total - 2, N_FRAMES, dtype=int)
+    if end_offset is None:
+        end_offset = DEFAULT_END_OFFSET
+    if end_offset < 0 or end_offset > total - 2:
+        sys.exit(f"FAIL: end_offset={end_offset} out of [0, {total - 2}]")
+    last_idx = total - 1 - end_offset
+    # Skip the very first source frame (can be setup/black).
+    indices = np.linspace(1, last_idx, N_FRAMES, dtype=int)
+    print(f"  Picking {N_FRAMES} frames from MP4 idx 1..{last_idx} (end_offset={end_offset})")
 
     TRANSPARENT_DIR.mkdir(parents=True, exist_ok=True)
     written = 0
@@ -241,9 +266,18 @@ def install_to_runtime():
 
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1 and sys.argv[1] == "install-only":
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--end-offset", type=int, default=None,
+                        help=f"Discard last N MP4 frames when picking keyframes "
+                             f"(default {DEFAULT_END_OFFSET}).")
+    parser.add_argument("cmd", nargs="?", default="all",
+                        help="'all' (default) = extract+install; "
+                             "'install-only' = skip extract, just re-install.")
+    args = parser.parse_args()
+
+    if args.cmd == "install-only":
         install_to_runtime()
     else:
-        written = extract_frames()
+        written = extract_frames(end_offset=args.end_offset)
         if written > 0:
             install_to_runtime()
