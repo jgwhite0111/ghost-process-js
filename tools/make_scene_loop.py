@@ -1747,10 +1747,10 @@ SCENES_B["jailbreak_d"] = {
     "name": "jailbreak_d",
     "bars": 16,
     "bpm": 60,
-    "lead": {"prog": 81, "vol": 90, "pan": 64, "reverb": 80, "mod_init": 0},
-    "bass": {"prog": 38, "vol": 70, "reverb": 60},
-    "pad":  {"prog": 89, "vol": 60, "pan": 64, "reverb": 90},
-    "drums": {"vol": 50, "reverb": 60},         # heartbeat only
+    "lead": {"prog": 81, "vol": 95, "pan": 64, "reverb": 80, "mod_init": 0},
+    "bass": {"prog": 38, "vol": 95, "reverb": 60},   # was 70 — too quiet vs siblings (95-100)
+    "pad":  {"prog": 89, "vol": 85, "pan": 64, "reverb": 90},   # was 60 — too quiet
+    "drums": {"vol": 70, "reverb": 60},   # was 50 — heartbeat too quiet
     "lead_mod_ramp": (0, 110),                  # HEAVY vibrato
     "lead_vel_ramp": (95, 105),
     "key_intervals": MINOR,
@@ -2302,9 +2302,9 @@ SCENES_B["kabukicho_d"] = {
     # 4-bar sax phrase that breathes — D5 → F5 → E5 → G5 → F5 → D5 motif
     # with rests, layered over the breathing pad. The held-note feel is
     # preserved by overlapping the next phrase before the previous ends.
-    "lead": {"prog": 65, "vol": 105, "pan": 64, "reverb": 70, "mod_init": 0},   # Tenor Sax
-    "bass": {"prog": 33, "vol": 50, "reverb": 30},                               # quiet, in background
-    "pad":  {"prog": 89, "vol": 40, "pan": 64, "reverb": 90},                    # low swell bed
+    "lead": {"prog": 65, "vol": 110, "pan": 64, "reverb": 70, "mod_init": 0},   # Tenor Sax (was 105, +5 to push above louder bass/pad)
+    "bass": {"prog": 33, "vol": 85, "reverb": 30},                               # was 50 — too quiet vs siblings
+    "pad":  {"prog": 89, "vol": 80, "pan": 64, "reverb": 90},                    # was 40 — too quiet vs siblings
     "drums": {"vol": 0, "reverb": 0},                                          # no kit
     "lead_mod_ramp": (0, 110),
     "lead_vel_ramp": (95, 105),
@@ -2320,7 +2320,7 @@ SCENES_B["kabukicho_d"] = {
         (16, [N(5,3), N(8,3), N(0,4), N(3,4)]),     # Gm7    (bars 16-19)
     ],
     "pad_breakdowns": [],                            # never go fully silent
-    "pad_vel_ramp": (45, 35, 20),
+    "pad_vel_ramp": (75, 65, 30),   # was (45,35,20) — too quiet, swells barely audible
     "lead_pattern": [],
     "bass_pattern": [],
     "drum_pattern": [],
@@ -2439,10 +2439,10 @@ SCENES_B["kabukicho_e"] = {
     "name": "kabukicho_e",
     "bars": 24,
     "bpm": 90,
-    "lead": {"prog": 65, "vol": 95, "pan": 64, "reverb": 70, "mod_init": 30},   # Tenor Sax
-    "bass": {"prog": 33, "vol": 90, "reverb": 30},                              # Fingered Bass
-    "pad":  {"prog": 89, "vol": 75, "pan": 64, "reverb": 80},                   # Fantasia Pad
-    "drums": {"vol": 60, "reverb": 40},                                          # Brush kit
+    "lead": {"prog": 65, "vol": 100, "pan": 64, "reverb": 70, "mod_init": 30},  # Tenor Sax (was 95)
+    "bass": {"prog": 33, "vol": 95, "reverb": 30},                              # was 90 — slight bump
+    "pad":  {"prog": 89, "vol": 85, "pan": 64, "reverb": 80},                   # was 75 — slight bump
+    "drums": {"vol": 70, "reverb": 40},                                         # was 60 — slight bump
     "lead_mod_ramp": (110, 30),                  # vibrato decays as sax recovers
     "lead_vel_ramp": (85, 100),
     "key_intervals": MINOR,
