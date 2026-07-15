@@ -6,30 +6,42 @@ Live project: `/Users/jwhite/ghost-process-js` — vanilla JavaScript + InkJS + 
 
 PC-98 / late-80s cyberpunk horror point-and-click visual novel. Mature proportions; no moe.
 
-## Update (2026-07-15)
+## Update (2026-07-15) — inventory pickup-fly animation fix
 
 ### Current live state
 
-- Branch: `main`; verified code commit: `845521c fix(audio): unlock intro_theme on Safari by wiring a canvas-level pointerdown fallback`.
-- `origin/main` is `339b3bf`; the branch is **2 commits ahead, 0 behind**. Both ahead commits are uncommitted work I produced and committed this session in response to direct user instruction: `890a18c docs: refresh handoff after hitbox work push` (uncommitted docs refresh from the prior session boundary, but actually already committed — the handoff just hadn't been updated since) and `845521c` (the Safari audio fix). Neither has been pushed; the user authorized commits, not pushes — do not push.
-- The working tree is clean; the documentation commit that closes this session boundary is the next commit after `845521c`.
-- Verification: **61/61 tests passed** (was 60; the +1 from the new `MusicHandler.resumePending` regression test). `git diff --check` passed; the live server returns HTTP 200; Express is still listening on `http://localhost:8765` as PID 67650.
+- Branch: `main`; verified code commit: `3de2343 fix(inventory): pickup-fly starts at click point and arcs to INV button`.
+- `origin/main` is `339b3bf`; the branch is **4 commits ahead, 0 behind**. The four local-ahead commits, in order, are `890a18c docs` (prior-session docs), `845521c fix(audio)` (Safari intro_theme), `92178fe docs` (the prior boundary's handoff refresh), and `3de2343 fix(inventory)` (this session). **None have been pushed**; the user authorized commits, not pushes — do not push.
+- The working tree is **clean**. Express is still listening on `http://localhost:8765` as **PID 15287** (restarted this session to pick up the new CSS `Cache-Control: no-cache` header). Live HTTP smoke: **HTTP 200**.
+- Verification: **67/67 tests passed** (was 61; the +6 are the new `test/inventory-fly-animation.test.js` regressions — icon creation, DOM lifecycle, arc interpolation toward the INV button, scale/opacity phases, `onComplete` firing, late completion, and popup-toggle parity). `git diff --check` passed.
 - `terminal_lab_c` MIDI/MP3 remain untouched. No audio assets were rewritten in this update.
 
-### Work completed this update — Safari intro_theme autoplay unlock
+### Work completed this update — inventory pickup-fly visible and going to the right place
+
+- User complaint: the inventory pickup icon appeared in the wrong corner and was barely visible. Investigation via headless Chrome CDP with real `Input.dispatchMouseEvent` clicks (no monkey-patching) showed the icon pinning to **bottom-left viewport** at (0, 633) instead of traveling up-right to the INV button at (1234, 26).
+- **Root cause:** `src/runtime/scene-base.js:128` registered `onTrigger: (hb) => this._triggerHitbox(hb)`. The hitbox layer was already passing client coords (`onTrigger(hb, e.clientX, e.clientY)`), but the wrapper arrow function dropped them. So `addWithFly(itemId, originX, originY, …)` always received `undefined, undefined`, the rAF loop wrote `style.left/top` from `NaN`, and CSS positioned the fixed node at (0, viewportHeight) — bottom-left.
+- **Fix:** `(hb, clientX, clientY) => this._triggerHitbox(hb, clientX, clientY)`. One-character wiring gap; the rest of the addWithFly arc logic, inventory commit timing, and `onComplete` firing were already correct.
+- **Visibility polish:** the icon was also too small/dim against the dark alley scene at 700ms. Bumped `.inv-fly` to 96px with translucent amber background pill, 2px gold border, multi-layer box-shadow halo, and a brightening/saturating filter. Z-index 60 → 900 (under scanlines at 1000). Lengthened the animation 700ms → 1500ms; raised arc height cap 80 → 100.
+- **Cache:** added `styles.css` and `index.html` to the no-cache `setHeaders` list in `server.js` so future CSS edits are not masked by the browser. Restarted the server (PID is now 15287, not 67650).
+- **End-to-end CDP verification** with a real mouse click on the rusty_key hitbox — trajectory: `(643, 527) → (773, 398) at t=0 → (1010, 156) at 200ms → (1140, 27) at 400ms → (1234, 9) at 900ms`; INV updates to `1` on animation end. Vision AI on the rendered screenshot confirms a clearly-visible amber-bordered key sprite flying toward the top-right corner.
+- Diff stat: `server.js` +8/-1, `src/inventory.js` +2/-2 (duration + arc), `src/runtime/scene-base.js` +1/-1 (signature), `styles.css` +20/-7, `test/inventory-fly-animation.test.js` +355/-0 (new). Suite moved from 61 to **67 passing tests**.
+- Code commit: `3de2343 fix(inventory): pickup-fly starts at click point and arcs to INV button`.
+
+### Next-session starting point
+
+- Do not redo the inventory pickup-fly fix, the Safari intro_theme autoplay unlock, the hitbox lifecycle / editor / title hitbox tests, the editor music transport, the dialogue typography, or the runtime-style editor preview work.
+- After this documentation commit, expect a clean tree with code commit `3de2343` immediately below, the branch **4 commits ahead, 0 behind** `origin/main` (which is at `339b3bf`). Do not push unless explicitly requested.
+- Server is listening on PID **15287** (not 67650 — that PID was killed during this session to refresh the no-cache header). To restart on a clean PID: `kill 15287 && nohup node server.js > /tmp/gpjs-server.log 2>&1 &` from `/Users/jwhite/ghost-process-js`.
+- Preserve the existing scope guardrails: the audit queue is complete; `story.json` remains protected except for its already-verified editor-routing correction; leave `terminal_lab_c` audio alone unless the user specifically requests a change.
+
+## Previous update (2026-07-15) — Safari intro_theme autoplay unlock (committed `845521c`; was the active banner before this session)
 
 - The user reported that `intro_theme.mp3` does not start playing when the title viewport is clicked, and suggested it could be Safari-specific. Headless-Chrome reproduction in this session reproduced the same symptom: the document-level capture-phase `pointerdown` fallback in `MusicHandler._queueResume` (music.js) fires, but Safari does not credit that listener as an autoplay gesture, so `audio.play()` is silently rejected.
 - Root cause: Safari only credits element-level event handlers (call-stack `play()` invoked inside a real handler on a real DOM element) for autoplay-unlock gesture recognition, while document-level capture-phase listeners do not qualify. Chrome and Firefox are more permissive.
 - Fix: refactored the resume body out of the inline `_queueResume` closure into a new public `MusicHandler.resumePending()` method (music.js). The intro scene's `onReady` (`src/scenes/_registry.js`) now wires a one-shot `pointerdown` listener directly on the canvas — Safari credits that as a gesture. `_pendingResumeVolume` and `_pendingResumeFadeMs` are stashed alongside `_pendingResume` so a late `resumePending()` call replays exactly the queued fade.
 - Existing document-level fallback is left intact (other scenes / browsers / non-intro flows still rely on it). The existing click handler in `_triggerHitbox` is untouched, so the title-music-start test contract ("START relies on MusicHandler first-gesture fallback instead of calling audio.play itself") still holds.
-- Diff stat: `src/runtime/music.js` +41/-16, `src/scenes/_registry.js` +26/-3, `test/title-music-start.test.js` +70/0. Suite moved from 60 to **61 passing tests**.
+- Diff stat: `src/runtime/music.js` +41/-16, `src/scenes/_registry.js` +26/-3, `test/title-music-start.test.js` +70/0. Suite moved from 60 to **61 passing tests** at this point (now 67 after the inventory-fly fix).
 - Code commit: `845521c fix(audio): unlock intro_theme on Safari by wiring a canvas-level pointerdown fallback`.
-
-### Next-session starting point
-
-- Do not redo the Safari intro_theme fix, the hitbox lifecycle work, the editor music transport, dialogue typography, or runtime-style editor preview work.
-- After this documentation commit, expect a clean tree with code commit `845521c` immediately below, the branch **2 commits ahead, 0 behind** `origin/main` (`890a18c docs` + `845521c fix`, neither pushed yet). Do not push unless explicitly requested.
-- Preserve the existing scope guardrails: the audit queue is complete; `story.json` remains protected except for its already-verified editor-routing correction; leave `terminal_lab_c` audio alone unless the user specifically requests a change.
 
 ## Previous update (2026-07-15) — hitbox lifecycle + editor/title button hitbox tests (already on `main` as `339b3bf`, superseded by the current update)
 
@@ -192,12 +204,18 @@ Runtime implementation is `src/runtime/music.js`; the editor's queue player inte
 
 ## Active carry-over
 
-### Hitbox lifecycle + button hitbox tests (commit `339b3bf`, superseded by the current Safari-audio update; do not redo)
+### Inventory pickup-fly animation (commit `3de2343`, this session)
+
+- The hitbox → scene-base wiring at `src/runtime/scene-base.js:128` and any peer scene must be `onTrigger: (hb, clientX, clientY) => this._triggerHitbox(hb, clientX, clientY)`. A single-argument arrow will silently drop the click coords and pin the fly icon to bottom-left.
+- `Inventory.addWithFly(itemId, originX, originY, label, onComplete)` expects viewport-space coords (matching `position: fixed`); the JS arc interpolates over `duration` ms and calls `this.add(itemId)` at completion. The signature is now frozen by `test/inventory-fly-animation.test.js` (icon creation, DOM lifecycle, arc interpolation, scale/opacity phases, late completion, popup parity).
+- `.inv-fly` styling is in `styles.css` (96px amber pill, multi-layer glow, z-index 900 under scanlines). If the icon is hard to see again in a future scene, the failure mode is contrast against that scene's background — extend `.inv-fly[data-scene='<id>']` rather than growing the global size.
+
+### Hitbox lifecycle + button hitbox tests (commit `339b3bf`; not currently active work)
 
 - The hitbox machinery in `src/runtime/hitbox.js` is now ref-counted and dedup-safe; scenes using the shared helper should not need to track manual cleanup. If a future scene reports double-fire or stale-hit symptoms, audit against this ref-tracking before adding scene-side workarounds.
 - The three new test files (`test/hitbox-lifecycle.test.js`, `test/editor-button-hitbox.test.js`, `test/title-music-start.test.js`) define the lifecycle contract. Any new hitbox user should sit inside that contract, not next to it.
 
-### Safari intro_theme autoplay unlock (commit `845521c`, just landed)
+### Safari intro_theme autoplay unlock (commit `845521c`; not currently active work)
 
 - `MusicHandler.resumePending()` is the new public method that scene-level event handlers can call when Safari requires an element-level `pointerdown` to credit the autoplay gesture. Document-level capture-phase fallback remains the first line of defense for Chrome/Firefox.
 - The intro scene wires it from a one-shot canvas `pointerdown` in `onReady`. Other scenes that hit similar Safari autoplay-credits-only-on-element-handlers quirks can do the same.
@@ -206,7 +224,7 @@ Runtime implementation is `src/runtime/music.js`; the editor's queue player inte
 ### Completed audit-remediation queue
 
 1. `AUDIT-FIX-TODO.md` is complete: all fixes 1–15 are verified. Do not continue implementing the queue or invent further work from superseded audit wording.
-2. The completed audit batch plus the verified `cold_open → alley` music-lifecycle fix are committed in `7b85309`; the later dialogue-typography and editor-preview commits are `c1b8d6e` and `ab0ca13`.
+2. The completed audit batch plus the verified `cold_open → alley` music-lifecycle fix are committed in `7b85309`; the later dialogue-typography, editor-preview, hitbox-lifecycle, Safari-audio, and inventory-fly commits are `c1b8d6e`, `ab0ca13`, `339b3bf`, `845521c`, and `3de2343`.
 3. Preserve the verified scope: no audio rewrites, asset generation, or unnecessary consolidation of historical one-off preview helpers.
 4. Keep the protected `story.json` editor changes byte-for-byte except for the already-verified `intro → cold_open` route correction and removal of the unsupported top-level recipes block.
 
@@ -264,7 +282,10 @@ python3 tools/make_scene_loop.py <track> --no-render
 - `src/scenes/_registry.js` — scene registry helper used by hitbox wiring.
 - `test/music-transition-lifecycle.test.js` — focused overlapping-fade and async-load regressions.
 - `test/hitbox-lifecycle.test.js`, `test/editor-button-hitbox.test.js`, `test/title-music-start.test.js` — hitbox lifecycle contract and editor/title regressions.
+- `test/inventory-fly-animation.test.js` — pickup-fly arc/icon lifecycle toward the INV button.
 - `editor.js` — editor queue player, music controls, and per-button hitboxes.
+- `src/inventory.js` — `Inventory.addWithFly()` arcs an icon from `(originX, originY)` to the `.inventory-button` rect; `onComplete` commits the pickup.
+- `src/runtime/scene-base.js` — `onTrigger(hb, clientX, clientY)` wiring on scene hitbox configs; must forward both coords or the icon pins to bottom-left.
 - `AGENTS.md` — current stack/style/verification rules.
 
 Historical detail removed from this shortened handoff remains available in git history; this file is current operational state, not a permanent session transcript.
