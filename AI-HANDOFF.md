@@ -6,17 +6,19 @@ Live project: `/Users/jwhite/ghost-process-js` — vanilla JavaScript + InkJS + 
 
 PC-98 / late-80s cyberpunk horror point-and-click visual novel. Mature proportions; no moe.
 
-## Update (2026-07-14)
+## Update (2026-07-15)
 
-### Current repository state
+### Live carry-over audit
 
-- Branch: `main`
-- Latest code commit: `0e3fb47 fix terminal lab and jailbreak medley audio`
-- This handoff update is a documentation-only commit on top of that code baseline.
-- Local branch after this handoff commit: **79 commits ahead of `origin/main`**, 0 behind.
-- Working tree: **clean after the handoff commit**.
-- Nothing was pushed.
-- Express was already listening on `http://localhost:8765` (PID 67650 at handoff time); `curl /` returned HTTP 200. A second `npm start` correctly failed with `EADDRINUSE` and left no duplicate process.
+- Branch: `main`; latest code commit: `7b85309 fix: complete audited runtime and editor remediation`.
+- Local branch after this handoff commit: **81 commits ahead of `origin/main`**, 0 behind.
+- Working tree: **clean after this handoff commit**.
+- All 15 audit fixes are parent-verified and committed in `7b85309` together with the post-queue `cold_open → alley` music-transition fix. Current verification is **54/54 tests passed**; all 9 Ink files compile; the focused Python tooling tests pass; `git diff --check` passes; and the live server returns HTTP 200.
+- The pre-existing editor-authored `story.json` changes remain protected; audit changes to that file are limited to the verified `intro → cold_open` route correction and removal of the unsupported top-level recipes block.
+- `terminal_lab_c` MIDI/MP3 remain untouched. Nothing was pushed.
+- Express is still listening on `http://localhost:8765` as PID 67650.
+
+The completed audit-remediation batch, its regression suite, current documentation corrections, and the verified post-queue music-lifecycle fix landed together in `7b85309`. This documentation commit records the resulting clean session boundary.
 
 Always ground a new audit in the live tree first:
 
@@ -27,7 +29,22 @@ git diff --numstat
 git log -5 --oneline
 ```
 
-### Work completed in the latest code commit (`0e3fb47`)
+### Carry-over cleanup completed
+
+- Re-audited the handoff and standing project docs against live code/data.
+- Replaced stale current-state A+B medley claims with the live ordered A→B→C→D→E configuration; retained the old B-side guide only as explicitly superseded historical provenance.
+- Corrected the `SPEC.md` PRESS START example to `cold_open` and aligned its task-schema reference with `src/tasks.js`.
+
+### Post-queue playtest fix: `cold_open → alley` music leak
+
+- The user directly reported that entering alley could leave cold-open music playing alongside alley music.
+- Root cause: one direction-wide outgoing-ramp generation let a newer fade cancel an older medley fade before its pause callback; async scene music requests could also resolve out of order.
+- `src/runtime/music.js` now tracks outgoing ramp generations per Audio element and invalidates stale scene-level play/medley requests after awaited loads or playback starts.
+- Added `test/music-transition-lifecycle.test.js` with focused regressions for the overlapping cold-open-medley → alley transition and out-of-order scene audio loads.
+- Parent verification: `npm test` passed **54/54**. The exact live-browser reproduction ended with `cold_open.mp3` and `cold_open_b.mp3` paused at volume 0 and `alley_confrontation.mp3` as the sole playing track at volume 0.7.
+- These changes are committed in `7b85309`.
+
+### Earlier audio follow-up (`0e3fb47`)
 
 The user approved the exact follow-up previously proposed: ship the verified `terminal_lab_e` drum fix and the `jailbreak_d` drum + lead fix, while leaving `terminal_lab_c` audio alone.
 
@@ -87,11 +104,11 @@ This was already committed before the latest follow-up. Do not rediscover or res
 Recent history:
 
 ```text
+7b85309 fix: complete audited runtime and editor remediation
+169d2d0 docs: refresh handoff for next session
 0e3fb47 fix terminal lab and jailbreak medley audio
 1ce362e AI-HANDOFF: state block reflects committed audit batch
 29bdec0 audio: sparse-pattern + monotony audit batch
-ab2362a AI-HANDOFF: correct kabukicho_d classification (was wrong)
-46b38ae kabukicho_d: replace silent held note with sparse breathing sax motif
 ```
 
 ## Current music/runtime state
@@ -124,14 +141,19 @@ Scene graph:
 
 Runtime implementation is `src/runtime/music.js`; the editor's queue player intentionally auditions tracks sequentially rather than rehearsing runtime crossfade timing.
 
-## Next session
+## Active carry-over
 
-### Immediate
+### Completed audit-remediation queue
 
-1. **Ask what the user wants to do next.** The latest requested fix is complete and committed; there is no hidden working-tree batch.
-2. If the user gives listening feedback on `terminal_lab_e` or `jailbreak_d`, act on that feedback rather than defending the metrics.
-3. Leave `terminal_lab_c` audio unchanged unless the user specifically says it still sounds wrong.
-4. Do not push unless the user explicitly asks. Local `main` is 79 commits ahead after this handoff commit.
+1. `AUDIT-FIX-TODO.md` is complete: all fixes 1–15 are verified. Do not continue implementing the queue or invent further work from superseded audit wording.
+2. The completed audit batch plus the verified `cold_open → alley` music-lifecycle fix are committed in `7b85309`; there is no pending dirty batch.
+3. Preserve the verified scope: no audio rewrites, asset generation, or unnecessary consolidation of historical one-off preview helpers.
+4. Keep the protected `story.json` editor changes byte-for-byte except for the already-verified `intro → cold_open` route correction and removal of the unsupported top-level recipes block.
+
+### Audio feedback guardrails
+
+- If the user gives listening feedback on `terminal_lab_e` or `jailbreak_d`, act on that feedback rather than defending the metrics.
+- Leave `terminal_lab_c` audio unchanged unless the user specifically says it still sounds wrong.
 
 ### Audit/listen candidates, not confirmed defects
 
@@ -175,10 +197,11 @@ python3 tools/make_scene_loop.py <track> --no-render
 ```
 
 - `story.json` — scene and music wiring; single source of truth.
-- `tools/make_scene_loop.py` — 44 renderable medley tracks and 9 five-track `MEDLEYS` groups.
+- `tools/make_scene_loop.py` — 44 renderable track configurations; `story.json` owns the nine five-track queue definitions.
 - `tools/render-midi.sh` — FluidSynth render pipeline.
 - `tools/test_full_chain.py` — broad render/smoke test.
-- `src/runtime/music.js` — runtime crossfades.
+- `src/runtime/music.js` — runtime crossfades and stale play-request invalidation.
+- `test/music-transition-lifecycle.test.js` — focused overlapping-fade and async-load regressions.
 - `editor.js` — editor queue player and music controls.
 - `AGENTS.md` — current stack/style/verification rules.
 
