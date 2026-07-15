@@ -11,17 +11,25 @@ keeps the same SC-55-style authoring discipline:
   - SMF Type-0, PPQ=96 (SC-55 standard)
   - Always-emitted status bytes (no running status) — eliminates parser
     complaints from picky synths
-  - Sort key: meta first, then by status code at each tick
-  - Cross-boundary discipline: held voices (pad/lead) get note_off at
-    LOOP_TICKS - 1; crash crosses the wrap to smear the boundary
+  - Semantic same-tick ordering: bank/program/CC/off/on/EOT
+  - Exact loop-boundary note releases; no events after End-of-Track
   - CC#91 (reverb) + CC#1 (modulation) set per channel at tick 0
 
 Usage:
-    # One-off render (writes assets/audio/<name>.mid and renders to .mp3):
-    python3 tools/make_scene_loop.py <name>
+    # Safe one-off render into a deliberate scratch/output directory:
+    python3 tools/make_scene_loop.py <name> --out-dir build/audio-preview
 
     # Just write the .mid (no MP3 render):
-    python3 tools/make_scene_loop.py <name> --no-render
+    python3 tools/make_scene_loop.py <name> --no-render --out-dir build/midi-preview
+
+    # Deliberately replace shipped assets (explicit opt-in only):
+    python3 tools/make_scene_loop.py <name> --force
+
+    # Render into a temporary directory and compare with the shipped baseline:
+    python3 tools/make_scene_loop.py --diagnose <name>
+
+    # Run the same render regression across every A/B/C/D/E scene:
+    python3 tools/make_scene_loop.py --diagnose-all
 
 The scene composition comes from a SCENES dict below. To add a new
 track, append an entry — copy an existing one and tweak tempo, key,
@@ -33,15 +41,22 @@ rendered with — same pipeline, same VintageDreamsWaves-v2 SF2 in
 assets/audio/sc55.sf2. No Godot/.import sidecars in this repo —
 the runtime plays MP3s via HTMLAudioElement directly.
 
-Zero external deps (stdlib only: struct, io, pathlib).
+Normal composition has zero Python-package dependencies. The optional
+`--diagnose` path additionally requires the project SoundFont plus the
+FluidSynth, FFmpeg and ffprobe command-line tools.
 """
 from __future__ import annotations
 
 import argparse
 import io
+import math
+import os
 import struct
+import shutil
 import subprocess
 import sys
+import tempfile
+import wave
 from pathlib import Path
 
 # -----------------------------------------------------------------------------
@@ -51,6 +66,74 @@ ROOT = Path(__file__).resolve().parent.parent
 AUDIO_DIR = ROOT / "assets" / "audio"
 SF2 = AUDIO_DIR / "sc55.sf2"
 RENDER_SH = ROOT / "tools" / "render-midi.sh"
+
+# Kept byte-for-byte equivalent to tools/render-midi.sh so diagnostics
+# exercise the shipped render chain without writing into assets/audio/.
+DIAGNOSTIC_SILENCE_FILTER = (
+    "silenceremove=stop_periods=9000:stop_duration=1.0:stop_threshold=-50dB"
+)
+# Rendered-duration regression baselines measured from the shipped MP3 assets.
+# Keys intentionally cover composer-owned SCENES only; legacy standalone assets
+# (alley_confrontation, clinic_tension, intro_theme, smoky_club_intro) are omitted.
+SHIPPED_DURATIONS_S: dict[str, float] = {
+    "alley_confrontation_b": 48.589,
+    "alley_confrontation_c": 48.611,
+    "alley_confrontation_d": 25.902,
+    "alley_confrontation_e": 48.611,
+    "chase": 48.663,
+    "chase_b": 49.634,
+    "chase_c": 47.942,
+    "chase_d": 49.631,
+    "chase_e": 53.274,
+    "cold_open": 87.287,
+    "cold_open_b": 85.478,
+    "cold_open_c": 87.278,
+    "cold_open_d": 57.848,
+    "cold_open_e": 87.278,
+    "corp_office": 55.542,
+    "corp_office_b": 54.468,
+    "corp_office_c": 55.542,
+    "corp_office_d": 23.165,
+    "corp_office_e": 53.770,
+    "corridor": 68.991,
+    "corridor_b": 100.991,
+    "corridor_c": 100.991,
+    "corridor_d": 68.991,
+    "corridor_e": 100.991,
+    "jailbreak": 50.817,
+    "jailbreak_b": 50.817,
+    "jailbreak_c": 48.093,
+    "jailbreak_d": 66.990,
+    "jailbreak_e": 74.224,
+    "kabukicho": 46.935,
+    "kabukicho_b": 46.732,
+    "kabukicho_c": 66.094,
+    "kabukicho_d": 55.426,
+    "kabukicho_e": 66.094,
+    "ship_engine": 77.002,
+    "ship_engine_b": 76.993,
+    "ship_engine_c": 76.993,
+    "ship_engine_d": 52.994,
+    "ship_engine_e": 76.993,
+    "terminal_lab": 75.620,
+    "terminal_lab_b": 80.782,
+    "terminal_lab_c": 59.728,
+    "terminal_lab_d": 62.595,
+    "terminal_lab_e": 59.728,
+}
+
+# Most shipped renders form a tight SoundFont-tail cluster. These five are
+# known historical duration outliers and receive a wider baseline tolerance
+# plus an EOT+1s spectral probe during diagnostics.
+STUCK_NOTE_PROBE_SCENES = frozenset({
+    "cold_open",
+    "ship_engine",
+    "jailbreak_e",
+    "corp_office_e",
+    "chase_e",
+})
+DEFAULT_DRIFT_LIMIT_SECONDS = 2.5
+OUTLIER_DRIFT_LIMIT_SECONDS = 5.0
 
 
 # -----------------------------------------------------------------------------
@@ -80,9 +163,11 @@ RIDE = 51
 
 
 def var_len(n: int) -> bytes:
-    """Encode a non-negative int as a MIDI variable-length quantity."""
+    """Encode a non-negative integer as a MIDI variable-length quantity."""
+    if not isinstance(n, int):
+        raise TypeError(f"VLQ value must be int, got {type(n).__name__}")
     if n < 0:
-        raise ValueError("var_len requires non-negative")
+        raise ValueError("VLQ value must be non-negative")
     buf = bytearray([n & 0x7F])
     n >>= 7
     while n:
@@ -92,41 +177,95 @@ def var_len(n: int) -> bytes:
     return bytes(buf)
 
 
+def _require_int(value: int, label: str) -> int:
+    if not isinstance(value, int):
+        raise TypeError(f"{label} must be int, got {type(value).__name__}")
+    return value
+
+
+def _tick(value: int) -> int:
+    value = _require_int(value, "tick")
+    if value < 0:
+        raise ValueError(f"tick must be >= 0, got {value}")
+    return value
+
+
+def _channel(value: int) -> int:
+    value = _require_int(value, "MIDI channel")
+    if not 0 <= value <= 15:
+        raise ValueError(f"MIDI channel must be 0..15, got {value}")
+    return value
+
+
+def _midi7(value: int, label: str) -> int:
+    value = _require_int(value, label)
+    if not 0 <= value <= 127:
+        raise ValueError(f"{label} must be 0..127, got {value}")
+    return value
+
+
+def _clamp_midi7(value: float | int) -> int:
+    return max(0, min(127, round(value)))
+
+
 class Event:
     __slots__ = ("tick", "status", "data")
 
     def __init__(self, tick: int, status: int, data: bytes = b"") -> None:
-        self.tick = tick
+        self.tick = _tick(tick)
+        status = _require_int(status, "status")
+        if status != 0xFF and not 0x80 <= status <= 0xEF:
+            raise ValueError(f"unsupported MIDI status 0x{status:02X}")
         self.status = status
         self.data = data
 
 
 def note_on(ch: int, key: int, vel: int, tick: int) -> Event:
-    return Event(tick, 0x90 | ch, bytes([key & 0x7F, vel & 0x7F]))
+    ch = _channel(ch)
+    key = _midi7(key, "note number")
+    vel = _midi7(vel, "note velocity")
+    if vel == 0:
+        raise ValueError("note_on velocity 0 is a note-off; call note_off() instead")
+    return Event(tick, 0x90 | ch, bytes([key, vel]))
 
 
 def note_off(ch: int, key: int, tick: int) -> Event:
-    return Event(tick, 0x80 | ch, bytes([key & 0x7F, 0]))
+    ch = _channel(ch)
+    key = _midi7(key, "note number")
+    return Event(tick, 0x80 | ch, bytes([key, 0]))
 
 
 def cc(ch: int, ctl: int, val: int, tick: int) -> Event:
-    return Event(tick, 0xB0 | ch, bytes([ctl & 0x7F, val & 0x7F]))
+    ch = _channel(ch)
+    ctl = _midi7(ctl, "controller number")
+    val = _midi7(val, "controller value")
+    return Event(tick, 0xB0 | ch, bytes([ctl, val]))
 
 
 def pc(ch: int, prog: int, tick: int) -> Event:
-    return Event(tick, 0xC0 | ch, bytes([prog & 0x7F]))
+    ch = _channel(ch)
+    prog = _midi7(prog, "program number")
+    return Event(tick, 0xC0 | ch, bytes([prog]))
 
 
 def meta_track_name(name: str, tick: int = 0) -> Event:
-    body = name.encode("ascii")
+    # MIDI text is byte-oriented. Replacement keeps non-ASCII scene names safe.
+    body = name.encode("ascii", errors="replace")
+    if len(body) > 127:
+        raise ValueError("track name is too long for this compact writer")
     return Event(tick, 0xFF, bytes([0x03, len(body)]) + body)
 
 
 def meta_set_tempo(micros_per_quarter: int, tick: int = 0) -> Event:
+    micros_per_quarter = _require_int(micros_per_quarter, "tempo")
+    if not 1 <= micros_per_quarter <= 0xFFFFFF:
+        raise ValueError(f"tempo must be 1..16777215 microseconds/quarter, got {micros_per_quarter}")
     return Event(tick, 0xFF, bytes([0x51, 3]) + struct.pack(">I", micros_per_quarter)[1:])
 
 
 def meta_time_sig(num: int, den_pow2: int, tick: int = 0) -> Event:
+    num = _midi7(num, "time-signature numerator")
+    den_pow2 = _midi7(den_pow2, "time-signature denominator exponent")
     return Event(tick, 0xFF, bytes([0x58, 4, num, den_pow2, 24, 8]))
 
 
@@ -134,21 +273,76 @@ def meta_end(tick: int = 0) -> Event:
     return Event(tick, 0xFF, bytes([0x2F, 0]))
 
 
+def _is_meta(event: Event, meta_type: int) -> bool:
+    return event.status == 0xFF and bool(event.data) and event.data[0] == meta_type
+
+
+def _event_priority(event: Event) -> int:
+    """Semantic same-tick ordering for deterministic synth behaviour."""
+    if event.status == 0xFF:
+        if _is_meta(event, 0x2F):
+            return 1000  # End-of-track must be the final event.
+        if _is_meta(event, 0x03):
+            return 0     # Track name.
+        if _is_meta(event, 0x58):
+            return 1     # Time signature.
+        if _is_meta(event, 0x51):
+            return 2     # Tempo.
+        return 3
+
+    message = event.status & 0xF0
+    if message == 0xB0 and event.data and event.data[0] in (0, 32):
+        return 10        # Bank select before program change.
+    if message == 0xC0:
+        return 20        # Program change before notes.
+    if message == 0xB0:
+        return 30        # Channel setup/automation before notes.
+    if message == 0x80 or (message == 0x90 and len(event.data) > 1 and event.data[1] == 0):
+        return 40        # Release old note before retriggering it.
+    if message == 0x90:
+        return 50
+    return 60
+
+
 def write_smf_clean(events: list[Event]) -> bytes:
-    """SMF Type-0 with always-emitted status bytes. Meta events sort first
-    within each tick (lower status codes first)."""
-    def sort_key(e: Event) -> tuple:
-        s = e.status
-        return (e.tick, 0 if s == 0xFF else s + 1, s)
-    events = sorted(events, key=sort_key)
+    """Write validated SMF Type-0 with explicit status bytes.
+
+    The writer enforces a single final End-of-Track event and semantically
+    orders bank/program/controller/note events that share a tick.
+    """
+    if not events:
+        raise ValueError("cannot write an empty MIDI track")
+
+    eot_events = [e for e in events if _is_meta(e, 0x2F)]
+    if len(eot_events) != 1:
+        raise ValueError(f"expected exactly one End-of-Track event, found {len(eot_events)}")
+    eot_tick = eot_events[0].tick
+
+    for event in events:
+        if event.tick > eot_tick:
+            raise ValueError(
+                f"event at tick {event.tick} occurs after End-of-Track at {eot_tick}"
+            )
+        if event.tick == eot_tick and not (
+            _is_meta(event, 0x2F) or (event.status & 0xF0) == 0x80
+        ):
+            raise ValueError(
+                f"only note-offs may share the End-of-Track tick {eot_tick}; "
+                f"got status 0x{event.status:02X}"
+            )
+
+    indexed = list(enumerate(events))
+    indexed.sort(key=lambda item: (item[1].tick, _event_priority(item[1]), item[0]))
+
     body = io.BytesIO()
     last_tick = 0
-    for e in events:
-        delta = e.tick - last_tick
-        last_tick = e.tick
+    for _, event in indexed:
+        delta = event.tick - last_tick
+        last_tick = event.tick
         body.write(var_len(delta))
-        body.write(bytes([e.status]))
-        body.write(e.data)
+        body.write(bytes([event.status]))
+        body.write(event.data)
+
     data = body.getvalue()
     out = io.BytesIO()
     out.write(b"MThd")
@@ -190,236 +384,673 @@ def chord(root: int, intervals: list[int], octave: int = 4, ext: int = 0) -> lis
 # -----------------------------------------------------------------------------
 # Composition functions
 # -----------------------------------------------------------------------------
+def ticks_per_bar() -> int:
+    return PPQ * BEATS_PER_BAR
+
+
+def at(bar: float, beat: float = 0.0) -> int:
+    """Convert a musical bar/beat position to an absolute MIDI tick."""
+    return round((bar * BEATS_PER_BAR + beat) * PPQ)
+
+
+def duration(*, bars: float = 0.0, beats: float = 0.0) -> int:
+    """Convert a musical duration to MIDI ticks."""
+    ticks = round((bars * BEATS_PER_BAR + beats) * PPQ)
+    if ticks <= 0:
+        raise ValueError("duration must be positive")
+    return ticks
+
+
+def cc_curve(channel: int, controller: int, start_tick: int, end_tick: int,
+             start_value: int, end_value: int, steps: int = 16) -> list[Event]:
+    """Create an explicitly stepped MIDI CC curve (MIDI does not interpolate)."""
+    start_tick = _tick(start_tick)
+    end_tick = _tick(end_tick)
+    if end_tick < start_tick:
+        raise ValueError("CC curve end_tick must be >= start_tick")
+    if steps < 2 or start_tick == end_tick:
+        return [cc(channel, controller, _clamp_midi7(end_value), end_tick)]
+
+    events: list[Event] = []
+    for i in range(steps):
+        frac = i / (steps - 1)
+        tick = round(start_tick + (end_tick - start_tick) * frac)
+        value = _clamp_midi7(start_value + (end_value - start_value) * frac)
+        events.append(cc(channel, controller, value, tick))
+    return events
+
+
+def _setup_part(channel: int, part: dict, *, default_volume: int,
+                default_reverb: int, default_pan: int = 64) -> list[Event]:
+    events: list[Event] = []
+    if "bank_msb" in part:
+        events.append(cc(channel, 0, part["bank_msb"], 0))
+    if "bank_lsb" in part:
+        events.append(cc(channel, 32, part["bank_lsb"], 0))
+    if "prog" in part:
+        events.append(pc(channel, part["prog"], 0))
+    events += [
+        cc(channel, 7, part.get("vol", default_volume), 0),
+        cc(channel, 10, part.get("pan", default_pan), 0),
+        cc(channel, 11, part.get("expression", 127), 0),
+        cc(channel, 91, part.get("reverb", default_reverb), 0),
+        cc(channel, 93, part.get("chorus", 0), 0),
+        cc(channel, 1, part.get("mod_init", 0), 0),
+    ]
+    return events
+
+
 def setup_channels(cfg: dict) -> list[Event]:
-    """Channel setup at tick 0: volume, pan, reverb, modulation, patch."""
-    ev: list[Event] = [
+    """Emit the complete tick-zero tempo, bank, patch and mixer state."""
+    bpm = cfg["bpm"]
+    if not isinstance(bpm, (int, float)) or bpm <= 0:
+        raise ValueError(f"scene {cfg.get('name', '<unnamed>')}: bpm must be positive")
+
+    events: list[Event] = [
         meta_track_name(f"{cfg['name']} (SC-55)"),
         meta_time_sig(4, 2),
+        # Always emit the base tempo. Later tempo changes no longer cause the
+        # first section to fall back to MIDI's implicit 120 BPM default.
+        meta_set_tempo(round(60_000_000 / bpm)),
     ]
-    # Only emit the tick-0 tempo if there are no mid-track tempo_changes
-    # (otherwise the first change at bar 0 is redundant with this one).
-    if not cfg.get("tempo_changes"):
-        ev.append(meta_set_tempo(int(60_000_000 / cfg["bpm"])))
-    # Lead
     if cfg.get("lead"):
-        l = cfg["lead"]
-        ev += [
-            cc(CH_LEAD, 7, l.get("vol", 100), 0),
-            cc(CH_LEAD, 10, l.get("pan", 64), 0),
-            cc(CH_LEAD, 91, l.get("reverb", 50), 0),
-            cc(CH_LEAD, 1, l.get("mod_init", 0), 0),
-            pc(CH_LEAD, l["prog"], 0),
-        ]
-    # Bass
+        events += _setup_part(CH_LEAD, cfg["lead"], default_volume=100, default_reverb=50)
     if cfg.get("bass"):
-        b = cfg["bass"]
-        ev += [
-            cc(CH_BASS, 7, b.get("vol", 90), 0),
-            cc(CH_BASS, 91, b.get("reverb", 25), 0),
-            pc(CH_BASS, b["prog"], 0),
-        ]
-    # Pad
+        events += _setup_part(CH_BASS, cfg["bass"], default_volume=90, default_reverb=25)
     if cfg.get("pad"):
-        p = cfg["pad"]
-        ev += [
-            cc(CH_PAD, 7, p.get("vol", 95), 0),
-            cc(CH_PAD, 10, p.get("pan", 64), 0),
-            cc(CH_PAD, 91, p.get("reverb", 85), 0),
-            pc(CH_PAD, p["prog"], 0),
-        ]
-    # Drums
+        events += _setup_part(CH_PAD, cfg["pad"], default_volume=95, default_reverb=85)
     if cfg.get("drums"):
-        d = cfg["drums"]
-        ev += [
-            cc(CH_DRUM, 7, d.get("vol", 100), 0),
-            cc(CH_DRUM, 91, d.get("reverb", 30), 0),
-        ]
-    return ev
+        events += _setup_part(CH_DRUM, cfg["drums"], default_volume=100, default_reverb=30)
+    return events
+
+
+def _pad_expression_events(cfg: dict, loop_ticks: int) -> list[Event]:
+    """Combine pad swell and breakdown envelopes without conflicting CC11s."""
+    ramp = cfg.get("pad_vel_ramp")
+    breakdowns = cfg.get("pad_breakdowns", [])
+    if not ramp and not breakdowns:
+        return []
+
+    if ramp:
+        start_expr, end_expr, requested_steps = ramp
+        requested_steps = max(2, int(requested_steps))
+    else:
+        start_expr = end_expr = cfg.get("pad", {}).get("expression", 127)
+        requested_steps = 2
+
+    bar_ticks = ticks_per_bar()
+    # At least 16 points per bar around fades; still tiny compared with audio.
+    step = max(1, bar_ticks // 16)
+    points = set(range(0, loop_ticks, step))
+    points.add(loop_ticks - 1)
+
+    # Include the originally requested global-ramp points exactly.
+    for i in range(requested_steps):
+        points.add(round((loop_ticks - 1) * i / (requested_steps - 1)))
+
+    for start_bar, end_bar in breakdowns:
+        t_start = max(0, round(start_bar * bar_ticks))
+        t_end = min(loop_ticks, round(end_bar * bar_ticks))
+        for anchor in (t_start - bar_ticks, t_start, t_end, t_end + bar_ticks):
+            if 0 <= anchor < loop_ticks:
+                points.add(anchor)
+
+    events: list[Event] = []
+    for tick in sorted(points):
+        frac = tick / max(1, loop_ticks - 1)
+        base = start_expr + (end_expr - start_expr) * frac
+        envelope = 1.0
+        for start_bar, end_bar in breakdowns:
+            start = max(0, round(start_bar * bar_ticks))
+            end = min(loop_ticks, round(end_bar * bar_ticks))
+            fade_in_start = max(0, start - bar_ticks)
+            fade_out_end = min(loop_ticks, end + bar_ticks)
+            if fade_in_start <= tick < start:
+                local = (start - tick) / max(1, start - fade_in_start)
+                envelope = min(envelope, local)
+            elif start <= tick < end:
+                envelope = 0.0
+            elif end <= tick < fade_out_end:
+                local = (tick - end) / max(1, fade_out_end - end)
+                envelope = min(envelope, local)
+        events.append(cc(CH_PAD, 11, _clamp_midi7(base * envelope), tick))
+    return events
 
 
 def schedule_pad_chord_block(cfg: dict) -> list[Event]:
-    """Hold pad chord(s) across their bar ranges, release at LOOP_TICKS - 1.
+    """Schedule non-stacking pad chords plus a combined CC11 envelope."""
+    events: list[Event] = []
+    loop_ticks = cfg["bars"] * ticks_per_bar()
+    chords = sorted(cfg.get("pad_chords", []), key=lambda item: item[0])
+    starts = [round(start_bar * ticks_per_bar()) for start_bar, _ in chords]
+    pad_velocity = _clamp_midi7(cfg.get("pad", {}).get("velocity", 70))
+    if pad_velocity == 0:
+        pad_velocity = 1
 
-    `cfg["pad_chords"]` is a list of (start_bar, [notes]) tuples. The
-    voices ring across bar boundaries so the loop seam is smooth.
+    for i, (start_bar, notes) in enumerate(chords):
+        note_tick = round(start_bar * ticks_per_bar())
+        if not 0 <= note_tick < loop_ticks:
+            continue
+        off_tick = starts[i + 1] if i + 1 < len(starts) else loop_ticks
+        off_tick = min(loop_ticks, max(note_tick + 1, off_tick))
+        for note in notes:
+            events.append(note_on(CH_PAD, note, pad_velocity, note_tick))
+            events.append(note_off(CH_PAD, note, off_tick))
 
-    Pad dynamics: cfg["pad_vel_ramp"] (start_vel, end_vel, n_steps) ramps
-    CC11 (channel expression) across the loop in N steps so the chord
-    swells in or fades out without changing notes. Default = none.
-    cfg["pad_breakdowns"] is [(start_bar, end_bar)] where expression drops
-    to 0 (full breakdown; just the held chord releases its own note).
+    events += _pad_expression_events(cfg, loop_ticks)
+    return events
+
+
+def schedule_note_sequence(cfg: dict, channel: int, phrases: list,
+                           base_vel: int = 80, mod_ramp: tuple = (0, 0),
+                           vel_ramp: tuple | None = None,
+                           default_gate: float = 1.0) -> list[Event]:
+    """Schedule sequential notes with optional velocity ramps and gate times.
+
+    Note entries may be (pitch, step), (pitch, step, velocity_delta), or
+    (pitch, step, velocity_delta, gate). A None pitch is a rest.
     """
-    ev: list[Event] = []
-    bar = PPQ * BEATS_PER_BAR
-    loop_ticks = cfg["bars"] * bar
-    chord_starts = [int(start_bar * bar) for start_bar, _ in cfg["pad_chords"]]
-    for i, (start_bar, notes) in enumerate(cfg["pad_chords"]):
-        t_on = int(start_bar * bar)
-        # A chord owns the range up to the next chord.  The old composer held
-        # every chord to the end of the loop, so each change merely piled a
-        # new harmony on top of all previous ones.
-        t_off = chord_starts[i + 1] - 1 if i + 1 < len(chord_starts) else loop_ticks - 1
-        for n in notes:
-            ev.append(note_on(CH_PAD, n, 70, t_on))
-            ev.append(note_off(CH_PAD, n, t_off))
-    # Optional expression ramp
-    pr = cfg.get("pad_vel_ramp")
-    if pr:
-        start_v, end_v, n_steps = pr
-        for i in range(n_steps):
-            t = int(loop_ticks * (i / n_steps))
-            v = int(start_v + (end_v - start_v) * (i / n_steps))
-            ev.append(cc(CH_PAD, 11, max(0, min(127, v)), t))
-    # Optional breakdowns (expression = 0 for the bar range, then restore)
-    pb = cfg.get("pad_breakdowns", [])
-    default_expr = cfg.get("pad", {}).get("vol", 95)
-    for b_start, b_end in pb:
-        t_start = b_start * bar
-        t_end = b_end * bar
-        # Ramp down into the breakdown
-        ramp_down = bar  # 1 bar fade-out
-        ev.append(cc(CH_PAD, 11, default_expr, max(0, t_start - ramp_down)))
-        ev.append(cc(CH_PAD, 11, 0, t_start))
-        # Ramp back up at the end of the breakdown
-        ramp_up_bars = 1
-        t_restore = (b_end - ramp_up_bars) * bar if b_end - ramp_up_bars >= 0 else b_end * bar
-        ev.append(cc(CH_PAD, 11, 0, t_restore))
-        ev.append(cc(CH_PAD, 11, default_expr, b_end * bar))
-    return ev
+    events: list[Event] = []
+    loop_ticks = cfg["bars"] * ticks_per_bar()
 
-
-def schedule_note_sequence(cfg: dict, channel: int, phrases: list, base_vel: int = 80,
-                    mod_ramp: tuple = (0, 0), vel_ramp: tuple | None = None) -> list[Event]:
-    """Schedule a single-channel melodic phrase.
-
-    `phrases` is a list of (start_tick_offset_from_loop, [notes]) where
-    each note is (midi_note, duration_ticks, velocity_delta).
-    `mod_ramp` (start_cc1, end_cc1) sweeps CC#1 across the loop for vibrato
-    / instability effects.
-    `vel_ramp` (start_vel, end_vel) ramps the per-note base_vel across the
-    loop — e.g. (40, 100) gives a soft start building to full volume.
-    Combined with `base_vel`, actual velocity = base_vel + vdelta, scaled
-    by the position in the loop toward vel_ramp target."""
-    ev: list[Event] = []
-    loop_ticks = cfg["bars"] * PPQ * BEATS_PER_BAR
     if mod_ramp[1] != mod_ramp[0]:
-        # 4-point CC ramp across the loop
-        for i, frac in enumerate([0.0, 0.33, 0.66, 1.0]):
-            t = int(loop_ticks * frac)
-            val = int(mod_ramp[0] + (mod_ramp[1] - mod_ramp[0]) * frac)
-            ev.append(cc(channel, 1, val, t))
+        events += cc_curve(
+            channel, 1, 0, loop_ticks - 1,
+            _clamp_midi7(mod_ramp[0]), _clamp_midi7(mod_ramp[1]),
+            steps=max(8, cfg.get("mod_ramp_steps", 16)),
+        )
+
     for start, notes in phrases:
-        # Pattern entries are sequential phrases.  Their note durations advance
-        # a local cursor; treating every tuple as if it began at `start` stacked
-        # the whole phrase into one chord and left the rest of the section bare.
-        cursor = start
+        cursor = _tick(start)
         for note_info in notes:
             if len(note_info) == 2:
-                key, dur = note_info
-                vdelta = 0
+                key, step_ticks = note_info
+                velocity_delta = 0
+                gate = default_gate
+            elif len(note_info) == 3:
+                key, step_ticks, velocity_delta = note_info
+                gate = default_gate
+            elif len(note_info) == 4:
+                key, step_ticks, velocity_delta, gate = note_info
             else:
-                key, dur, vdelta = note_info
+                raise ValueError(f"invalid note tuple {note_info!r}")
+
+            step_ticks = _require_int(step_ticks, "note duration")
+            if step_ticks <= 0:
+                raise ValueError(f"note duration must be positive, got {step_ticks}")
+            if not isinstance(gate, (int, float)) or gate <= 0:
+                raise ValueError(f"note gate must be positive, got {gate}")
+
             if cursor >= loop_ticks:
                 break
-            dur = min(dur, loop_ticks - cursor)
+            usable_step = min(step_ticks, loop_ticks - cursor)
+
             if key is not None:
                 if vel_ramp is None or vel_ramp[0] == vel_ramp[1]:
                     scaled_base = base_vel
                 else:
-                    frac = cursor / max(1, loop_ticks)
-                    scaled_base = int(vel_ramp[0] + (vel_ramp[1] - vel_ramp[0]) * frac)
-                v = max(20, min(127, scaled_base + vdelta))
-                ev.append(note_on(channel, key, v, cursor))
-                ev.append(note_off(channel, key, cursor + dur - 1))
-            cursor += dur
-    return ev
+                    frac = cursor / max(1, loop_ticks - 1)
+                    scaled_base = vel_ramp[0] + (vel_ramp[1] - vel_ramp[0]) * frac
+                velocity = max(1, _clamp_midi7(scaled_base + velocity_delta))
+                sounding_ticks = max(1, round(usable_step * gate))
+                off_tick = min(loop_ticks, cursor + sounding_ticks)
+                pitches = key if isinstance(key, (tuple, list)) else (key,)
+                for pitch in pitches:
+                    events.append(note_on(channel, pitch, velocity, cursor))
+                    events.append(note_off(channel, pitch, off_tick))
+            cursor += usable_step
+    return events
+
+
+def _drum_family(note: int) -> str | None:
+    if note in (35, 36):
+        return "kick"
+    if note in (37, 38, 39, 40):
+        return "snare"
+    if note in (42, 44, 46):
+        return "hats"
+    if note in (41, 43, 45, 47, 48, 50):
+        return "toms"
+    return None
+
+
+def _resolved_drum_velocity(cfg: dict, velocity: int) -> int:
+    """Support old scene data where negative values meant ghost-note deltas."""
+    velocity = _require_int(velocity, "drum velocity")
+    if velocity <= 0:
+        velocity = cfg.get("drums", {}).get("velocity", cfg.get("drums", {}).get("vol", 100)) + velocity
+    return max(1, _clamp_midi7(velocity))
+
+
+def _shape_drum_hit(cfg: dict, tick: int, note: int, velocity: int) -> int | None:
+    bar = tick / ticks_per_bar()
+    family = _drum_family(note)
+    for shape in cfg.get("drum_shapes", []):
+        start_bar, end_bar = shape.get("bars", (0, cfg["bars"]))
+        if not start_bar <= bar < end_bar:
+            continue
+        setting = shape.get(family) if family else None
+        if setting == "off":
+            return None
+        if isinstance(setting, int):
+            velocity = min(velocity, max(1, _clamp_midi7(setting)))
+    return velocity
 
 
 def schedule_drums(cfg: dict) -> list[Event]:
-    """Build a drum pattern from `cfg["drum_pattern"]`.
+    """Schedule validated GM drum hits and working whole-kit automation."""
+    events: list[Event] = []
+    loop_ticks = cfg["bars"] * ticks_per_bar()
 
-    Pattern is a list of (start_tick, drum_note, velocity). The composer
-    also schedules a crash that crosses the wrap (cross-boundary crash).
+    for tick, note, raw_velocity in cfg.get("drum_pattern", []):
+        tick = _tick(tick)
+        if tick >= loop_ticks:
+            continue
+        velocity = _resolved_drum_velocity(cfg, raw_velocity)
+        velocity = _shape_drum_hit(cfg, tick, note, velocity)
+        if velocity is None:
+            continue
+        events.append(note_on(CH_DRUM, note, velocity, tick))
+        events.append(note_off(CH_DRUM, note, min(loop_ticks, tick + 1)))
 
-    Bar-band shaping: cfg["drum_shapes"] is a list of band dicts applied
-    across the loop, each like {"bars": (start_bar, end_bar), "kick":
-    None|"off", "snare": vol_int|None, "hats": vol_int|None, ...}.
-    `None` for the vol means "leave default". Setting a key to `"off"`
-    silences that instrument for the bar range. This is how we get a
-    real "breakdown" (drums cut, then come back in)."""
-    ev: list[Event] = []
-    bar = PPQ * BEATS_PER_BAR
-    loop_ticks = cfg["bars"] * bar
-    pattern = cfg.get("drum_pattern", [])
-    # Pass 1: schedule the actual drum hits
-    for t, note, vel in pattern:
-        for n in range(cfg.get("drum_repeats", 1)):
-            tt = t + n * loop_ticks
-            ev.append(note_on(CH_DRUM, note, vel, tt))
-            ev.append(note_off(CH_DRUM, note, tt + 1))
-    # Pass 2: per-bar shaping — emit CC7 (channel volume) and CC9
-    # (note-off velocity curves) bursts at the start of each shaped bar
-    # band. We use CC7 per note since channel 10 is a drum channel and
-    # all GM drums respond to it (most percussion responds to CC7 with
-    # attenuation, gives a "fading out" feel for breakdowns). For "off"
-    # we set CC7=0 at the start of the band and restore at the end.
-    shapes = cfg.get("drum_shapes", [])
-    for sh in shapes:
-        b_start, b_end = sh.get("bars", (0, cfg["bars"]))
-        t_start = b_start * bar
-        t_end = b_end * bar
-        for inst in ("kick", "snare", "hats", "toms"):
-            v = sh.get(inst, None) if isinstance(sh.get(inst, None), int) else None
-            # We can't address individual drum instruments via CC on a
-            # single drum channel — CC7 mutes the whole kit. For partial
-            # shaping we'd need multi-channel drums. As a fallback we use
-            # CC7 for whole-band on/off:
-            if inst == "_volume" and v is not None:
-                ev.append(cc(CH_DRUM, 7, max(0, min(127, v)), t_start))
-                if t_end < loop_ticks:
-                    # restore on exit (use the default vol if not given)
-                    restore = sh.get("_restore", cfg.get("drums", {}).get("vol", 100))
-                    ev.append(cc(CH_DRUM, 7, max(0, min(127, restore)), t_end))
-    # Cross-boundary crash (last 2 bars of the loop, ring past the wrap)
-    if cfg.get("cross_boundary_crash"):
-        crash_vel = cfg.get("crash_velocity", 100)
-        # crash at bar (N-2) beat 3, note_off well past the wrap
-        cb_on = (cfg["bars"] - 2) * bar + 2 * PPQ
-        cb_off = loop_ticks + PPQ  # 1 beat past wrap
-        ev.append(note_on(CH_DRUM, CRASH, crash_vel, cb_on))
-        ev.append(note_off(CH_DRUM, CRASH, cb_off))
-    return ev
+    # Whole-kit CC7 bands. This fixes the old unreachable `_volume` branch.
+    for shape in cfg.get("drum_shapes", []):
+        if "_volume" not in shape:
+            continue
+        start_bar, end_bar = shape.get("bars", (0, cfg["bars"]))
+        start_tick = max(0, min(loop_ticks - 1, round(start_bar * ticks_per_bar())))
+        end_tick = max(0, min(loop_ticks, round(end_bar * ticks_per_bar())))
+        events.append(cc(CH_DRUM, 7, _clamp_midi7(shape["_volume"]), start_tick))
+        if end_tick < loop_ticks:
+            restore = shape.get("_restore", cfg.get("drums", {}).get("vol", 100))
+            events.append(cc(CH_DRUM, 7, _clamp_midi7(restore), end_tick))
 
+    if cfg.get("cross_boundary_crash") and cfg["bars"] >= 2:
+        crash_tick = (cfg["bars"] - 2) * ticks_per_bar() + 2 * PPQ
+        velocity = _resolved_drum_velocity(cfg, cfg.get("crash_velocity", 100))
+        events.append(note_on(CH_DRUM, CRASH, velocity, crash_tick))
+        # Release exactly at the loop boundary, before End-of-Track.
+        events.append(note_off(CH_DRUM, CRASH, loop_ticks))
+    return events
+
+
+def _note_pair(event_on: Event, event_off: Event) -> bool:
+    return (
+        (event_on.status & 0xF0) == 0x90
+        and len(event_on.data) == 2 and event_on.data[1] > 0
+        and (event_off.status & 0xF0) == 0x80
+        and (event_on.status & 0x0F) == (event_off.status & 0x0F)
+        and event_on.data[0] == event_off.data[0]
+    )
+
+
+def normalize_note_overlaps(events: list[Event]) -> list[Event]:
+    """Merge duplicate same-tick notes and clip same-key overlaps safely.
+
+    Composer helpers append each note-on directly beside its matching note-off,
+    which lets this pass preserve note ownership without a heavy MIDI library.
+    """
+    pairs: list[tuple[int, int, Event, Event]] = []
+    i = 0
+    while i + 1 < len(events):
+        if _note_pair(events[i], events[i + 1]):
+            pairs.append((i, i + 1, events[i], events[i + 1]))
+            i += 2
+        else:
+            i += 1
+
+    grouped: dict[tuple[int, int], list[tuple[int, int, Event, Event]]] = {}
+    for pair in pairs:
+        _, _, on, _ = pair
+        grouped.setdefault((on.status & 0x0F, on.data[0]), []).append(pair)
+
+    remove: set[int] = set()
+    for note_pairs in grouped.values():
+        note_pairs.sort(key=lambda pair: (pair[2].tick, pair[0]))
+        merged: list[tuple[int, int, Event, Event]] = []
+        for pair in note_pairs:
+            on_i, off_i, on, off = pair
+            if merged and merged[-1][2].tick == on.tick:
+                prev_on_i, prev_off_i, prev_on, prev_off = merged[-1]
+                # One physical MIDI note cannot represent duplicate unison voices.
+                # Keep the stronger attack and the longest release.
+                if on.data[1] > prev_on.data[1]:
+                    prev_on.data = bytes([prev_on.data[0], on.data[1]])
+                prev_off.tick = max(prev_off.tick, off.tick)
+                remove.update((on_i, off_i))
+                continue
+            if merged:
+                _, _, prev_on, prev_off = merged[-1]
+                if prev_off.tick > on.tick:
+                    prev_off.tick = on.tick  # note-off sorts before new note-on
+                if prev_off.tick <= prev_on.tick:
+                    prev_off.tick = prev_on.tick + 1
+            merged.append(pair)
+
+    return [event for index, event in enumerate(events) if index not in remove]
+
+
+def validate_scene(cfg: dict) -> list[str]:
+    """Return catalogue/data diagnostics before MIDI event generation."""
+    issues: list[str] = []
+    name = cfg.get("name", "<unnamed>")
+    bars = cfg.get("bars")
+    bpm = cfg.get("bpm")
+    if not isinstance(bars, int) or bars <= 0:
+        issues.append(f"{name}: bars must be a positive integer")
+        return issues
+    if not isinstance(bpm, (int, float)) or bpm <= 0:
+        issues.append(f"{name}: bpm must be positive")
+    loop_ticks = bars * ticks_per_bar()
+
+    for index, change in enumerate(cfg.get("tempo_changes", [])):
+        if not isinstance(change, (tuple, list)) or len(change) != 2:
+            issues.append(f"{name}: tempo change {index} must be (bar, bpm)")
+            continue
+        change_bar, change_bpm = change
+        if not isinstance(change_bar, (int, float)) or not 0 <= change_bar < bars:
+            issues.append(f"{name}: tempo change at bar {change_bar!r} is outside the loop")
+        if not isinstance(change_bpm, (int, float)) or change_bpm <= 0:
+            issues.append(f"{name}: tempo change BPM must be positive")
+
+    for role, key_name in (("lead", "lead_pattern"), ("bass", "bass_pattern")):
+        for index, phrase in enumerate(cfg.get(key_name, [])):
+            if not isinstance(phrase, (tuple, list)) or len(phrase) != 2:
+                issues.append(f"{name}: {role} phrase {index} must be (start_tick, notes)")
+                continue
+            start, notes = phrase
+            if not isinstance(start, int) or start < 0:
+                issues.append(f"{name}: {role} phrase {index} has invalid start tick {start!r}")
+                continue
+            if start >= loop_ticks:
+                issues.append(f"{name}: {role} phrase {index} starts at/past EOT")
+            total = 0
+            for note_index, note in enumerate(notes):
+                if not isinstance(note, (tuple, list)) or len(note) not in (2, 3, 4):
+                    issues.append(
+                        f"{name}: {role} phrase {index} note {note_index} has invalid tuple"
+                    )
+                    continue
+                step_ticks = note[1]
+                if not isinstance(step_ticks, int) or step_ticks <= 0:
+                    issues.append(
+                        f"{name}: {role} phrase {index} note {note_index} "
+                        f"has invalid duration {step_ticks!r}"
+                    )
+                    continue
+                total += step_ticks
+                pitch = note[0]
+                pitches = pitch if isinstance(pitch, (tuple, list)) else (pitch,)
+                for single_pitch in pitches:
+                    if single_pitch is not None and (
+                        not isinstance(single_pitch, int) or not 0 <= single_pitch <= 127
+                    ):
+                        issues.append(
+                            f"{name}: {role} pitch {single_pitch!r} is outside MIDI range"
+                        )
+                if len(note) == 4:
+                    gate = note[3]
+                    if not isinstance(gate, (int, float)) or gate <= 0:
+                        issues.append(
+                            f"{name}: {role} phrase {index} note {note_index} "
+                            f"has invalid gate {gate!r}"
+                        )
+            if start < loop_ticks and start + total > loop_ticks:
+                issues.append(f"{name}: {role} phrase {index} crosses EOT")
+
+    for index, hit in enumerate(cfg.get("drum_pattern", [])):
+        if not isinstance(hit, (tuple, list)) or len(hit) != 3:
+            issues.append(f"{name}: drum hit {index} must be (tick, note, velocity)")
+            continue
+        tick, note, velocity = hit
+        if not isinstance(tick, int) or not 0 <= tick < loop_ticks:
+            issues.append(f"{name}: drum hit {index} occurs at/past EOT: {tick!r}")
+        if not isinstance(note, int) or not 0 <= note <= 127:
+            issues.append(f"{name}: drum hit {index} note is outside MIDI range: {note!r}")
+        if not isinstance(velocity, int):
+            issues.append(f"{name}: drum hit {index} velocity must be int")
+
+    for index, chord_entry in enumerate(cfg.get("pad_chords", [])):
+        if not isinstance(chord_entry, (tuple, list)) or len(chord_entry) != 2:
+            issues.append(f"{name}: pad chord {index} must be (start_bar, notes)")
+            continue
+        start_bar, notes = chord_entry
+        if not isinstance(start_bar, (int, float)) or not 0 <= start_bar < bars:
+            issues.append(f"{name}: pad chord {index} starts outside the loop")
+        for note in notes:
+            if not isinstance(note, int) or not 0 <= note <= 127:
+                issues.append(f"{name}: pad chord {index} contains invalid note {note!r}")
+
+    for label, ranges in (
+        ("pad breakdown", cfg.get("pad_breakdowns", [])),
+    ):
+        for index, bar_range in enumerate(ranges):
+            if not isinstance(bar_range, (tuple, list)) or len(bar_range) != 2:
+                issues.append(f"{name}: {label} {index} must be (start_bar, end_bar)")
+                continue
+            start_bar, end_bar = bar_range
+            if not (
+                isinstance(start_bar, (int, float))
+                and isinstance(end_bar, (int, float))
+                and 0 <= start_bar < end_bar <= bars
+            ):
+                issues.append(f"{name}: {label} {index} has invalid range {bar_range!r}")
+
+    for index, shape in enumerate(cfg.get("drum_shapes", [])):
+        start_bar, end_bar = shape.get("bars", (0, bars))
+        if not (
+            isinstance(start_bar, (int, float))
+            and isinstance(end_bar, (int, float))
+            and 0 <= start_bar < end_bar <= bars
+        ):
+            issues.append(f"{name}: drum shape {index} has invalid bar range")
+
+    return issues
+
+def tempo_map_seconds(cfg: dict) -> float:
+    """Calculate exact nominal loop length, including tempo changes."""
+    loop_ticks = cfg["bars"] * ticks_per_bar()
+    changes: dict[int, float] = {0: float(cfg["bpm"])}
+    for change_bar, change_bpm in cfg.get("tempo_changes", []):
+        tick = round(change_bar * ticks_per_bar())
+        if 0 <= tick < loop_ticks:
+            changes[tick] = float(change_bpm)
+
+    ordered = sorted(changes.items())
+    seconds = 0.0
+    for index, (start_tick, bpm) in enumerate(ordered):
+        end_tick = ordered[index + 1][0] if index + 1 < len(ordered) else loop_ticks
+        seconds += ((end_tick - start_tick) / PPQ) * (60.0 / bpm)
+    return seconds
+
+
+
+def _ordered_events(events: list[Event]) -> list[Event]:
+    indexed = list(enumerate(events))
+    indexed.sort(key=lambda item: (item[1].tick, _event_priority(item[1]), item[0]))
+    return [event for _, event in indexed]
+
+
+def _tempo_map_seconds_from_events(events: list[Event], eot_tick: int) -> float:
+    """Integrate emitted tempo meta-events up to EOT."""
+    tempo_by_tick: dict[int, int] = {}
+    for event in _ordered_events(events):
+        if _is_meta(event, 0x51):
+            if len(event.data) != 5 or event.data[1] != 3:
+                raise ValueError("malformed Set Tempo meta-event")
+            tempo_by_tick[event.tick] = int.from_bytes(event.data[2:5], "big")
+    if 0 not in tempo_by_tick:
+        raise ValueError("tempo map has no tick-zero Set Tempo event")
+
+    ordered = sorted((tick, micros) for tick, micros in tempo_by_tick.items() if tick < eot_tick)
+    seconds = 0.0
+    for index, (start_tick, micros) in enumerate(ordered):
+        end_tick = ordered[index + 1][0] if index + 1 < len(ordered) else eot_tick
+        seconds += ((end_tick - start_tick) / PPQ) * (micros / 1_000_000.0)
+    return seconds
+
+
+def validate_composed_events(cfg: dict, events: list[Event]) -> list[str]:
+    """Validate the MIDI/render contract after all scene repairs and scheduling.
+
+    Note-offs at the EOT tick are valid because semantic ordering guarantees
+    they are serialized before the End-of-Track event itself.
+    """
+    issues: list[str] = []
+    name = cfg.get("name", "<unnamed>")
+    loop_ticks = cfg["bars"] * ticks_per_bar()
+    eots = [event for event in events if _is_meta(event, 0x2F)]
+    if len(eots) != 1:
+        issues.append(f"{name}: expected one EOT event, found {len(eots)}")
+        return issues
+    if eots[0].tick != loop_ticks:
+        issues.append(
+            f"{name}: EOT tick {eots[0].tick} does not equal loop tick {loop_ticks}"
+        )
+
+    for event in events:
+        if event.tick > loop_ticks:
+            issues.append(f"{name}: event at tick {event.tick} floats after EOT")
+        if event.tick == loop_ticks and not (
+            _is_meta(event, 0x2F) or (event.status & 0xF0) == 0x80
+        ):
+            issues.append(
+                f"{name}: non-note-off status 0x{event.status:02X} shares EOT tick"
+            )
+
+    active: dict[tuple[int, int], int] = {}
+    reached_eot = False
+    for event in _ordered_events(events):
+        if _is_meta(event, 0x2F):
+            reached_eot = True
+            still_active = [key for key, count in active.items() if count]
+            if still_active:
+                preview = ", ".join(f"ch{ch + 1}/note{note}" for ch, note in still_active[:8])
+                issues.append(f"{name}: held notes remain active at EOT: {preview}")
+            continue
+        if reached_eot:
+            issues.append(f"{name}: serialized event appears after EOT")
+            continue
+        message = event.status & 0xF0
+        if message not in (0x80, 0x90) or len(event.data) < 2:
+            continue
+        key = (event.status & 0x0F, event.data[0])
+        is_on = message == 0x90 and event.data[1] > 0
+        if is_on:
+            if active.get(key, 0):
+                issues.append(f"{name}: overlapping same-key note {key} at tick {event.tick}")
+            active[key] = active.get(key, 0) + 1
+        else:
+            if active.get(key, 0) <= 0:
+                issues.append(f"{name}: unmatched note-off {key} at tick {event.tick}")
+            else:
+                active[key] -= 1
+
+    try:
+        write_smf_clean(events)
+    except (TypeError, ValueError) as exc:
+        issues.append(f"{name}: SMF writer rejected composed events: {exc}")
+
+    try:
+        emitted_seconds = _tempo_map_seconds_from_events(events, loop_ticks)
+        nominal_seconds = tempo_map_seconds(cfg)
+        if abs(emitted_seconds - nominal_seconds) > 0.01:
+            issues.append(
+                f"{name}: emitted tempo map is {emitted_seconds:.6f}s but "
+                f"SCENES data says {nominal_seconds:.6f}s"
+            )
+    except ValueError as exc:
+        issues.append(f"{name}: invalid emitted tempo map: {exc}")
+
+    effective_start_bpm = float(cfg["bpm"])
+    for change_bar, change_bpm in cfg.get("tempo_changes", []):
+        if round(change_bar * ticks_per_bar()) == 0:
+            effective_start_bpm = float(change_bpm)
+    tick_zero_tempos = [
+        int.from_bytes(event.data[2:5], "big")
+        for event in _ordered_events(events)
+        if event.tick == 0 and _is_meta(event, 0x51)
+    ]
+    expected_micros = round(60_000_000 / effective_start_bpm)
+    if not tick_zero_tempos or tick_zero_tempos[-1] != expected_micros:
+        issues.append(
+            f"{name}: opening tempo is not the SCENES tick-zero tempo "
+            f"({effective_start_bpm:g} BPM)"
+        )
+    return issues
+
+
+def _writer_guard_diagnostic() -> str | None:
+    """Regression guard: the writer must reject any input after EOT."""
+    try:
+        write_smf_clean([
+            meta_end(10),
+            cc(CH_LEAD, 7, 100, 11),
+        ])
+    except ValueError:
+        return None
+    return "SMF writer accepted an event after EOT"
+
+
+def validate_catalogue() -> list[str]:
+    """Run data, baseline and composed-event discipline checks across all scenes."""
+    issues: list[str] = []
+    missing_baselines = sorted(set(SCENES) - set(SHIPPED_DURATIONS_S))
+    stale_baselines = sorted(set(SHIPPED_DURATIONS_S) - set(SCENES))
+    if missing_baselines:
+        issues.append(f"missing shipped-duration baselines: {missing_baselines}")
+    if stale_baselines:
+        issues.append(f"baseline entries without SCENES configs: {stale_baselines}")
+    writer_issue = _writer_guard_diagnostic()
+    if writer_issue:
+        issues.append(writer_issue)
+    for cfg in SCENES.values():
+        issues.extend(validate_scene(cfg))
+        try:
+            events = compose(cfg)
+        except (TypeError, ValueError) as exc:
+            issues.append(f"{cfg.get('name', '<unnamed>')}: compose failed: {exc}")
+            continue
+        issues.extend(validate_composed_events(cfg, events))
+    return issues
 
 def compose(cfg: dict) -> list[Event]:
-    """Top-level composer — stitches setup + voices together."""
-    ev: list[Event] = []
-    ev += setup_channels(cfg)
+    """Top-level composer with validation, safe boundaries and overlap repair."""
+    loop_ticks = cfg["bars"] * ticks_per_bar()
+    events: list[Event] = []
+    events += setup_channels(cfg)
+
     if cfg.get("pad"):
-        ev += schedule_pad_chord_block(cfg)
+        events += schedule_pad_chord_block(cfg)
     if cfg.get("bass"):
-        ev += schedule_note_sequence(cfg, CH_BASS, cfg["bass_pattern"],
-                              base_vel=cfg["bass"].get("vol", 85),
-                              vel_ramp=cfg.get("bass_vel_ramp"))
+        bass = cfg["bass"]
+        events += schedule_note_sequence(
+            cfg, CH_BASS, cfg.get("bass_pattern", []),
+            base_vel=bass.get("velocity", bass.get("vol", 85)),
+            vel_ramp=cfg.get("bass_vel_ramp"),
+            default_gate=bass.get("gate", 1.0),
+        )
     if cfg.get("lead"):
-        ev += schedule_note_sequence(cfg, CH_LEAD, cfg["lead_pattern"],
-                              base_vel=cfg["lead"].get("vol", 90),
-                              mod_ramp=cfg.get("lead_mod_ramp", (0, 0)),
-                              vel_ramp=cfg.get("lead_vel_ramp"))
+        lead = cfg["lead"]
+        events += schedule_note_sequence(
+            cfg, CH_LEAD, cfg.get("lead_pattern", []),
+            base_vel=lead.get("velocity", lead.get("vol", 90)),
+            mod_ramp=cfg.get("lead_mod_ramp", (0, 0)),
+            vel_ramp=cfg.get("lead_vel_ramp"),
+            default_gate=lead.get("gate", 1.0),
+        )
     if cfg.get("drums"):
-        ev += schedule_drums(cfg)
-    # Mid-track tempo changes — emitted via meta_set_tempo events at the
-    # start tick of each listed bar. cfg["tempo_changes"] is [(bar, bpm)].
-    bar = PPQ * BEATS_PER_BAR
-    for ch_bar, ch_bpm in cfg.get("tempo_changes", []):
-        t = int(ch_bar * bar)
-        # Set meta at this bar; if it's earlier than the setup tempo at
-        # tick 0, we need to suppress that initial tempo. Easiest fix is
-        # to drop the initial meta_set_tempo from setup if any tempo
-        # changes exist; we do that conditionally in setup_channels.
-        ev.append(meta_set_tempo(int(60_000_000 / ch_bpm), t))
-    ev.append(meta_end(cfg["bars"] * PPQ * BEATS_PER_BAR))
-    return ev
+        events += schedule_drums(cfg)
+
+    # Base tempo is already at tick zero; later entries override it naturally.
+    for change_bar, change_bpm in cfg.get("tempo_changes", []):
+        tick = round(change_bar * ticks_per_bar())
+        if 0 <= tick < loop_ticks:
+            events.append(meta_set_tempo(round(60_000_000 / change_bpm), tick))
+
+    events = normalize_note_overlaps(events)
+    events.append(meta_end(loop_ticks))
+    return events
 
 
 # -----------------------------------------------------------------------------
@@ -2049,16 +2680,16 @@ def _build_corp_office_patterns():
         # stab = root + 3rd + 5th, voiced close
         chord_notes = [N(root_idx, 4), N(root_idx + 3, 4), N(root_idx + 7, 4)]
         # beat 1
-        lead_ev.append((b * bar, [(n, PPQ // 2, -5) for n in chord_notes]))
+        lead_ev.append((b * bar, [(tuple(chord_notes), PPQ // 2, -5)]))
         # beat 3
-        lead_ev.append((b * bar + 2 * PPQ, [(n, PPQ // 2, -5) for n in chord_notes]))
+        lead_ev.append((b * bar + 2 * PPQ, [(tuple(chord_notes), PPQ // 2, -5)]))
     # bars 4-7: EP chord progression (4 chords × 1 bar each) — stabs continue
     for b in range(4, 8):
         root_idx = chord_roots[(b - 4) % 4]
         chord_notes = [N(root_idx, 4), N(root_idx + 3, 4), N(root_idx + 7, 4)]
         # stabs on beats 1+3 as before, with higher velocity now (full band)
-        lead_ev.append((b * bar, [(n, PPQ // 2, 0) for n in chord_notes]))
-        lead_ev.append((b * bar + 2 * PPQ, [(n, PPQ // 2, 0) for n in chord_notes]))
+        lead_ev.append((b * bar, [(tuple(chord_notes), PPQ // 2, 0)]))
+        lead_ev.append((b * bar + 2 * PPQ, [(tuple(chord_notes), PPQ // 2, 0)]))
         # bar-end melodic tag (one high note on bar 7)
         if b == 7:
             lead_ev.append((b * bar + 3 * PPQ, [(N(root_idx, 5), PPQ, 0)]))
@@ -2072,7 +2703,7 @@ def _build_corp_office_patterns():
         # second half: chord stabs (the EP "pulse")
         chord_notes = [N(root_idx, 4), N(root_idx + 3, 4), N(root_idx + 7, 4)]
         for off in [2 * PPQ + PPQ // 2, 3 * PPQ + PPQ // 2]:
-            lead_ev.append((b * bar + off, [(n, PPQ // 2, 0) for n in chord_notes]))
+            lead_ev.append((b * bar + off, [(tuple(chord_notes), PPQ // 2, 0)]))
     # bars 12-15: BUILD — lead plays more arpeggios, fuller
     for b in range(12, 16):
         root_idx = chord_roots[(b - 12) % 4]
@@ -2084,22 +2715,22 @@ def _build_corp_office_patterns():
         # chord stabs on beats 2.5 and 4 (for stability)
         chord_notes = [N(root_idx, 4), N(root_idx + 3, 4), N(root_idx + 7, 4)]
         for off in [PPQ + PPQ // 2, 3 * PPQ + PPQ // 2]:
-            lead_ev.append((b * bar + off, [(n, PPQ // 2, 0) for n in chord_notes]))
+            lead_ev.append((b * bar + off, [(tuple(chord_notes), PPQ // 2, 0)]))
     # bars 16-19: CRESCENDO — 16th-note lead runs, climbing
     for b in range(16, 20):
         root_idx = chord_roots[(b - 16) % 4]
         # Lead climbs an octave over the 4-bar phrase
         climb = b - 16   # 0, 1, 2, 3
-        octave_shift = climb * 2  # 0, 2, 4, 6 semitones
+        semitone_shift = climb * 2  # 0, 2, 4, 6 semitones
         arp = [N(root_idx, 5), N(root_idx + 3, 5), N(root_idx + 7, 5), N(root_idx + 10, 5),
-               N(root_idx + 12, 5 + octave_shift), N(root_idx + 10, 5 + octave_shift),
-               N(root_idx + 7, 5 + octave_shift), N(root_idx + 3, 5 + octave_shift)]
+               N(root_idx + 12, 5) + semitone_shift, N(root_idx + 10, 5) + semitone_shift,
+               N(root_idx + 7, 5) + semitone_shift, N(root_idx + 3, 5) + semitone_shift]
         for i, n in enumerate(arp):
             lead_ev.append((b * bar + i * (PPQ // 4), [(n, PPQ // 4, 0)]))
         # chord stabs on beats 2.5 and 4
         chord_notes = [N(root_idx, 4), N(root_idx + 3, 4), N(root_idx + 7, 4)]
         for off in [PPQ + PPQ // 2, 3 * PPQ + PPQ // 2]:
-            lead_ev.append((b * bar + off, [(n, PPQ // 2, 0) for n in chord_notes]))
+            lead_ev.append((b * bar + off, [(tuple(chord_notes), PPQ // 2, 0)]))
     cfg["lead_pattern"] = lead_ev
 
     # ----- DRUMS -----------------------------------------------------------
@@ -4737,7 +5368,7 @@ def _build_corp_office_e_patterns():
             lead_ev.append((t + i * eighth, [(n, eighth, 0)]))
         # stabs on 3+
         chord_notes = [N(root_idx, 4), N(root_idx + 3, 4), N(root_idx + 7, 4)]
-        lead_ev.append((t + 2 * PPQ, [(n, eighth, 0) for n in chord_notes]))
+        lead_ev.append((t + 2 * PPQ, [(tuple(chord_notes), eighth, 0)]))
     # bars 12-15: arpeggio + stabs (matches A's bars 8-11)
     for b in range(12, 16):
         t = b * bar
@@ -4746,14 +5377,14 @@ def _build_corp_office_e_patterns():
         for i, n in enumerate(arp):
             lead_ev.append((t + i * eighth, [(n, eighth, 0)]))
         chord_notes = [N(root_idx, 4), N(root_idx + 3, 4), N(root_idx + 7, 4)]
-        lead_ev.append((t + 2 * PPQ, [(n, eighth, 0) for n in chord_notes]))
+        lead_ev.append((t + 2 * PPQ, [(tuple(chord_notes), eighth, 0)]))
     # bars 16-19: A's exact opening — STABS ONLY on beats 1+3, no arpeggio
     for b in range(16, 20):
         t = b * bar
         root_idx = chord_roots[(b - 16) % 4]
         chord_notes = [N(root_idx, 4), N(root_idx + 3, 4), N(root_idx + 7, 4)]
-        lead_ev.append((t, [(n, PPQ // 2, -5) for n in chord_notes]))
-        lead_ev.append((t + 2 * PPQ, [(n, PPQ // 2, -5) for n in chord_notes]))
+        lead_ev.append((t, [(tuple(chord_notes), PPQ // 2, -5)]))
+        lead_ev.append((t + 2 * PPQ, [(tuple(chord_notes), PPQ // 2, -5)]))
     cfg["lead_pattern"] = lead_ev
 
     # ----- BASS ------------------------------------------------------------
@@ -5506,113 +6137,686 @@ _build_alley_confrontation_e_patterns()
 SCENES.update(SCENES_B)
 
 
-# -----------------------------------------------------------------------------
-# Render entrypoints
-# -----------------------------------------------------------------------------
-def render_midi(name: str) -> Path:
-    """Compose and write <name>.mid. Returns the output path."""
-    if name not in SCENES:
-        print(f"ERROR: scene '{name}' not in SCENES. Available: {sorted(SCENES)}", file=sys.stderr)
-        sys.exit(1)
-    cfg = SCENES[name]
-    AUDIO_DIR.mkdir(parents=True, exist_ok=True)
-    out = AUDIO_DIR / f"{name}.mid"
-    raw = write_smf_clean(compose(cfg))
-    out.write_bytes(raw)
-    loop_ticks = cfg["bars"] * PPQ * BEATS_PER_BAR
-    loop_seconds = loop_ticks / PPQ * 60 / cfg["bpm"]
-    print(f"[make_scene_loop] wrote {out} ({len(raw)} bytes, "
-          f"{cfg['bars']} bars @ {cfg['bpm']} BPM, "
-          f"loop ≈ {loop_seconds:.1f}s)")
-    # Post-write per-bar density check (catches sparse regressions early).
-    # Counts note_on events on each non-drum channel per bar. Prints one
-    # line per channel with min/max bars hit so a single glance shows
-    # whether any channel has empty bars. The COMBINED line sums lead
-    # + bass + pad note-ons per bar — any bar with 0 across all three
-    # is genuinely silent (no melody, no bass, no pad). Drum hits are
-    # NOT counted here (they're on ch=9 and excluded).
-    try:
-        import mido
-        mid = mido.MidiFile(str(out))
-        bar_ticks = PPQ * BEATS_PER_BAR
-        ch_events = {0: [], 1: [], 2: []}  # lead, bass, pad
-        for tr in mid.tracks:
-            t = 0
-            for msg in tr:
-                t += msg.time
-                if msg.type == 'note_on' and msg.channel in ch_events and msg.velocity > 0:
-                    ch_events[msg.channel].append(t)
-        role = {0: 'lead', 1: 'bass', 2: 'pad'}
-        per_channel_counts = {}
-        for ch, events in ch_events.items():
-            if not events:
-                continue
-            counts = [0] * cfg["bars"]
-            for t in events:
-                b = int(t // bar_ticks)
-                if 0 <= b < cfg["bars"]:
-                    counts[b] += 1
-            per_channel_counts[ch] = counts
-            non_zero = sum(1 for c in counts if c > 0)
-            empty = [i for i, c in enumerate(counts) if c == 0]
-            msg = f"  ch={ch} ({role[ch]:<4}) bars hit: {non_zero}/{cfg['bars']} min={min(counts)} max={max(counts)}"
-            if empty:
-                msg += f" EMPTY: {empty}"
-            print(msg)
-        # Combined: any melody/bass/pad activity per bar
-        if per_channel_counts:
-            combined = [sum(per_channel_counts[ch][b] if b < len(per_channel_counts[ch]) else 0
-                            for ch in per_channel_counts)
-                        for b in range(cfg["bars"])]
-            non_zero = sum(1 for c in combined if c > 0)
-            empty = [i for i, c in enumerate(combined) if c == 0]
-            longest = 0; cur = 0
-            for c in combined:
-                if c == 0:
-                    cur += 1
-                    if cur > longest: longest = cur
-                else:
-                    cur = 0
-            msg = f"  COMBINED (lead+bass+pad) bars hit: {non_zero}/{cfg['bars']} longest_empty_run={longest}"
-            if empty:
-                msg += f" EMPTY: {empty}"
-            print(msg)
-    except ImportError:
-        pass  # mido is dev-only; not a render dependency
-    return out
+def _repair_legacy_scene_data() -> None:
+    """Repair known timing/chord mistakes in the original scene catalogue.
+
+    These were data-entry errors caused by mixing beat counts and bar counts,
+    plus using sequential note lists for material described as simultaneous.
+    Keeping the repairs here makes the original scene blocks easy to compare
+    while ensuring every runtime scene gets corrected data.
+    """
+    # cold_open A: align all sections to the bars stated in its comments.
+    cfg = SCENES["cold_open"]
+    cfg["bass_pattern"] = [
+        (at(0), [((N(2, 1), N(2, 2)), duration(bars=8), 0)]),
+        (at(8), [
+            (N(2,1), duration(beats=2), 0), (N(2,2), duration(beats=2), 0),
+            (N(7,1), duration(beats=2), 0), (N(7,2), duration(beats=2), 0),
+            (N(2,1), duration(beats=2), 0), (N(2,2), duration(beats=2), 0),
+            (N(0,2), duration(beats=2), 0), (N(0,3), duration(beats=2), 0),
+        ]),
+        (at(12), [
+            (N(2,1), duration(beats=2), 0), (N(2,2), duration(beats=2), 0),
+            (N(7,1), duration(beats=2), 0), (N(7,2), duration(beats=2), 0),
+            (N(0,2), duration(beats=2), 0), (N(0,3), duration(beats=2), 0),
+            (N(2,1), duration(beats=2), 0), (N(2,2), duration(beats=2), 0),
+        ]),
+        (at(16), [
+            (N(2,1), duration(beats=2), 0), (N(9,1), duration(beats=2), 0),
+            (N(2,1), duration(beats=2), 0), (N(9,1), duration(beats=2), 0),
+            (N(2,1), duration(beats=2), 0), (N(9,1), duration(beats=2), 0),
+            (N(2,1), duration(beats=2), 0), (N(9,1), duration(beats=2), 0),
+        ]),
+        (at(20), [(N(2,1), duration(bars=1), 0)]),
+        (at(21), [(N(2,1), duration(bars=1), 0)]),
+        (at(22), [(N(2,1), duration(bars=1), 0)]),
+        (at(23), [(None, duration(bars=1), 0)]),
+    ]
+    lead = cfg["lead_pattern"]
+    cfg["lead_pattern"] = [
+        (at(8), lead[0][1]),
+        (at(12), lead[1][1]),
+        (at(16), lead[2][1]),
+        (at(20), lead[3][1]),
+        (at(22), lead[4][1]),
+    ]
+
+    # cold_open B: simultaneous drones/fifths and corrected section starts.
+    cfg = SCENES["cold_open_b"]
+    cfg["bass_pattern"] = [
+        (at(0), [((N(2,1), N(2,2)), duration(bars=8), 0)]),
+        (at(8), [
+            ((N(2,1), N(2,2)), duration(bars=2), 0),
+            ((N(2,1), N(2,2)), duration(bars=2), 0),
+        ]),
+        (at(12), [((N(2,1), N(9,2)), duration(bars=1), 0)] * 4),
+        (at(16), [((N(2,1), N(9,2)), duration(bars=1), 0)] * 4),
+        (at(20), [((N(2,1), N(2,2)), duration(bars=4), 0)]),
+        (at(20), [
+            (pitch, duration(beats=1), delta)
+            for _ in range(4)
+            for pitch, delta in ((N(2,4), 8), (N(5,4), 6), (N(2,4), 8), (N(9,4), 6))
+        ]),
+    ]
+    lead = cfg["lead_pattern"]
+    cfg["lead_pattern"] = [
+        (at(8), lead[0][1]),
+        (at(12), lead[1][1]),
+        (at(16), lead[2][1]),
+        (at(20), lead[3][1]),
+        (at(22), lead[4][1]),
+    ]
+
+    # cold_open C: keep the floor as a true simultaneous drone and place
+    # the five climax phrases at musically explicit four-bar landmarks.
+    cfg = SCENES["cold_open_c"]
+    cfg["bass_pattern"] = [
+        (at(0), [((N(2,1), N(2,2)), duration(bars=24), 0)]),
+        (at(0), [
+            (N(9,2), duration(bars=4), 5), (N(2,2), duration(bars=4), 0),
+            (N(9,2), duration(bars=4), 5), (N(2,2), duration(bars=4), 0),
+            (N(9,2), duration(bars=2), 5), (N(2,2), duration(bars=2), 0),
+            (N(9,2), duration(bars=2), 5), (N(2,2), duration(bars=2), 0),
+        ]),
+    ]
+    lead = cfg["lead_pattern"]
+    cfg["lead_pattern"] = [
+        (at(4), lead[0][1]),
+        (at(8), lead[1][1]),
+        (at(12), lead[2][1]),
+        (at(16), lead[3][1]),
+        (at(20), lead[4][1]),
+    ]
+
+    # cold_open E had a no-op rest beginning exactly after the loop.
+    cfg = SCENES["cold_open_e"]
+    cfg["lead_pattern"] = [phrase for phrase in cfg["lead_pattern"] if phrase[0] < at(cfg["bars"])]
+
+    # Normalize every remaining legacy phrase to the exact loop range. This
+    # makes clipping explicit in the scene data instead of silently discarding
+    # notes during scheduling.
+    for scene in SCENES.values():
+        loop_ticks = at(scene["bars"])
+        for pattern_name in ("lead_pattern", "bass_pattern"):
+            fitted = []
+            for start_tick, notes in scene.get(pattern_name, []):
+                if start_tick >= loop_ticks:
+                    continue
+                remaining = loop_ticks - start_tick
+                fitted_notes = []
+                for note in notes:
+                    if remaining <= 0:
+                        break
+                    note_list = list(note)
+                    step_ticks = min(note_list[1], remaining)
+                    note_list[1] = step_ticks
+                    fitted_notes.append(tuple(note_list))
+                    remaining -= step_ticks
+                if fitted_notes:
+                    fitted.append((start_tick, fitted_notes))
+            scene[pattern_name] = fitted
 
 
-def render_mp3(name: str) -> Path:
-    """Render the MIDI to MP3 via the project's documented pipeline
-    (tools/render-midi.sh). Same path the existing alley_confrontation.mp3
-    and clinic_tension.mp3 were rendered with."""
-    if not RENDER_SH.exists():
-        print(f"ERROR: {RENDER_SH} not found", file=sys.stderr)
-        sys.exit(1)
-    if not SF2.exists():
-        print(f"ERROR: soundfont not found at {SF2}", file=sys.stderr)
-        sys.exit(1)
-    mid = AUDIO_DIR / f"{name}.mid"
-    if not mid.exists():
-        print(f"ERROR: {mid} not found — render MIDI first", file=sys.stderr)
-        sys.exit(1)
-    print(f"[make_scene_loop] rendering {name}.mid → {name}.mp3 via render-midi.sh")
+_repair_legacy_scene_data()
+
+# A repaired catalogue is an import-time invariant: no phrase, drum hit, pad
+# change or tempo change may still float at/past the intended loop boundary.
+_repair_issues = [
+    issue
+    for scene in SCENES.values()
+    for issue in validate_scene(scene)
+]
+if _repair_issues:
+    raise RuntimeError(
+        "_repair_legacy_scene_data() left invalid scene data:\n  - "
+        + "\n  - ".join(_repair_issues)
+    )
+
+
+# -----------------------------------------------------------------------------
+# Render diagnostics (temporary workspace only; never touches assets/audio/)
+# -----------------------------------------------------------------------------
+def _require_executable(name: str) -> str:
+    executable = shutil.which(name)
+    if not executable:
+        raise RuntimeError(f"required executable not found on PATH: {name}")
+    return executable
+
+
+def _run_checked(command: list[str], *, label: str) -> None:
+    result = subprocess.run(command, capture_output=True, text=True)
+    if result.returncode != 0:
+        detail = result.stderr.strip() or result.stdout.strip() or "no diagnostic output"
+        raise RuntimeError(f"{label} failed ({result.returncode}): {detail}")
+
+
+def _probe_duration(path: Path, ffprobe: str) -> float:
     result = subprocess.run(
-        [str(RENDER_SH), str(mid)],
-        cwd=str(ROOT),
+        [
+            ffprobe,
+            "-v", "error",
+            "-show_entries", "format=duration",
+            "-of", "default=noprint_wrappers=1:nokey=1",
+            str(path),
+        ],
         capture_output=True,
         text=True,
     )
     if result.returncode != 0:
-        print(f"ERROR: render-midi.sh failed:\n{result.stderr}", file=sys.stderr)
-        sys.exit(result.returncode)
-    print(result.stdout, end="")
-    mp3 = AUDIO_DIR / f"{name}.mp3"
-    if not mp3.exists():
-        print(f"ERROR: render-midi.sh reported success but {mp3} not found", file=sys.stderr)
-        sys.exit(1)
-    return mp3
+        raise RuntimeError(f"ffprobe failed for {path.name}: {result.stderr.strip()}")
+    try:
+        duration_seconds = float(result.stdout.strip())
+    except ValueError as exc:
+        raise RuntimeError(
+            f"ffprobe returned an invalid duration for {path.name}: {result.stdout!r}"
+        ) from exc
+    if duration_seconds < 0:
+        raise RuntimeError(f"ffprobe returned a negative duration for {path.name}")
+    return duration_seconds
 
+
+def _seconds_to_tick(cfg: dict, seconds: float) -> float:
+    """Map wall-clock seconds through the scene tempo map, extending the last BPM."""
+    if seconds < 0:
+        raise ValueError("seconds must be non-negative")
+    loop_ticks = cfg["bars"] * ticks_per_bar()
+    changes: dict[int, float] = {0: float(cfg["bpm"])}
+    for change_bar, change_bpm in cfg.get("tempo_changes", []):
+        tick = round(change_bar * ticks_per_bar())
+        if 0 <= tick < loop_ticks:
+            changes[tick] = float(change_bpm)
+    ordered = sorted(changes.items())
+
+    remaining = seconds
+    for index, (start_tick, bpm) in enumerate(ordered):
+        end_tick = ordered[index + 1][0] if index + 1 < len(ordered) else loop_ticks
+        segment_seconds = ((end_tick - start_tick) / PPQ) * (60.0 / bpm)
+        if remaining <= segment_seconds:
+            return start_tick + remaining * PPQ * bpm / 60.0
+        remaining -= segment_seconds
+
+    last_bpm = ordered[-1][1]
+    return loop_ticks + remaining * PPQ * last_bpm / 60.0
+
+
+def _format_musical_position(cfg: dict, seconds: float) -> str:
+    tick = _seconds_to_tick(cfg, seconds)
+    bar_ticks = ticks_per_bar()
+    bar_index = int(tick // bar_ticks)
+    beat = ((tick - bar_index * bar_ticks) / PPQ) + 1.0
+    if abs(beat - round(beat)) < 0.005:
+        beat_text = str(int(round(beat)))
+    else:
+        beat_text = f"{beat:.2f}"
+    return f"bar {bar_index + 1}, beat {beat_text}"
+
+
+def _scene_drift_limit(name: str, override: float | None) -> float:
+    if override is not None:
+        if override < 0:
+            raise ValueError("drift_limit must be non-negative")
+        return override
+    return (
+        OUTLIER_DRIFT_LIMIT_SECONDS
+        if name in STUCK_NOTE_PROBE_SCENES
+        else DEFAULT_DRIFT_LIMIT_SECONDS
+    )
+
+
+def _decode_pcm_window(path: Path, *, center_seconds: float,
+                       window_seconds: float = 1.0) -> tuple[list[float], int, float] | None:
+    """Read a mono PCM analysis window from a FluidSynth WAV using stdlib only."""
+    with wave.open(str(path), "rb") as wav_file:
+        channels = wav_file.getnchannels()
+        sample_width = wav_file.getsampwidth()
+        sample_rate = wav_file.getframerate()
+        frame_count = wav_file.getnframes()
+        total_seconds = frame_count / sample_rate
+        half = window_seconds / 2.0
+        start_seconds = center_seconds - half
+        end_seconds = center_seconds + half
+        if start_seconds < 0 or end_seconds > total_seconds:
+            return None
+        start_frame = round(start_seconds * sample_rate)
+        frames_to_read = max(1, round(window_seconds * sample_rate))
+        wav_file.setpos(start_frame)
+        raw = wav_file.readframes(frames_to_read)
+
+    if sample_width not in (1, 2, 3, 4):
+        raise RuntimeError(f"unsupported WAV sample width: {sample_width} bytes")
+    if channels <= 0:
+        raise RuntimeError("WAV has no audio channels")
+
+    scale = float(1 << (sample_width * 8 - 1))
+    frame_width = sample_width * channels
+    samples: list[float] = []
+    for offset in range(0, len(raw) - frame_width + 1, frame_width):
+        total = 0.0
+        for channel in range(channels):
+            pos = offset + channel * sample_width
+            chunk = raw[pos:pos + sample_width]
+            if sample_width == 1:
+                value = chunk[0] - 128
+            elif sample_width == 3:
+                value = int.from_bytes(chunk, "little", signed=False)
+                if value & 0x800000:
+                    value -= 1 << 24
+            else:
+                value = int.from_bytes(chunk, "little", signed=True)
+            total += value / scale
+        samples.append(total / channels)
+
+    if not samples:
+        return None
+    mean = sum(samples) / len(samples)
+    samples = [sample - mean for sample in samples]
+
+    # Keep the Goertzel scan inexpensive while retaining the relevant musical band.
+    target_rate = min(sample_rate, 11025)
+    stride = max(1, round(sample_rate / target_rate))
+    if stride > 1:
+        samples = samples[::stride]
+        sample_rate = round(sample_rate / stride)
+    actual_center = start_seconds + window_seconds / 2.0
+    return samples, sample_rate, actual_center
+
+
+def _goertzel_power(samples: list[float], sample_rate: int, frequency: float) -> float:
+    omega = 2.0 * math.pi * frequency / sample_rate
+    coefficient = 2.0 * math.cos(omega)
+    q1 = 0.0
+    q2 = 0.0
+    for sample in samples:
+        q0 = coefficient * q1 - q2 + sample
+        q2 = q1
+        q1 = q0
+    return q1 * q1 + q2 * q2 - coefficient * q1 * q2
+
+
+def _spectral_probe(path: Path, *, center_seconds: float,
+                    window_seconds: float = 1.0) -> dict[str, object]:
+    decoded = _decode_pcm_window(
+        path,
+        center_seconds=center_seconds,
+        window_seconds=window_seconds,
+    )
+    if decoded is None:
+        return {
+            "available": False,
+            "center_seconds": center_seconds,
+            "reason": "requested analysis window lies outside the rendered WAV",
+        }
+    samples, sample_rate, actual_center = decoded
+    rms = math.sqrt(sum(sample * sample for sample in samples) / len(samples))
+    rms_dbfs = 20.0 * math.log10(max(rms, 1e-12))
+
+    # Scan quarter-semitone-spaced bins from 40 Hz to the safe Nyquist range.
+    highest = min(6000.0, sample_rate * 0.45)
+    frequencies: list[float] = []
+    frequency = 40.0
+    ratio = 2.0 ** (1.0 / 48.0)
+    while frequency <= highest:
+        frequencies.append(frequency)
+        frequency *= ratio
+    dominant = max(frequencies, key=lambda freq: _goertzel_power(samples, sample_rate, freq))
+    return {
+        "available": True,
+        "center_seconds": actual_center,
+        "window_seconds": window_seconds,
+        "rms_dbfs": rms_dbfs,
+        "dominant_frequency_hz": dominant,
+        "classification": (
+            "near-silent tail"
+            if rms_dbfs < -55.0
+            else "audible sustained-tail candidate"
+        ),
+    }
+
+
+def _outlier_probes(wav_path: Path, *, nominal_seconds: float,
+                    wav_seconds: float) -> dict[str, dict[str, object]]:
+    probes: dict[str, dict[str, object]] = {
+        "eot_plus_1s": _spectral_probe(
+            wav_path,
+            center_seconds=nominal_seconds + 1.0,
+        ),
+    }
+    # Shorter-than-nominal outliers cannot have an EOT+1s window. Inspect the
+    # final full second instead so the report still distinguishes audible
+    # content from an already-silent/truncated ending.
+    if wav_seconds >= 1.0:
+        probes["final_second"] = _spectral_probe(
+            wav_path,
+            center_seconds=max(0.5, wav_seconds - 0.55),
+        )
+    return probes
+
+
+def diagnose_scene(name: str, *, soundfont: Path = SF2,
+                   drift_limit: float | None = None,
+                   verbose: bool = True) -> dict[str, object]:
+    """Render one scene in a temporary directory and measure real durations."""
+    if name not in SCENES:
+        raise ValueError(f"scene {name!r} not found; available: {sorted(SCENES)}")
+    effective_drift_limit = _scene_drift_limit(name, drift_limit)
+    soundfont = Path(soundfont).expanduser().resolve()
+    if not soundfont.is_file():
+        raise RuntimeError(f"soundfont not found: {soundfont}")
+
+    fluidsynth = _require_executable("fluidsynth")
+    ffmpeg = _require_executable("ffmpeg")
+    ffprobe = _require_executable("ffprobe")
+    cfg = SCENES[name]
+    scene_issues = validate_scene(cfg)
+    events = compose(cfg)
+    scene_issues.extend(validate_composed_events(cfg, events))
+    if scene_issues:
+        raise RuntimeError("MIDI discipline failed:\n  - " + "\n  - ".join(scene_issues))
+
+    nominal_seconds = tempo_map_seconds(cfg)
+    with tempfile.TemporaryDirectory(prefix=f"make_scene_loop_{name}_") as tmp_name:
+        tmp = Path(tmp_name)
+        midi_path = tmp / f"{name}.mid"
+        wav_path = tmp / f"{name}.wav"
+        mp3_path = tmp / f"{name}.mp3"
+        midi_path.write_bytes(write_smf_clean(events))
+
+        _run_checked(
+            [fluidsynth, "-F", str(wav_path), "-q", str(soundfont), str(midi_path)],
+            label="FluidSynth render",
+        )
+        _run_checked(
+            [
+                ffmpeg, "-y", "-loglevel", "error", "-i", str(wav_path),
+                "-af", DIAGNOSTIC_SILENCE_FILTER,
+                "-codec:a", "libmp3lame", "-b:a", "192k", "-ar", "44100",
+                str(mp3_path),
+            ],
+            label="FFmpeg encode",
+        )
+        wav_seconds = _probe_duration(wav_path, ffprobe)
+        mp3_seconds = _probe_duration(mp3_path, ffprobe)
+        outlier_probes = (
+            _outlier_probes(
+                wav_path,
+                nominal_seconds=nominal_seconds,
+                wav_seconds=wav_seconds,
+            )
+            if name in STUCK_NOTE_PROBE_SCENES
+            else {}
+        )
+
+    shipped_seconds = SHIPPED_DURATIONS_S[name]
+    baseline_drift = wav_seconds - shipped_seconds
+    nominal_drift = wav_seconds - nominal_seconds
+    result: dict[str, object] = {
+        "scene": name,
+        "nominal_seconds": nominal_seconds,
+        "shipped_seconds": shipped_seconds,
+        "wav_seconds": wav_seconds,
+        "mp3_seconds": mp3_seconds,
+        "baseline_drift_seconds": baseline_drift,
+        # Backward-compatible alias now explicitly means shipped-baseline drift.
+        "wav_drift_seconds": baseline_drift,
+        "nominal_drift_seconds": nominal_drift,
+        "tail_beyond_loop_seconds": max(0.0, nominal_drift),
+        "wav_end_position": _format_musical_position(cfg, wav_seconds),
+        "mp3_end_position": _format_musical_position(cfg, mp3_seconds),
+        "passed": abs(baseline_drift) <= effective_drift_limit,
+        "drift_limit_seconds": effective_drift_limit,
+        "outlier_probes": outlier_probes,
+    }
+
+    if verbose:
+        rows = [
+            ("Nominal loop duration", f"{nominal_seconds:.3f} s"),
+            ("Shipped MP3 baseline", f"{shipped_seconds:.3f} s"),
+            ("Rendered WAV duration", f"{wav_seconds:.3f} s"),
+            ("Encoded MP3 duration", f"{mp3_seconds:.3f} s"),
+            ("WAV deviation vs shipped", f"{baseline_drift:+.3f} s"),
+            ("WAV drift vs nominal", f"{nominal_drift:+.3f} s"),
+            ("Tail beyond nominal loop", f"{max(0.0, nominal_drift):.3f} s"),
+            ("Nominal loop boundary", _format_musical_position(cfg, nominal_seconds)),
+            ("Rendered WAV ends at", result["wav_end_position"]),
+            ("Encoded MP3 ends at", result["mp3_end_position"]),
+            (
+                f"Shipped baseline contract (±{effective_drift_limit:.3f}s)",
+                "PASS" if result["passed"] else "FAIL",
+            ),
+        ]
+        for probe_name, probe in outlier_probes.items():
+            label = "EOT+1s spectral probe" if probe_name == "eot_plus_1s" else "Final-second spectral probe"
+            if not probe.get("available"):
+                value = str(probe.get("reason", "unavailable"))
+            else:
+                value = (
+                    f"{float(probe['dominant_frequency_hz']):.1f} Hz, "
+                    f"{float(probe['rms_dbfs']):.1f} dBFS — "
+                    f"{probe['classification']}"
+                )
+            rows.append((label, value))
+        width = max(len(label) for label, _ in rows)
+        print(f"Diagnostic render: {name}")
+        print("Temporary workspace only; assets/audio/ was not modified.")
+        for label, value in rows:
+            print(f"  {label:<{width}}  {value}")
+    return result
+
+
+def diagnose_all_scenes(*, soundfont: Path = SF2,
+                        drift_limit: float | None = None) -> bool:
+    """Render and enforce shipped-duration baselines for every scene."""
+    print(
+        f"{'scene':24} {'nominal':>9} {'shipped':>9} {'wav':>9} {'mp3':>9} "
+        f"{'delta':>9} {'limit':>7} {'status':>7}"
+    )
+    print("-" * 102)
+    all_passed = True
+    for name in sorted(SCENES):
+        try:
+            result = diagnose_scene(
+                name,
+                soundfont=soundfont,
+                drift_limit=drift_limit,
+                verbose=False,
+            )
+        except (OSError, RuntimeError, ValueError) as exc:
+            all_passed = False
+            print(f"{name:24} ERROR: {exc}")
+            continue
+        passed = bool(result["passed"])
+        all_passed = all_passed and passed
+        print(
+            f"{name:24} "
+            f"{float(result['nominal_seconds']):9.3f} "
+            f"{float(result['shipped_seconds']):9.3f} "
+            f"{float(result['wav_seconds']):9.3f} "
+            f"{float(result['mp3_seconds']):9.3f} "
+            f"{float(result['baseline_drift_seconds']):+9.3f} "
+            f"{float(result['drift_limit_seconds']):7.3f} "
+            f"{('PASS' if passed else 'FAIL'):>7}"
+        )
+        if name in STUCK_NOTE_PROBE_SCENES:
+            for probe_name, probe in result["outlier_probes"].items():
+                probe_label = "EOT+1s" if probe_name == "eot_plus_1s" else "final 1s"
+                if probe.get("available"):
+                    print(
+                        f"{'':24} {probe_label}: "
+                        f"{float(probe['dominant_frequency_hz']):.1f} Hz, "
+                        f"{float(probe['rms_dbfs']):.1f} dBFS — {probe['classification']}"
+                    )
+                else:
+                    print(
+                        f"{'':24} {probe_label}: "
+                        f"{probe.get('reason', 'unavailable')}"
+                    )
+    return all_passed
+
+
+# -----------------------------------------------------------------------------
+# Render entrypoints
+# -----------------------------------------------------------------------------
+def _resolve_output_dir(out_dir: Path | None, *, force: bool) -> Path:
+    """Resolve a deliberate output directory and protect shipped assets."""
+    candidate: Path | None = out_dir
+    if candidate is None:
+        env_value = os.environ.get("SCENE_LOOP_OUT_DIR")
+        if env_value:
+            candidate = Path(env_value)
+    if candidate is None:
+        if not force:
+            raise RuntimeError(
+                "refusing to write to assets/audio/ by default; pass --out-dir DIR, "
+                "set SCENE_LOOP_OUT_DIR, or use --force for an intentional shipped-asset write"
+            )
+        candidate = AUDIO_DIR
+
+    resolved = candidate.expanduser().resolve()
+    if resolved == AUDIO_DIR.resolve() and not force:
+        raise RuntimeError(
+            "refusing to write to assets/audio/ without --force; choose another --out-dir"
+        )
+    resolved.mkdir(parents=True, exist_ok=True)
+    return resolved
+
+
+def _print_density_report(out: Path, cfg: dict) -> None:
+    """Optional mido-based per-bar density report."""
+    try:
+        import mido
+    except ImportError:
+        return
+    mid = mido.MidiFile(str(out))
+    bar_ticks = PPQ * BEATS_PER_BAR
+    ch_events = {0: [], 1: [], 2: []}
+    for track in mid.tracks:
+        tick = 0
+        for message in track:
+            tick += message.time
+            if (
+                message.type == "note_on"
+                and message.channel in ch_events
+                and message.velocity > 0
+            ):
+                ch_events[message.channel].append(tick)
+    role = {0: "lead", 1: "bass", 2: "pad"}
+    per_channel_counts: dict[int, list[int]] = {}
+    for channel, event_ticks in ch_events.items():
+        if not event_ticks:
+            continue
+        counts = [0] * cfg["bars"]
+        for tick in event_ticks:
+            bar_index = int(tick // bar_ticks)
+            if 0 <= bar_index < cfg["bars"]:
+                counts[bar_index] += 1
+        per_channel_counts[channel] = counts
+        non_zero = sum(1 for count in counts if count > 0)
+        empty = [index for index, count in enumerate(counts) if count == 0]
+        message = (
+            f"  ch={channel} ({role[channel]:<4}) bars hit: "
+            f"{non_zero}/{cfg['bars']} min={min(counts)} max={max(counts)}"
+        )
+        if empty:
+            message += f" EMPTY: {empty}"
+        print(message)
+    if per_channel_counts:
+        combined = [
+            sum(per_channel_counts[channel][bar_index] for channel in per_channel_counts)
+            for bar_index in range(cfg["bars"])
+        ]
+        non_zero = sum(1 for count in combined if count > 0)
+        empty = [index for index, count in enumerate(combined) if count == 0]
+        longest = current = 0
+        for count in combined:
+            if count == 0:
+                current += 1
+                longest = max(longest, current)
+            else:
+                current = 0
+        message = (
+            f"  COMBINED (lead+bass+pad) bars hit: {non_zero}/{cfg['bars']} "
+            f"longest_empty_run={longest}"
+        )
+        if empty:
+            message += f" EMPTY: {empty}"
+        print(message)
+
+
+def render_midi(name: str, *, strict: bool = False,
+                out_dir: Path | None = None, force: bool = False) -> Path:
+    """Compose and deliberately write <name>.mid to a protected output path."""
+    if name not in SCENES:
+        raise ValueError(f"scene {name!r} not in SCENES; available: {sorted(SCENES)}")
+    destination = _resolve_output_dir(out_dir, force=force)
+    cfg = SCENES[name]
+    diagnostics = validate_scene(cfg)
+    events = compose(cfg)
+    discipline_issues = validate_composed_events(cfg, events)
+    if discipline_issues:
+        raise ValueError(
+            f"scene {name!r} failed MIDI discipline:\n  - "
+            + "\n  - ".join(discipline_issues)
+        )
+    if diagnostics:
+        for diagnostic in diagnostics:
+            print(f"WARNING: {diagnostic}", file=sys.stderr)
+        if strict:
+            raise ValueError(
+                f"scene {name!r} failed strict validation with "
+                f"{len(diagnostics)} issue(s)"
+            )
+    out = destination / f"{name}.mid"
+    raw = write_smf_clean(events)
+    out.write_bytes(raw)
+    loop_seconds = tempo_map_seconds(cfg)
+    tempo_desc = f"{cfg['bpm']} BPM"
+    if cfg.get("tempo_changes"):
+        tempo_desc += " + tempo map"
+    print(
+        f"[make_scene_loop] wrote {out} ({len(raw)} bytes, "
+        f"{cfg['bars']} bars, {tempo_desc}, loop ≈ {loop_seconds:.1f}s)"
+    )
+    _print_density_report(out, cfg)
+    return out
+
+
+def render_mp3(name: str, *, midi_path: Path | None = None,
+               out_dir: Path | None = None, force: bool = False) -> Path:
+    """Render through render-midi.sh in a tempdir, then copy only the result."""
+    if name not in SCENES:
+        raise ValueError(f"scene {name!r} not in SCENES; available: {sorted(SCENES)}")
+    destination = _resolve_output_dir(out_dir, force=force)
+    if not RENDER_SH.exists():
+        raise RuntimeError(f"renderer not found: {RENDER_SH}")
+    if not SF2.exists():
+        raise RuntimeError(f"soundfont not found: {SF2}")
+    source_midi = Path(midi_path) if midi_path is not None else destination / f"{name}.mid"
+    if not source_midi.is_file():
+        raise RuntimeError(f"MIDI not found: {source_midi}; render MIDI first")
+
+    with tempfile.TemporaryDirectory(prefix=f"make_scene_loop_render_{name}_") as tmp_name:
+        tmp = Path(tmp_name)
+        staged_midi = tmp / f"{name}.mid"
+        shutil.copy2(source_midi, staged_midi)
+        print(f"[make_scene_loop] rendering {name}.mid → {name}.mp3 in temporary workspace")
+        result = subprocess.run(
+            [str(RENDER_SH), str(staged_midi)],
+            cwd=str(ROOT),
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            detail = result.stderr.strip() or result.stdout.strip() or "no renderer output"
+            raise RuntimeError(f"render-midi.sh failed ({result.returncode}): {detail}")
+        staged_mp3 = tmp / f"{name}.mp3"
+        if not staged_mp3.is_file():
+            raise RuntimeError(
+                f"render-midi.sh reported success but did not create {staged_mp3}"
+            )
+        output_mp3 = destination / f"{name}.mp3"
+        shutil.copy2(staged_mp3, output_mp3)
+    print(f"[make_scene_loop] wrote {output_mp3}")
+    return output_mp3
 
 def main() -> None:
     p = argparse.ArgumentParser(description="Compose + render a Ghost Process scene loop")
@@ -5622,21 +6826,91 @@ def main() -> None:
                    help="Only write the .mid, don't run fluidsynth")
     p.add_argument("--list", action="store_true",
                    help="List available scene configs and exit")
+    p.add_argument("--validate-all", action="store_true",
+                   help="Validate scene data, MIDI discipline, EOT and tempo maps")
+    p.add_argument("--strict", action="store_true",
+                   help="Treat legacy timing diagnostics as fatal")
+    p.add_argument("--diagnose", metavar="SCENE",
+                   help="Temporarily render one scene and compare it with the shipped baseline")
+    p.add_argument("--diagnose-all", action="store_true",
+                   help="Compare every rendered scene with its shipped-duration baseline")
+    p.add_argument("--soundfont", type=Path, default=SF2,
+                   help=f"SoundFont for diagnostics (default: {SF2})")
+    p.add_argument("--drift-limit", type=float, default=None,
+                   help=(
+                       "Override allowed absolute WAV-vs-shipped deviation for all scenes; "
+                       "defaults to ±1s, or ±5s for the five historical outliers"
+                   ))
+    p.add_argument("--out-dir", type=Path, default=None,
+                   help="Write generated MIDI/MP3 outside assets/audio/")
+    p.add_argument("--force", action="store_true",
+                   help="Explicitly allow writes to the shipped assets/audio/ directory")
     args = p.parse_args()
 
     if args.list:
         print("Available scenes:")
-        for k, cfg in SCENES.items():
-            loop_sec = (cfg['bars']*PPQ*BEATS_PER_BAR)/PPQ*60/cfg['bpm']
-            print(f"  {k:14} bars={cfg['bars']:2} bpm={cfg['bpm']:3} loop≈{loop_sec:.1f}s")
+        for key, cfg in SCENES.items():
+            loop_sec = tempo_map_seconds(cfg)
+            print(f"  {key:24} bars={cfg['bars']:2} bpm={cfg['bpm']:3} loop≈{loop_sec:.1f}s")
         return
 
-    if not args.name:
-        p.error("scene name required (or use --list)")
+    if args.validate_all:
+        issues = validate_catalogue()
+        if issues:
+            print(f"Validation failed with {len(issues)} issue(s):")
+            for issue in issues:
+                print(f"  - {issue}")
+            raise SystemExit(1)
+        print(
+            f"All {len(SCENES)} scenes validated cleanly: scene inputs, "
+            "tick-zero tempo, held-note release, EOT boundaries and SMF writer guard."
+        )
+        return
 
-    render_midi(args.name)
-    if not args.no_render:
-        render_mp3(args.name)
+    if args.diagnose and args.diagnose_all:
+        p.error("choose either --diagnose SCENE or --diagnose-all")
+    if args.diagnose:
+        try:
+            result = diagnose_scene(
+                args.diagnose,
+                soundfont=args.soundfont,
+                drift_limit=args.drift_limit,
+            )
+        except (OSError, RuntimeError, ValueError) as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            raise SystemExit(2)
+        raise SystemExit(0 if result["passed"] else 1)
+    if args.diagnose_all:
+        try:
+            passed = diagnose_all_scenes(
+                soundfont=args.soundfont,
+                drift_limit=args.drift_limit,
+            )
+        except (OSError, RuntimeError, ValueError) as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            raise SystemExit(2)
+        raise SystemExit(0 if passed else 1)
+
+    if not args.name:
+        p.error("scene name required (or use --list/--validate-all/--diagnose)")
+
+    try:
+        midi_path = render_midi(
+            args.name,
+            strict=args.strict,
+            out_dir=args.out_dir,
+            force=args.force,
+        )
+        if not args.no_render:
+            render_mp3(
+                args.name,
+                midi_path=midi_path,
+                out_dir=args.out_dir,
+                force=args.force,
+            )
+    except (OSError, RuntimeError, ValueError) as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        raise SystemExit(2)
 
 
 if __name__ == "__main__":
