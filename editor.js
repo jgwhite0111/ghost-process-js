@@ -7,6 +7,8 @@
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
+const SCENE_ID_PATTERN = /^[a-z][a-z0-9_]*$/;
+const EDITOR_TOKEN_SESSION_KEY = 'ghost-process-editor-token';
 
 // ---------- editor state ----------
 const state = {
@@ -162,14 +164,101 @@ function snapX(v, spriteW, vpW, snapPx, prevV) {
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 const EDGE_OVERDRAG = 0.20;
 
+// ---------- selection / scene lifecycle ----------
+function clearActiveDrag() {
+  const drag = state.drag;
+  state.drag = null;
+  if (!drag?.handle) return;
+
+  const moveHandler = drag.targetKind === 'sprite' ? onSpriteDragMove : onHitboxDragMove;
+  const endHandler = drag.targetKind === 'sprite' ? onSpriteDragEnd : onHitboxDragEnd;
+  drag.handle.removeEventListener('pointermove', moveHandler);
+  drag.handle.removeEventListener('pointerup', endHandler);
+  drag.handle.removeEventListener('pointercancel', endHandler);
+  drag.handle.classList.remove('dragging');
+}
+
+function selectionBelongsToCurrentStory(selection = state.selected) {
+  if (!selection) return true;
+  if (selection.kind === 'sprite') {
+    return (getScene()?.characters || []).includes(selection.ref);
+  }
+  if (selection.kind === 'hitbox') {
+    return (getScene()?.hitboxes || []).includes(selection.ref);
+  }
+  if (selection.kind === 'item') {
+    return Object.values(state.story?.items || {}).includes(selection.ref);
+  }
+  return false;
+}
+
+function validateSelection() {
+  if (!selectionBelongsToCurrentStory()) state.selected = null;
+  return state.selected;
+}
+
+function switchScene(sceneId, { render = true } = {}) {
+  const scenes = state.story?.scenes;
+  if (!scenes || !Object.prototype.hasOwnProperty.call(scenes, sceneId)) return false;
+
+  if (sceneId !== state.sceneId) {
+    state.sceneId = sceneId;
+    state.selected = null;
+    clearActiveDrag();
+  }
+  if (render) renderAll();
+  return true;
+}
+
 // ---------- API ----------
 async function loadStory() {
   const res = await fetch('/api/story');
-  state.story = await res.json();
+  const story = await res.json();
+  // Every fetch creates new object identities. Drop refs into the previous
+  // story before replacing it, even when the same scene remains selected.
+  state.selected = null;
+  clearActiveDrag();
+  state.story = story;
+}
+
+function readEditorToken() {
+  try {
+    return typeof sessionStorage === 'undefined'
+      ? ''
+      : (sessionStorage.getItem(EDITOR_TOKEN_SESSION_KEY) || '');
+  } catch (_) {
+    return '';
+  }
+}
+
+function storeEditorToken(token) {
+  try {
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.setItem(EDITOR_TOKEN_SESSION_KEY, token);
+    }
+  } catch (_) {}
+}
+
+// Mutation-only fetch wrapper. Tokens remain tab-scoped in sessionStorage and
+// a 401 gets at most one interactive retry.
+async function mutationFetch(url, options) {
+  const send = (token) => {
+    const headers = { ...(options.headers || {}) };
+    if (token) headers['X-Editor-Token'] = token;
+    return fetch(url, { ...options, headers });
+  };
+
+  const failedResponse = await send(readEditorToken());
+  if (failedResponse.status !== 401) return failedResponse;
+
+  const suppliedToken = prompt('Editor token required for this server:');
+  if (suppliedToken === null) return failedResponse;
+  storeEditorToken(suppliedToken);
+  return send(suppliedToken);
 }
 
 async function saveStory() {
-  const res = await fetch('/api/story', {
+  const res = await mutationFetch('/api/story', {
     method: 'PUT',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(state.story),
@@ -184,10 +273,29 @@ async function saveStory() {
   return true;
 }
 
-async function listDir(rel) {
-  const res = await fetch('/api/list?dir=' + encodeURIComponent(rel));
-  if (!res.ok) return [];
-  return await res.json();
+// Directory contents are immutable for the lifetime of an editor page. Keep
+// the promise itself so concurrent inspector renders share the same request,
+// rather than merely caching after the first response has completed.
+const listDirCache = new Map();
+function listDir(rel) {
+  if (listDirCache.has(rel)) return listDirCache.get(rel);
+
+  const request = fetch('/api/list?dir=' + encodeURIComponent(rel))
+    .then(async (res) => {
+      if (!res.ok) {
+        listDirCache.delete(rel);
+        return [];
+      }
+      return res.json();
+    })
+    .catch((error) => {
+      // Failed requests remain retryable; successful (including empty)
+      // directory listings stay cached for the rest of this editor session.
+      listDirCache.delete(rel);
+      throw error;
+    });
+  listDirCache.set(rel, request);
+  return request;
 }
 
 async function loadImage(path) {
@@ -464,7 +572,7 @@ function hitboxRectPx(hb) {
 }
 
 // ---------- preview render ----------
-function getScene() { return state.story.scenes[state.sceneId]; }
+function getScene() { return state.story?.scenes?.[state.sceneId] || null; }
 
 async function renderPreview() {
   bgCtx.fillStyle = '#000';
@@ -878,7 +986,7 @@ function renderSceneList() {
     const cnt = document.createElement('span'); cnt.className = 'count';
     cnt.textContent = `${(sc.characters || []).length}c/${(sc.hitboxes || []).length}h`;
     li.appendChild(cnt);
-    li.onclick = () => { state.sceneId = sid; renderAll(); };
+    li.onclick = () => { switchScene(sid); };
     ul.appendChild(li);
   }
 }
@@ -1005,22 +1113,46 @@ function addNewSprite() {
 }
 
 // ---------- inspector (right panel) ----------
+let activeInspectorLifecycle = null;
+
+function beginInspectorRender() {
+  if (activeInspectorLifecycle) {
+    activeInspectorLifecycle.disposed = true;
+    for (const cleanup of activeInspectorLifecycle.cleanups) cleanup();
+    activeInspectorLifecycle.cleanups.clear();
+  }
+  activeInspectorLifecycle = { disposed: false, cleanups: new Set() };
+  return activeInspectorLifecycle;
+}
+
+function retainInspectorCleanup(lifecycle, cleanup) {
+  if (lifecycle.disposed) {
+    cleanup();
+    return;
+  }
+  lifecycle.cleanups.add(cleanup);
+}
+
 function renderRight() {
+  const lifecycle = beginInspectorRender();
+  validateSelection();
   const right = $('#right');
   right.innerHTML = '';
   const sceneHdr = document.createElement('div');
   sceneHdr.className = 'section';
-  sceneHdr.innerHTML = `<h2>Scene — ${state.sceneId || '—'}</h2>`;
+  const sceneHeading = document.createElement('h2');
+  sceneHeading.textContent = `Scene — ${state.sceneId || '—'}`;
+  sceneHdr.appendChild(sceneHeading);
   right.appendChild(sceneHdr);
 
   const sc = getScene();
   if (sc) {
     right.appendChild(makeField('background', 'Background (assets/backgrounds/*.png)', makePlaceholder()));
-    fillAsync($('#right .field[data-key="background"] .ctrl'), makeBgPicker(sc));
+    fillAsync($('#right .field[data-key="background"] .ctrl'), makeBgPicker(sc), lifecycle);
     right.appendChild(makeField('bgPalette', 'Palette', makePlaceholder()));
-    fillAsync($('#right .field[data-key="bgPalette"] .ctrl'), makePalettePicker(sc));
+    fillAsync($('#right .field[data-key="bgPalette"] .ctrl'), makePalettePicker(sc), lifecycle);
     right.appendChild(makeField('music', 'Music (assets/audio/*)', makePlaceholder()));
-    fillAsync($('#right .field[data-key="music"] .ctrl'), makeMusicEditor(sc));
+    fillAsync($('#right .field[data-key="music"] .ctrl'), makeMusicEditor(sc, lifecycle), lifecycle);
     right.appendChild(makeField('ink', 'Ink file', makeTextInput(sc.ink || '', v => { sc.ink = v; markDirty(); })));
     // --- Scene tasks (per-scene, surfaced as toast hints + auto-completion) ---
     right.appendChild(makeTasksPanel(sc));
@@ -1101,7 +1233,7 @@ function renderRight() {
     right.appendChild(makeField('header', `Item — ${it.id}`));
     right.appendChild(makeField('name', 'Name', makeTextInput(it.name || '', v => { it.name = v; markDirty(); renderItemList(); })));
     right.appendChild(makeField('icon', 'Icon (assets/items/*.png)', makePlaceholder()));
-    fillAsync($('#right .field[data-key="icon"] .ctrl'), makeIconPicker(it));
+    fillAsync($('#right .field[data-key="icon"] .ctrl'), makeIconPicker(it), lifecycle);
     right.appendChild(makeField('description', 'Description', makeTextArea(it.description || '', v => { it.description = v; markDirty(); })));
     right.appendChild(makeField('pickup_message', 'Pickup message', makeTextInput(it.pickup_message || '', v => { it.pickup_message = v; markDirty(); })));
     right.appendChild(makeField('key', 'Key item',
@@ -1128,14 +1260,29 @@ function makeField(key, labelText, controlEl) {
 // Per-scene task list. Each task is a small object the runtime TaskTracker
 // reads from sceneConfig.tasks[]. The runtime recognises these types:
 //   pickup       — { item }
-//   use_item     — { item, on_hitbox }
-//   goto_hitbox  — { target } (label of a hitbox the player must click)
-//   trigger_dialog — { ink_node } (resolved by Ink # goto:<node>)
-//   combine      — { items[] } (future)
+//   use_item     — { item }
+//   goto_hitbox  — { target } (target scene of the hitbox the player must click)
+//   goto_dialog  — { ink_node } (resolved by Ink # goto:<node>)
 //   custom       — Ink calls EXTERNAL complete_task(id) when satisfied
 // `hint` is shown in a toast when dialogue is dismissed and any task is
 // still open; it disappears on completion.
-const TASK_TYPES = ['pickup', 'use_item', 'goto_hitbox', 'trigger_dialog', 'combine', 'custom'];
+const TASK_TYPE_FIELDS = {
+  pickup: ['item'],
+  use_item: ['item'],
+  goto_hitbox: ['target'],
+  goto_dialog: ['ink_node'],
+  custom: [],
+};
+const TASK_TYPES = Object.keys(TASK_TYPE_FIELDS);
+const TASK_SPECIFIC_FIELDS = ['item', 'items', 'result', 'target', 'ink_node', 'on_hitbox'];
+
+function setTaskType(t, type) {
+  t.type = type;
+  const allowed = new Set(TASK_TYPE_FIELDS[type] || []);
+  for (const key of TASK_SPECIFIC_FIELDS) {
+    if (!allowed.has(key)) delete t[key];
+  }
+}
 
 function makeTasksPanel(sc) {
   const div = document.createElement('div');
@@ -1192,16 +1339,8 @@ function makeTaskRow(t, idx, tasks, refresh) {
   }
   typeSel.onchange = () => {
     // Reset type-specific fields when type changes so we don't carry over
-    // orphan keys (e.g. an old `item` from a use_item row when switching
-    // to a `goto_hitbox`).
-    const oldKeys = Object.keys(t);
-    t.type = typeSel.value;
-    if (t.type === 'pickup')      { delete t.on_hitbox; delete t.items; delete t.ink_node; }
-    else if (t.type === 'use_item'){ delete t.items; delete t.ink_node; }
-    else if (t.type === 'goto_hitbox') { delete t.item; delete t.on_hitbox; delete t.items; delete t.ink_node; }
-    else if (t.type === 'trigger_dialog') { delete t.item; delete t.on_hitbox; delete t.items; delete t.target; }
-    else if (t.type === 'combine') { delete t.item; delete t.on_hitbox; delete t.ink_node; delete t.target; }
-    else if (t.type === 'custom') { delete t.item; delete t.on_hitbox; delete t.items; delete t.ink_node; delete t.target; }
+    // orphan keys, including legacy trigger_dialog/on_hitbox data.
+    setTaskType(t, typeSel.value);
     markDirty();
     renderRight();
   };
@@ -1242,24 +1381,12 @@ function makeTaskRow(t, idx, tasks, refresh) {
   } else if (t.type === 'use_item') {
     appendField(row, 'item', t.item || '', v => { t.item = v; markDirty(); },
       'item id to use');
-    appendField(row, 'on_hitbox', t.on_hitbox || '', v => { t.on_hitbox = v; markDirty(); },
-      'hitbox label / target');
   } else if (t.type === 'goto_hitbox') {
     appendField(row, 'target', t.target || '', v => { t.target = v; markDirty(); },
-      'hitbox label / target to click');
-  } else if (t.type === 'trigger_dialog') {
+      'hitbox target scene id');
+  } else if (t.type === 'goto_dialog') {
     appendField(row, 'ink_node', t.ink_node || '', v => { t.ink_node = v; markDirty(); },
       'Ink knot name (# goto:...)');
-  } else if (t.type === 'combine') {
-    const itemsInput = document.createElement('input');
-    itemsInput.type = 'text';
-    itemsInput.placeholder = 'items (comma-separated)';
-    itemsInput.value = (t.items || []).join(',');
-    itemsInput.oninput = () => {
-      t.items = itemsInput.value.split(',').map(s => s.trim()).filter(Boolean);
-      markDirty();
-    };
-    row.appendChild(itemsInput);
   }
   // custom has no extra fields beyond id + hint.
 
@@ -1281,15 +1408,17 @@ function makePlaceholder() {
   span.style.color = '#6c7280';
   return span;
 }
-async function fillAsync(container, asyncBuilder) {
+async function fillAsync(container, asyncBuilder, lifecycle = null) {
   if (!container) return;
   container.innerHTML = '';
   container.appendChild(makePlaceholder());
   try {
     const el = await asyncBuilder;
+    if (lifecycle?.disposed) return;
     container.innerHTML = '';
     container.appendChild(el);
   } catch (e) {
+    if (lifecycle?.disposed) return;
     container.textContent = 'error: ' + e.message;
   }
 }
@@ -1307,7 +1436,12 @@ function makeNumberInput(value, onChange, min, max, step, sync) {
   const i = document.createElement('input'); i.type = 'number';
   i.value = value; if (min !== undefined) i.min = min; if (max !== undefined) i.max = max; if (step !== undefined) i.step = step;
   if (sync) i.dataset.sync = sync;
-  i.oninput = () => onChange(parseFloat(i.value));
+  i.oninput = () => {
+    const raw = i.value.trim();
+    if (!raw) return;
+    const parsed = Number(raw);
+    if (Number.isFinite(parsed)) onChange(parsed);
+  };
   return i;
 }
 function makeSelect(value, options, onChange) {
@@ -1349,7 +1483,7 @@ async function makePalettePicker(sc) {
   sel.onchange = () => { sc.bgPalette = sel.value || null; markDirty(); };
   return sel;
 }
-async function makeMusicEditor(sc) {
+async function makeMusicEditor(sc, lifecycle = activeInspectorLifecycle) {
   const files = await listDir('assets/audio');
   const audio = files.filter(f => /\.(mp3|mid|ogg)$/i.test(f));
 
@@ -1598,8 +1732,9 @@ async function makeMusicEditor(sc) {
   wrap.appendChild(medleyWrap);
 
   // Subscribe to QueuePlayer status changes to highlight the
-  // currently-playing row + show progress text.
-  QueuePlayer.onStatus((s) => {
+  // currently-playing row + show progress text. The inspector owns this
+  // subscription and disposes it before replacing the panel on a rerender.
+  const unsubscribeStatus = QueuePlayer.onStatus((s) => {
     // Update row highlights. Both queue mode (s.index = current queue index)
     // and one mode (s.index = the row's medleyIndex if known, else -1) light
     // up the matching row. index === -1 means no row should highlight (e.g.
@@ -1619,6 +1754,7 @@ async function makeMusicEditor(sc) {
       status.innerHTML = `<span>▶</span><span class="progress">${s.index + 1}/${getMedley().length} — ${escapeHtml(file)}</span>`;
     }
   });
+  retainInspectorCleanup(lifecycle, unsubscribeStatus);
 
   render();
   return wrap;
@@ -1738,11 +1874,15 @@ async function makeIconPicker(it) {
 
 // ---------- add scene / add item ----------
 $('#add-scene-btn').onclick = () => {
-  const id = prompt('Scene id (lowercase, no spaces):');
+  const id = prompt('Scene id (lower-snake, e.g. terminal_lab):');
   if (!id) return;
-  if (state.story.scenes[id]) { alert('already exists'); return; }
+  if (!SCENE_ID_PATTERN.test(id)) {
+    alert('Scene id must match /^[a-z][a-z0-9_]*$/ (lower-snake, starting with a letter).');
+    return;
+  }
+  if (Object.prototype.hasOwnProperty.call(state.story.scenes, id)) { alert('already exists'); return; }
   state.story.scenes[id] = { id, kind: 'ink', bg: null, music: null, ink: 'ink/' + id + '.ink', characters: [], hitboxes: [] };
-  state.sceneId = id;
+  switchScene(id, { render: false });
   markDirty(); renderAll();
 };
 $('#add-item-btn').onclick = () => {
@@ -1821,7 +1961,8 @@ async function renderAll() {
 async function main() {
   await loadStory();
   const ids = Object.keys(state.story.scenes || {});
-  state.sceneId = ids.includes('alley') ? 'alley' : (ids[0] || null);
+  const initialSceneId = ids.includes('alley') ? 'alley' : ids[0];
+  if (initialSceneId) switchScene(initialSceneId, { render: false });
   // If state.vpW / state.vpH were never initialised (this code path
   // hit on a fresh editor load — setViewport is only called from the
   // dropdown's onchange, which doesn't fire on first load), inherit

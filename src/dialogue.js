@@ -24,6 +24,9 @@ class DialogueRunner {
         this.currentTags = [];
         this.typewriterTimer = null;
         this.typing = false;
+        this._completionTimer = null;
+        this._completionGeneration = 0;
+        this._completedGeneration = -1;
         this.onLine = callbacks.onLine || (() => {});
         this.onChoices = callbacks.onChoices || (() => {});
         this.onCommand = callbacks.onCommand || (() => {});
@@ -106,12 +109,51 @@ class DialogueRunner {
         this.step();
     }
 
+    _cancelCompletionTimer() {
+        if (this._completionTimer !== null) {
+            clearTimeout(this._completionTimer);
+            this._completionTimer = null;
+        }
+    }
+
+    _resetCompletionEligibility() {
+        this._cancelCompletionTimer();
+        this._completionGeneration++;
+    }
+
+    _dispatchCompletion(generation = this._completionGeneration) {
+        if (generation !== this._completionGeneration || this._completedGeneration === generation) return;
+        this._cancelCompletionTimer();
+        this._completedGeneration = generation;
+        this.onComplete();
+    }
+
+    _scheduleCompletion() {
+        this._cancelCompletionTimer();
+        const generation = this._completionGeneration;
+        const delay = this.typing ? Math.max(50, (this.currentLine?.length || 0) * 30 + 80) : 50;
+        const timer = setTimeout(() => {
+            if (this._completionTimer === timer) this._completionTimer = null;
+            if (!this.typing) this._dispatchCompletion(generation);
+        }, delay);
+        this._completionTimer = timer;
+    }
+
     step() {
         if (this._suppressStep) {
             this._suppressStep = false;
             return;
         }
         if (!this.story) return;
+        // A completed runner may later be redirected with ChoosePathString.
+        // Content becoming available again starts a fresh completion cycle,
+        // including paths that contain only blank lines or commands.
+        if (this.story.canContinue && (
+            this._completionTimer !== null ||
+            this._completedGeneration === this._completionGeneration
+        )) {
+            this._resetCompletionEligibility();
+        }
         const maxLinesPerStep = 100;
         let walked = 0;
         // Walk past blank lines and surface the FIRST non-empty line
@@ -138,9 +180,7 @@ class DialogueRunner {
             if (!this.story.canContinue && (!this.story.currentChoices || this.story.currentChoices.length === 0)) {
                 // Defer until the typewriter finishes so the player sees
                 // the line before the box tries to disappear on them.
-                setTimeout(() => {
-                    if (!this.typing) this.onComplete();
-                }, this.typing ? Math.max(50, (this.currentLine?.length || 0) * 30 + 80) : 50);
+                this._scheduleCompletion();
             }
             return;
         }
@@ -159,7 +199,7 @@ class DialogueRunner {
         if (this.story.currentChoices && this.story.currentChoices.length > 0) {
             this.onChoices(this.story.currentChoices);
         } else {
-            this.onComplete();
+            this._dispatchCompletion();
         }
     }
 
@@ -177,6 +217,10 @@ class DialogueRunner {
     _cancelNextStep() { this._suppressStep = true; }
 
     showLine(line, tags) {
+        // Each surfaced line can lead to a distinct exhausted Ink state.
+        // Reset here rather than latching completion for the runner's life;
+        // pickup redirects reuse this runner for a later path.
+        this._resetCompletionEligibility();
         this.typing = true;
         this.currentLine = line;
         this.currentTags = tags;
@@ -198,6 +242,9 @@ class DialogueRunner {
 
     advance() {
         if (!this.story) return;
+        // If this is the final line, step() below dispatches immediately.
+        // Cancel its delayed dispatch first so both paths cannot win.
+        this._cancelCompletionTimer();
         if (this.typing) {
             if (this.typewriterTimer) {
                 clearInterval(this.typewriterTimer);
@@ -221,6 +268,7 @@ class DialogueRunner {
     }
 
     stop() {
+        this._cancelCompletionTimer();
         if (this.typewriterTimer) {
             clearInterval(this.typewriterTimer);
             this.typewriterTimer = null;

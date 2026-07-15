@@ -7,9 +7,9 @@ the PC-98 16-colour Bayer dither at display time, so the source image
 should be a clean painterly illustration, NOT pre-dithered.
 
 Usage:
-    python3 tools/gen_intro_v2.py                      # v7 at 16:9 (default)
+    python3 tools/gen_intro_v2.py                      # v11 at 16:9 (default)
     python3 tools/gen_intro_v2.py v6                   # v6 at 4:3 (legacy)
-    python3 tools/gen_intro_v2.py v7 16:9              # explicit
+    python3 tools/gen_intro_v2.py v11 16:9             # explicit current preset
     python3 tools/gen_intro_v2.py v8 21:9              # cinematic ultrawide
 """
 import argparse
@@ -18,8 +18,6 @@ import json
 import sys
 from datetime import datetime
 from pathlib import Path
-
-import httpx
 
 API_URL = "https://api.minimax.io/v1/image_generation"
 
@@ -164,13 +162,15 @@ Avoid: cartoon, kawaii, chibi, child, 3D render, photorealistic, CGI, smooth gra
 
 def main():
     parser = argparse.ArgumentParser(description="Generate the title screen background.")
-    parser.add_argument("version", nargs="?", default="v7",
+    parser.add_argument("version", nargs="?", default="v11",
                         choices=list(PROMPTS.keys()),
-                        help="Which preset version to generate (default: v7)")
+                        help="Which preset version to generate (default: v11)")
     parser.add_argument("aspect_ratio", nargs="?", default=None,
                         choices=["4:3", "16:9", "21:9", "1:1", "3:4"],
                         help="Override the preset's aspect ratio")
     args = parser.parse_args()
+
+    import httpx
 
     preset = PROMPTS[args.version]
     prompt = preset["prompt"]

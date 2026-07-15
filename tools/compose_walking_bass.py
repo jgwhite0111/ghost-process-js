@@ -14,9 +14,10 @@ For 2-chord songs (each chord lasts 16 bars), the walking bass
 varies in 4-bar phrases. Bar 16 lands on chord 2's root.
 """
 import os
+from pathlib import Path
 from mido import MidiFile, MidiTrack, Message
 
-os.chdir('/Users/jwhite/ghost-process-js')
+os.chdir(Path(__file__).resolve().parent.parent)
 
 # Chord progressions from ch 2 analysis
 SCENES = {

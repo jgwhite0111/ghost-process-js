@@ -61,16 +61,10 @@ class HitboxLayer {
             this._hitboxEls[i] = this._createHitboxDiv(this.hitboxes[i], i);
         }
         this._hoveredIdx = null;
-        if (this._alwaysVisible) {
-            for (const idx in this._labels) this._labels[idx].style.opacity = '1';
-        } else if (this._itemHitboxesAlwaysVisible) {
-            // Show item-pickup hitbox labels so the player can find them.
-            // But hide them once the item is in inventory or consumed.
-            for (let i = 0; i < this.hitboxes.length; i++) {
-                this._updateItemLabel(i);
-            }
-        }
+        this._restoreBaselineLabels();
         this._syncOverlay();
+        this._onCanvasResized = () => this._syncOverlay();
+        window.addEventListener('game:canvas-resized', this._onCanvasResized);
     }
 
     _updateItemLabel(i) {
@@ -80,6 +74,14 @@ class HitboxLayer {
         const consumed = window.STATE?.consumed || [];
         const inInv = inv.indexOf(hb.item) !== -1 || consumed.indexOf(hb.item) !== -1;
         this._labels[i].style.opacity = inInv ? '0' : '1';
+    }
+
+    _restoreBaselineLabels() {
+        for (const i in this._labels) {
+            this._labels[i].style.opacity = this._alwaysVisible ? '1' : '0';
+        }
+        if (!this._itemHitboxesAlwaysVisible) return;
+        for (let i = 0; i < this.hitboxes.length; i++) this._updateItemLabel(i);
     }
 
     _createHitboxDiv(hb, idx) {
@@ -106,7 +108,7 @@ class HitboxLayer {
         this._hoveredIdx = idx;
         if (idx === null) {
             this.canvas.style.cursor = '';
-            for (const i in this._labels) this._labels[i].style.opacity = '0';
+            this._restoreBaselineLabels();
         } else {
             this.canvas.style.cursor = window.EYE_CURSOR;
             for (const i in this._labels) this._labels[i].style.opacity = (i == idx) ? '1' : '0';
@@ -178,7 +180,7 @@ class HitboxLayer {
         } else {
             this.canvas.style.cursor = '';
             this._hoveredIdx = null;
-            for (const i in this._labels) this._labels[i].style.opacity = '0';
+            this._restoreBaselineLabels();
         }
     }
 
@@ -211,6 +213,7 @@ class HitboxLayer {
     destroy() {
         this.canvas.removeEventListener('pointermove', this._onPointerMove);
         this.canvas.removeEventListener('pointerdown', this._onPointerDown);
+        window.removeEventListener('game:canvas-resized', this._onCanvasResized);
         if (this.overlay) this.overlay.remove();
         this.canvas.style.cursor = '';
     }

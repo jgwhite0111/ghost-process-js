@@ -1,11 +1,9 @@
-// src/story.js — fetch + cache story.json, then start the asset
+// src/story.js — fetch + cache story.json, start the startup-critical
 // preload, then fire `story-ready` so the Engine can boot.
 //
-// story-ready fires only after EVERY asset referenced by story.json
-// has been preloaded. Each scene's bg image, audio, and 16-frame
-// sprite sheets are added to the preload batch up-front. Total preload
-// is bounded by the
-// number of scenes x assets; with ~7 scenes it's a few seconds.
+// Only the start scene blocks Engine startup. Remaining scenes preload
+// afterward, one scene at a time in narrative next-chain order, so the
+// browser never receives an all-game burst of image and audio requests.
 
 (async () => {
     'use strict';
@@ -38,57 +36,105 @@
         visited: [story.start]
     };
 
-    // 2. Preload every asset referenced by story.json. We do this
-    //    BEFORE announcing story-ready so the first scene's start()
-    //    doesn't have to wait — but we still keep this behind a
-    //    promise so the Engine can boot the moment preloading
-    //    finishes.
-    const preloadPromises = [];
-    for (const [sceneId, scene] of Object.entries(story.scenes)) {
-        if (scene.bg) {
-            preloadPromises.push(
-                window.Runtime.loadImage(`assets/backgrounds/${scene.bg}.png`)
-                    .catch((e) => console.warn(`bg preload failed: ${scene.bg}`, e))
-            );
-        }
-        if (scene.music) {
-            // music can be a string (single track) OR a list of
-            // {file: ..., fadeAt?: ..., volume?: ...} entries — preload
-            // each unique file so the runtime doesn't stall on first play.
-            const tracks = Array.isArray(scene.music)
-                ? scene.music
-                : (typeof scene.music === 'string'
-                    ? [{ file: scene.music }]
-                    : [scene.music]);
-            tracks.forEach((t) => {
-                if (t && t.file) {
-                    preloadPromises.push(
-                        window.Runtime.loadAudio(`assets/audio/${t.file}`)
-                            .catch((e) => console.warn(`audio preload failed: ${t.file}`, e))
-                    );
-                }
+    function safelyPreload(load, warning) {
+        try {
+            return Promise.resolve(load()).catch((err) => {
+                if (warning) console.warn(warning, err);
+                return null;
             });
-        }
-        for (const char of scene.characters || []) {
-            const sprites = (char.scenes || {})[sceneId] || {};
-            if (sprites.frames) {
-                const m = sprites.frames.match(/^(.+\/)([^/]+)_\*\.png$/);
-                if (m) {
-                    const dir = m[1], prefix = m[2];
-                    for (let i = 1; i <= 16; i++) {
-                        const num = String(i).padStart(2, '0');
-                        preloadPromises.push(
-                            window.Runtime.loadImage(`${dir}${prefix}_${num}.png`)
-                                .catch(() => null)
-                        );
-                    }
-                }
-            }
+        } catch (err) {
+            if (warning) console.warn(warning, err);
+            return Promise.resolve(null);
         }
     }
-    window.STORY_BG_PROMISE = Promise.all(preloadPromises);
 
-    // 3. Fire story-ready.
+    function musicEntries(music) {
+        if (!music) return [];
+        if (Array.isArray(music)) return music;
+        if (typeof music === 'string') return [{ file: music }];
+        return [music];
+    }
+
+    function preloadSceneAssets(sceneId) {
+        const scene = story.scenes[sceneId];
+        if (!scene) return Promise.resolve([]);
+
+        const preloads = [];
+        if (scene.bg) {
+            preloads.push(safelyPreload(
+                () => window.Runtime.loadImage(`assets/backgrounds/${scene.bg}.png`),
+                `bg preload failed: ${scene.bg}`
+            ));
+        }
+
+        for (const track of musicEntries(scene.music)) {
+            if (!track || !track.file) continue;
+            preloads.push(safelyPreload(
+                () => window.Runtime.loadAudio(`assets/audio/${track.file}`),
+                `audio preload failed: ${track.file}`
+            ));
+        }
+
+        for (const char of scene.characters || []) {
+            const sprites = (char.scenes || {})[sceneId] || {};
+            if (!sprites.frames) continue;
+            const match = sprites.frames.match(/^(.+\/)([^/]+)_\*\.png$/);
+            if (!match) continue;
+            const dir = match[1], prefix = match[2];
+            for (let i = 1; i <= 16; i++) {
+                const num = String(i).padStart(2, '0');
+                preloads.push(safelyPreload(
+                    () => window.Runtime.loadImage(`${dir}${prefix}_${num}.png`)
+                ));
+            }
+        }
+
+        return Promise.all(preloads);
+    }
+
+    function backgroundSceneOrder() {
+        const ordered = [];
+        const seen = new Set([story.start]);
+        let sceneId = story.next && story.next[story.start];
+
+        // Follow the declared narrative chain first. Stop at loops and
+        // malformed/missing targets, then append any disconnected scenes in
+        // story order so diagnostics still cover every configured scene.
+        while (sceneId && story.scenes[sceneId] && !seen.has(sceneId)) {
+            seen.add(sceneId);
+            ordered.push(sceneId);
+            sceneId = story.next && story.next[sceneId];
+        }
+        for (const remainingId of Object.keys(story.scenes)) {
+            if (seen.has(remainingId)) continue;
+            seen.add(remainingId);
+            ordered.push(remainingId);
+        }
+        return ordered;
+    }
+
+    // 2. Start only the start scene's critical preload. Engine retains the
+    //    STORY_BG_PROMISE compatibility name, but it no longer represents an
+    //    all-game barrier.
+    window.STORY_BG_PROMISE = preloadSceneAssets(story.start);
+
+    // Remaining scenes begin only after the critical stage and are bounded
+    // to one complete scene at a time. This aggregate promise is diagnostic;
+    // Engine deliberately does not await it. Every asset rejection is caught
+    // inside its scene stage, and this final catch prevents unexpected staging
+    // errors from becoming unhandled rejections.
+    window.STORY_BACKGROUND_PRELOAD_PROMISE = window.STORY_BG_PROMISE
+        .then(async () => {
+            for (const sceneId of backgroundSceneOrder()) {
+                await preloadSceneAssets(sceneId);
+            }
+        })
+        .catch((err) => {
+            console.warn('background scene preload failed', err);
+        });
+
+    // 3. Announce that STORY is available. Engine independently waits for the
+    //    critical start-scene promise before entering the title scene.
     window.dispatchEvent(new CustomEvent('story-ready'));
 
     function showFatal(msg) {

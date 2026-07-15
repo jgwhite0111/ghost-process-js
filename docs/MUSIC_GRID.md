@@ -1,12 +1,25 @@
 # Music Grid
 
-Per-scene music map. Generated against the live `story.json` `music` field. Only `intro` is solo; all 9 gameplay scenes are A+B medleys.
+Per-scene music map, checked against the live `story.json` `music` field. The runtime accepts either one MP3 string or a generic ordered medley array. Only `intro` is solo; all 9 gameplay scenes currently use five-track A→B→C→D→E medleys.
 
-[Title truncated]...
+For the table below, B–E filenames append `_b` through `_e` to the listed A-file stem. `fadeAt` is stored on the destination entry: B's value controls the transition after A has played that many seconds, C's after B, and so on.
+
+| Scene | A file | Track order | Destination-entry `fadeAt` values (B / C / D / E, seconds) |
+|---|---|---|---|
+| intro | `intro_theme.mp3` | solo | — |
+| cold_open | `cold_open.mp3` | A→B→C→D→E | 51.1 / 82.3 / 52.8 / 82.3 |
+| alley | `alley_confrontation.mp3` | A→B→C→D→E | 23.8 / 41.7 / 50.5 / 41.7 |
+| chase | `chase.mp3` | A→B→C→D→E | 31.6 / 45 / 36 / 36 |
+| corridor | `corridor.mp3` | A→B→C→D→E | 93 / 95 / 63 / 95 |
+| jailbreak | `jailbreak.mp3` | A→B→C→D→E | 35.1 / 42.9 / 62 / 45.1 |
+| kabukicho | `kabukicho.mp3` | A→B→C→D→E | 31.4 / 61.1 / 50.4 / 61.1 |
+| corp_office | `corp_office.mp3` | A→B→C→D→E | 37.3 / 42 / 50 / 22 |
+| terminal_lab | `terminal_lab.mp3` | A→B→C→D→E | 50.6 / 54.7 / 57.6 / 54.7 |
+| ship_engine | `ship_engine.mp3` | A→B→C→D→E | 51.7 / 72 / 46 / 72 |
 
 ## Scene Shapes — what each track sounds like
 
-Beyond the medley, each track has a real *song shape* — intro → build → peak → break → rebuild → release. Not a flat loop.
+The original A tracks documented below each have a real *song shape* — intro → build → peak → break → rebuild → release. They are not flat loops.
 
 ### `cold_open` (D Phrygian, 70 BPM, 24 bars)
 **Shape:** *drone sits → whisper lead climbs → big swell → sharp cutoff → one fading note*

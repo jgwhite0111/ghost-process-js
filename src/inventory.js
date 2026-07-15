@@ -72,8 +72,10 @@ class Inventory {
     }
 
     _openPopup() {
-        if (this.popup) return;
-        const items = (window.STATE && window.STATE.inventory) || [];
+        if (this.popup) {
+            this._renderPopupContents();
+            return;
+        }
         // Backdrop dims the scene so the popup reads as a modal layer.
         const backdrop = document.createElement('div');
         backdrop.className = 'inventory-backdrop';
@@ -91,44 +93,10 @@ class Inventory {
         // Item list
         const list = document.createElement('div');
         list.className = 'inventory-list';
-        if (items.length === 0) {
-            const empty = document.createElement('div');
-            empty.className = 'inventory-empty';
-            empty.textContent = '— nothing collected —';
-            list.appendChild(empty);
-        } else {
-            for (const itemId of items) {
-                const item = window.STORY.items[itemId];
-                if (!item) continue;
-                const slot = document.createElement('button');
-                slot.type = 'button';
-                slot.className = 'inventory-item';
-                slot.dataset.itemId = itemId;
-                const img = document.createElement('img');
-                img.src = item.icon;
-                img.alt = item.name;
-                const name = document.createElement('span');
-                name.className = 'inventory-item-name';
-                name.textContent = item.name;
-                slot.appendChild(img);
-                slot.appendChild(name);
-                slot.addEventListener('click', () => this._showDescription(itemId));
-                list.appendChild(slot);
-            }
-        }
         popup.appendChild(list);
-        // Description panel (initially shows first item or a placeholder).
+        // Description panel
         const desc = document.createElement('div');
         desc.className = 'inventory-description';
-        if (items.length > 0 && window.STORY.items[items[0]]) {
-            this._lastFocusedItem = items[0];
-            this._renderDescription(items[0], desc);
-            // Highlight the first item.
-            const firstSlot = list.querySelector('.inventory-item');
-            if (firstSlot) firstSlot.classList.add('is-selected');
-        } else {
-            desc.innerHTML = '<span class="inventory-empty-desc">Pick up items by clicking them in the scene.</span>';
-        }
         popup.appendChild(desc);
         backdrop.appendChild(popup);
         backdrop.addEventListener('click', (e) => {
@@ -137,6 +105,59 @@ class Inventory {
         });
         document.body.appendChild(backdrop);
         this.popup = backdrop;
+        this._renderPopupContents();
+    }
+
+    _renderPopupContents() {
+        if (!this.popup) return;
+        const list = this.popup.querySelector('.inventory-list');
+        const desc = this.popup.querySelector('.inventory-description');
+        if (!list || !desc) return;
+
+        list.textContent = '';
+        desc.textContent = '';
+        const inventory = (window.STATE && window.STATE.inventory) || [];
+        const storyItems = (window.STORY && window.STORY.items) || {};
+        const items = inventory.filter((itemId) => storyItems[itemId]);
+
+        if (items.length === 0) {
+            this._lastFocusedItem = null;
+            const empty = document.createElement('div');
+            empty.className = 'inventory-empty';
+            empty.textContent = '— nothing collected —';
+            list.appendChild(empty);
+
+            const emptyDesc = document.createElement('span');
+            emptyDesc.className = 'inventory-empty-desc';
+            emptyDesc.textContent = 'Pick up items by clicking them in the scene.';
+            desc.appendChild(emptyDesc);
+            return;
+        }
+
+        const selectedItem = items.includes(this._lastFocusedItem)
+            ? this._lastFocusedItem
+            : items[0];
+        this._lastFocusedItem = selectedItem;
+
+        for (const itemId of items) {
+            const item = storyItems[itemId];
+            const slot = document.createElement('button');
+            slot.type = 'button';
+            slot.className = 'inventory-item';
+            slot.dataset.itemId = itemId;
+            slot.classList.toggle('is-selected', itemId === selectedItem);
+            const img = document.createElement('img');
+            img.src = item.icon;
+            img.alt = item.name;
+            const name = document.createElement('span');
+            name.className = 'inventory-item-name';
+            name.textContent = item.name;
+            slot.appendChild(img);
+            slot.appendChild(name);
+            slot.addEventListener('click', () => this._showDescription(itemId));
+            list.appendChild(slot);
+        }
+        this._renderDescription(selectedItem, desc);
     }
 
     _renderDescription(itemId, descEl) {
@@ -184,7 +205,7 @@ class Inventory {
         this._updateCount();
         // If the popup is currently open, refresh it so the new item
         // shows up without the user having to close+reopen.
-        if (this.popup) this._openPopup(); // close+reopen pattern
+        if (this.popup) this._renderPopupContents();
     }
 
     // Pickup with a visual "fly to inventory" animation. Spawns a
@@ -273,7 +294,7 @@ class Inventory {
         }
         this.ensureButton();
         this._updateCount();
-        if (this.popup) this._openPopup();
+        if (this.popup) this._renderPopupContents();
     }
 
     has(itemId) {
@@ -283,7 +304,7 @@ class Inventory {
     refresh() {
         this.ensureButton();
         this._updateCount();
-        if (this.popup) this._openPopup();
+        if (this.popup) this._renderPopupContents();
     }
 }
 

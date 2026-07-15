@@ -7,13 +7,13 @@ MP3s, source MIDIs, and a soundfont for re-rendering.
 | File | Role |
 |---|---|
 | `intro_theme.mp3` | Intro scene music. No MIDI source — synthesized directly from FM (17 SC-55 channels). |
-| `<scene>.mp3` + `<scene>_b.mp3` | A-side + B-side medley for each of the 9 gameplay scenes (`cold_open`, `alley`, `chase`, `corridor`, `jailbreak`, `kabukicho`, `corp_office`, `terminal_lab`, `ship_engine`). |
-| `<scene>.mid` + `<scene>_b.mid` | Source MIDI for each medley half. Re-render with `tools/render-midi.sh`. |
-| `clinic_tension.mp3` / `.mid` | Orphan — not wired into `story.json`. Kept for archival. |
-| `smoky_club_intro.mid` | Orphan — single-track idea that didn't land. No MP3 render. |
+| `<stem>.mp3` + `<stem>_{b,c,d,e}.mp3` | Ordered A→B→C→D→E medley tracks for each of the 9 gameplay scenes (`cold_open`, `alley`, `chase`, `corridor`, `jailbreak`, `kabukicho`, `corp_office`, `terminal_lab`, `ship_engine`). Filenames are wired explicitly in `story.json`; the alley stem is `alley_confrontation`. |
+| `<stem>.mid` + `<stem>_{b,c,d,e}.mid` | Matching source MIDI for the 45 runtime medley tracks. Re-render with `tools/render-midi.sh`. |
+| `clinic_tension.{mp3,mid}` | Orphan pair — not wired into `story.json`. Kept for archival. |
+| `smoky_club_intro.{mp3,mid}` | Orphan pair — single-track idea that didn't land. |
 | `sc55.sf2` | General MIDI soundfont (VintageDreamsWaves-v2). Used by FluidSynth for re-renders. Not loaded by the browser at runtime. |
 
-20 MP3s + 20 MIDIs on disk total.
+48 MP3s + 47 MIDIs on disk total. `story.json` wires 46 MP3s: the solo intro plus 45 gameplay-medley tracks.
 
 ## Why pre-render MIDIs
 

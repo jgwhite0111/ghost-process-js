@@ -43,12 +43,12 @@ For character animations: use image-to-video (I2V), not text-to-video.
 ## Audio policy
 
 - **MP3 only at runtime.** No FluidSynth, no MIDI playback. The `.mid` source files are archived but not loaded.
-- `story.json` `music` field is a string (single MP3) or array (A-side + B-side medley pair). Crossfade is wired in `src/runtime/music.js`.
+- `story.json` `music` field is a string (single MP3) or an ordered array of track objects (medley). Arrays are not limited to two tracks; the current 9 gameplay scenes each use A→B→C→D→E. A destination entry's optional `fadeAt` schedules the crossfade into that entry after the current track has played that many seconds. Crossfade is wired in `src/runtime/music.js`.
 - Sample-rate 44.1 kHz, mono or stereo OK. Volume ~0.7 default.
 
 ## Code architecture
 
-- **Single source of truth: `story.json`.** Every scene, item, recipe, hitbox lives there. Engine code reads it; editor writes it.
+- **Single source of truth: `story.json`.** Every scene, item, task, and hitbox lives there. Engine code reads it; editor writes it.
 - **Engine scenes map 1:1 to story scenes.** When the player enters `alley`, the runtime's scene loader boots, reads that scene's config from `story.json`, mounts the dialogue runner, plays music, attaches hitboxes. Implementation lives in `src/runtime/` (vanilla JS).
 - **No global state outside `boot.js` + `src/runtime/` modules.** Each scene owns its own state via closure; cross-scene state (inventory, visited, consumed) lives in `window.STATE` initialised at boot.
 - **No new dependencies without discussion.** InkJS + Express + Multer is the ceiling.
@@ -68,7 +68,7 @@ Run before claiming any task is done so the next chat picks up cleanly:
 
 ```bash
 pkill -f "node server.js" 2>/dev/null
-cd /Users/jwhite/ghost-process-js
+cd "$(git rev-parse --show-toplevel)"
 npm start &   # verify server boots
 git status    # expect clean (or intentional uncommitted)
 ```

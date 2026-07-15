@@ -37,6 +37,7 @@ class Scene {
         this._lastFrameTime = 0;
         this._onPointerDown = (e) => this._handlePointerDown(e);
         this._active = false;
+        this._pickupRedirectTimer = null;
 
         // Scenes where the character is supposed to already be in
         // place when the scene opens — fade-in is skipped and the
@@ -354,6 +355,34 @@ class Scene {
         }
     }
 
+    // Configure an item-gated Ink scene. A first-time pickup keeps the
+    // fly-to-inventory delay before entering the post-pickup knot; scene
+    // re-entry with an already held/consumed item enters it immediately.
+    _bindPickupRedirect(itemId, inkNode, delayMs = 700) {
+        const redirect = () => {
+            this._pickupRedirectTimer = null;
+            if (!this._active || !this.dialogueRunner) return;
+            try {
+                this.dialogueRunner.story.ChoosePathString(inkNode);
+                this.dialogueRunner.step();
+            } catch (e) {
+                console.warn(`[${this.sceneId}] redirect to ${inkNode} failed`, e);
+            }
+        };
+
+        const inventory = window.STATE?.inventory || [];
+        const consumed = window.STATE?.consumed || [];
+        if (inventory.includes(itemId) || consumed.includes(itemId)) {
+            redirect();
+            return;
+        }
+
+        this._onItemPicked = (pickedItemId) => {
+            if (pickedItemId !== itemId || !this.dialogueRunner) return;
+            this._pickupRedirectTimer = setTimeout(redirect, delayMs);
+        };
+    }
+
     // Called by the dialogue panel after the player clicks the (now-
     // exhausted) dialogue box. Surfaces the next unresolved task hint
     // via Toast. If no tasks are defined, the box just hides silently.
@@ -562,7 +591,8 @@ class Scene {
 
     // Snap the loaded bgImage into a 16-colour PC-98 dither on an
     // offscreen canvas. Stored as this._ditheredBg and blitted by
-    // _drawBackground every frame. Paid once per scene load.
+    // _drawBackground every frame. Equivalent scene revisits share the
+    // immutable processed canvas through Runtime's source/parameter cache.
     //
     // The offscreen is sized at the SOURCE image's resolution (not the
     // canvas). The canvas-side aspect fit (cover for gameplay, contain
@@ -570,18 +600,32 @@ class Scene {
     // we don't re-dither on every canvas resize — only on first load.
     _ditherBg() {
         const palette = window.Runtime.resolvePalette(this.sceneConfig.bgPalette);
-        const off = document.createElement('canvas');
-        off.width = this.bgImage.width;
-        off.height = this.bgImage.height;
+        const width = this.bgImage.width;
+        const height = this.bgImage.height;
+        const bgColor = palette[0] || [0, 0, 0];
+        const ditherStrength = this.sceneConfig.bgDitherStrength ?? 1.0;
+        const anchor = this.sceneConfig.bgAnchor || 'center';
         try {
-            window.Runtime.ditherImageToCanvas(this.bgImage, off, palette, {
-                // Letterbox fill comes from the palette's BG_deep slot so
-                // any pillarbox bars match the dithered plate rather than
-                // showing as solid black.
-                bgColor: palette[0] || [0, 0, 0],
-                ditherStrength: this.sceneConfig.bgDitherStrength ?? 1.0,
+            this._ditheredBg = window.Runtime.getProcessedCanvas(this.bgImage, {
+                operation: 'background-dither',
+                version: 1,
+                width,
+                height,
+                parameters: { palette, bgColor, ditherStrength, anchor },
+            }, () => {
+                const off = document.createElement('canvas');
+                off.width = width;
+                off.height = height;
+                window.Runtime.ditherImageToCanvas(this.bgImage, off, palette, {
+                    // Letterbox fill comes from the palette's BG_deep slot so
+                    // any pillarbox bars match the dithered plate rather than
+                    // showing as solid black.
+                    bgColor,
+                    ditherStrength,
+                    anchor,
+                });
+                return off;
             });
-            this._ditheredBg = off;
         } catch (e) {
             console.warn(`Scene ${this.sceneId}: bg dither failed:`, e);
             // Fall back to the raw image — _drawBackground will pick it up.
@@ -609,12 +653,19 @@ class Scene {
 
     shutdown() {
         this._active = false;
+        if (this._pickupRedirectTimer !== null) {
+            clearTimeout(this._pickupRedirectTimer);
+            this._pickupRedirectTimer = null;
+        }
         if (this._rafId) cancelAnimationFrame(this._rafId);
         if (this.hitboxLayer) this.hitboxLayer.destroy();
         this.canvas.removeEventListener('pointerdown', this._onPointerDown);
         // Tell the dialogue runner to stop producing line events.
         if (this.dialogueRunner) this.dialogueRunner.stop();
-        // Characters fade out by virtue of canvas being clear next frame.
+        // CharacterSprite objects are per-start state. Scene instances are
+        // cached by the engine, so release them here instead of appending a
+        // duplicate set the next time this scene starts.
+        this.characters = [];
     }
 }
 

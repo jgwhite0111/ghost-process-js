@@ -12,23 +12,9 @@ window.SCENE_CLASSES.cold_open = class extends window.Scene {};
 window.SCENE_CLASSES.alley = class extends window.Scene {
     onReady() {
         // The android is invisible until the player finds the rusty
-        // key. After the fly-to-INV animation runs, redirect the Ink
-        // runner from the "waiting" Start knot into FoundKey, where
-        // the android fade-in + dialogue beat lives.
-        this._onItemPicked = (itemId) => {
-            if (itemId !== 'rusty_key') return;
-            if (!this.dialogueRunner) return;
-            // 700ms is the addWithFly duration; redirect Ink right
-            // after the icon lands.
-            setTimeout(() => {
-                try {
-                    this.dialogueRunner.story.ChoosePathString('FoundKey');
-                    this.dialogueRunner.step();
-                } catch (e) {
-                    console.warn('[alley] redirect to FoundKey failed', e);
-                }
-            }, 700);
-        };
+        // key. First pickup waits for the fly-to-INV animation; re-entry
+        // with the key already held/consumed goes straight to FoundKey.
+        this._bindPickupRedirect('rusty_key', 'FoundKey');
     }
 };
 window.SCENE_CLASSES.chase = class extends window.Scene {};
@@ -38,18 +24,7 @@ window.SCENE_CLASSES.chase = class extends window.Scene {};
 // and the ContactMade branch fires.
 window.SCENE_CLASSES.kabukicho = class extends window.Scene {
     onReady() {
-        this._onItemPicked = (itemId) => {
-            if (itemId !== 'datacard') return;
-            if (!this.dialogueRunner) return;
-            setTimeout(() => {
-                try {
-                    this.dialogueRunner.story.ChoosePathString('ContactMade');
-                    this.dialogueRunner.step();
-                } catch (e) {
-                    console.warn('[kabukicho] redirect to ContactMade failed', e);
-                }
-            }, 700);
-        };
+        this._bindPickupRedirect('datacard', 'ContactMade');
     }
 };
 // Corp office extends chase — its hitbox (if any) advances Ink via

@@ -5,9 +5,8 @@
 // scaling gap, no letterbox bars on portrait mobile. The canvas uses
 // `image-rendering: pixelated` so the dither stays crisp at any size.
 //
-// Asset preload is one big Promise.all of Image() objects keyed by
-// filename. Each asset is loaded with an `src=` assignment + onload
-// handler.
+// Loaded images remain in the public asset cache. Concurrent requests for
+// the same not-yet-loaded source also share one private promise/Image.
 
 const INTERNAL_W = 640;
 const INTERNAL_H = 480;
@@ -16,6 +15,102 @@ const assets = {
     images: {},      // filename -> HTMLImageElement (loaded)
     audio: {}        // filename -> { audio: HTMLAudioElement, decoded: Promise }
 };
+const imageLoads = Object.create(null); // filename -> Promise (in flight only)
+const processedCanvasesBySource = new Map();
+const processedCanvasesByImage = new WeakMap();
+
+// Stable serialization for the JSON-like processing descriptors used below.
+// Object keys are sorted recursively, so semantically identical options do not
+// miss merely because callers constructed their objects in a different order.
+function serializeProcessedParameters(value, stack = new Set()) {
+    if (value === null) return 'null';
+    const type = typeof value;
+    if (type === 'string') return `string:${JSON.stringify(value)}`;
+    if (type === 'boolean') return `boolean:${value}`;
+    if (type === 'undefined') return 'undefined';
+    if (type === 'number') {
+        if (Number.isNaN(value)) return 'number:NaN';
+        if (value === Infinity) return 'number:Infinity';
+        if (value === -Infinity) return 'number:-Infinity';
+        if (Object.is(value, -0)) return 'number:-0';
+        return `number:${value}`;
+    }
+    if (type !== 'object') {
+        throw new TypeError(`Unsupported processed-canvas parameter type: ${type}`);
+    }
+    if (stack.has(value)) {
+        throw new TypeError('Processed-canvas parameters must not be cyclic');
+    }
+    stack.add(value);
+    let serialized;
+    if (Array.isArray(value)) {
+        serialized = `array:[${value.map((entry) =>
+            serializeProcessedParameters(entry, stack)).join(',')}]`;
+    } else if (ArrayBuffer.isView(value)) {
+        serialized = `${value.constructor.name}:[${Array.from(value).map((entry) =>
+            serializeProcessedParameters(entry, stack)).join(',')}]`;
+    } else {
+        const keys = Object.keys(value).sort();
+        serialized = `object:{${keys.map((key) =>
+            `${JSON.stringify(key)}=${serializeProcessedParameters(value[key], stack)}`
+        ).join(',')}}`;
+    }
+    stack.delete(value);
+    return serialized;
+}
+
+/**
+ * Return a synchronously-created processed canvas cached by source image,
+ * output dimensions, operation/version, and every processing parameter.
+ * Source-less image objects are isolated by WeakMap identity. The factory is
+ * called before insertion, so a throw never poisons later retries.
+ *
+ * The exact canvas object is shared. Callers must treat returned canvases as
+ * immutable after the factory completes.
+ */
+function getProcessedCanvas(image, descriptor, factory) {
+    if (!image || (typeof image !== 'object' && typeof image !== 'function')) {
+        throw new TypeError('getProcessedCanvas requires an image object');
+    }
+    if (!descriptor || typeof descriptor !== 'object') {
+        throw new TypeError('getProcessedCanvas requires a processing descriptor');
+    }
+    if (typeof factory !== 'function') {
+        throw new TypeError('getProcessedCanvas requires a factory function');
+    }
+    if (!Number.isFinite(descriptor.width) || !Number.isFinite(descriptor.height)) {
+        throw new TypeError('Processed-canvas width and height must be finite numbers');
+    }
+
+    const key = serializeProcessedParameters({
+        operation: descriptor.operation,
+        version: descriptor.version,
+        width: descriptor.width,
+        height: descriptor.height,
+        parameters: descriptor.parameters,
+    });
+    const source = (typeof image.currentSrc === 'string' && image.currentSrc) ||
+        (typeof image.src === 'string' && image.src) || '';
+    let cache;
+    if (source) {
+        cache = processedCanvasesBySource.get(source);
+        if (!cache) {
+            cache = new Map();
+            processedCanvasesBySource.set(source, cache);
+        }
+    } else {
+        cache = processedCanvasesByImage.get(image);
+        if (!cache) {
+            cache = new Map();
+            processedCanvasesByImage.set(image, cache);
+        }
+    }
+
+    if (cache.has(key)) return cache.get(key);
+    const canvas = factory();
+    cache.set(key, canvas);
+    return canvas;
+}
 
 function createGameCanvas(parentId = 'game') {
     const parent = document.getElementById(parentId);
@@ -75,13 +170,26 @@ function createGameCanvas(parentId = 'game') {
 }
 
 function loadImage(src) {
-    return new Promise((resolve, reject) => {
-        if (assets.images[src]) return resolve(assets.images[src]);
-        const img = new Image();
-        img.onload = () => { assets.images[src] = img; resolve(img); };
-        img.onerror = (e) => reject(new Error(`Failed to load image: ${src}`));
-        img.src = src;
+    if (assets.images[src]) return Promise.resolve(assets.images[src]);
+    if (imageLoads[src]) return imageLoads[src];
+
+    const img = new Image();
+    const load = new Promise((resolve, reject) => {
+        img.onload = () => {
+            assets.images[src] = img;
+            if (imageLoads[src] === load) delete imageLoads[src];
+            resolve(img);
+        };
+        img.onerror = () => {
+            // A failed request must not poison the cache: a later scene.start
+            // or background stage can retry with a fresh Image.
+            if (imageLoads[src] === load) delete imageLoads[src];
+            reject(new Error(`Failed to load image: ${src}`));
+        };
     });
+    imageLoads[src] = load;
+    img.src = src;
+    return load;
 }
 
 function loadAudio(src) {
@@ -362,6 +470,7 @@ window.Runtime = {
     assets,
     createGameCanvas,
     loadImage,
+    getProcessedCanvas,
     loadAudio,
     getCachedAudio,
     coverRect,

@@ -34,10 +34,11 @@ async function boot() {
         window.DialoguePanel.show();
         window.__dialoguePanel = true;
     }
-    // Start music for first scene. This warms the music preload so the
-    // first Ink line doesn't have to await audio.
+    // Wait only for the start scene's background, complete medley, and sprite
+    // frames. Remaining scene stages continue opportunistically in parallel
+    // with play and Scene.start retains its on-demand fallback.
     const startSceneId = window.STORY.start;
-    await window.STORY_BG_PROMISE;   // wait for asset preload
+    await window.STORY_BG_PROMISE;
     goTo(startSceneId);
 }
 

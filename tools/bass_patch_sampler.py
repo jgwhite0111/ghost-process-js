@@ -8,9 +8,10 @@ For each program we:
 """
 import os
 import subprocess
+from pathlib import Path
 from mido import MidiFile, MidiTrack, Message
 
-os.chdir('/Users/jwhite/ghost-process-js')
+os.chdir(Path(__file__).resolve().parent.parent)
 SOUNDFONT = 'assets/audio/sc55.sf2'
 SRC = 'assets/audio/terminal_lab.mid'
 OUT_DIR = '/tmp/bass_patches'

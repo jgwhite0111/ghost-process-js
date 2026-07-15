@@ -6,8 +6,8 @@
 // Each task has:
 //   id      - unique within the scene, used by Ink and runtime to
 //             reference it (EXTERNAL complete_task("id"))
-//   type    - one of: pickup, use_item, combine, goto_hitbox,
-//             goto_dialog, custom
+//   type    - one of: pickup, use_item, goto_hitbox, goto_dialog,
+//             custom
 //   hint    - the line shown via Toast when the dialogue box is
 //             dismissed (or the scene opens) and this task is the
 //             first unresolved one
@@ -16,19 +16,15 @@
 // Types and their completion triggers:
 //   pickup      { item }                — completed when STATE.inventory
 //                                          contains `item`.
-//   use_item    { item, on_hitbox }     — completed when player clicks a
+//   use_item    { item }                — completed when player clicks a
 //                                          hitbox whose `item_required`
-//                                          matches `item`, OR via the
-//                                          runtime `_onItemUsedOnHitbox`
-//                                          hook the hitbox layer fires.
-//   combine     { items:[a,b], result } — completed when Inventory.combine
-//                                          returns `result`.
+//                                          matches `item`.
 //   goto_hitbox { target }              — completed when a hitbox click
 //                                          transitions to `target`.
 //   goto_dialog { ink_node }            — completed when Ink jumps to the
 //                                          named knot (set via # goto:node
 //                                          tag OR EXTERNAL redirect).
-//   custom      { ... }                 — completed only via EXTERNAL
+//   custom      {}                      — completed only via EXTERNAL
 //                                          complete_task("id") from Ink.
 //
 // When all open tasks are completed, the Toast hint reverts to "…just
@@ -48,6 +44,22 @@ class TaskTracker {
         this.sceneId = sceneId;
         this.tasks = Array.isArray(tasks) ? tasks : [];
         this.completed = new Set();
+        this.reconcilePickups(window.STATE);
+    }
+
+    // Scene entry can happen after a pickup has already been collected
+    // (or consumed later in the loop). Reconcile that persistent state
+    // before anyone asks for a hint, otherwise a hidden pickup hitbox can
+    // leave an impossible task open forever.
+    reconcilePickups(state) {
+        const inventory = state?.inventory || [];
+        const consumed = state?.consumed || [];
+        for (const t of this.tasks) {
+            if (t.type !== 'pickup' || !t.item) continue;
+            if (inventory.includes(t.item) || consumed.includes(t.item)) {
+                this.complete(t.id);
+            }
+        }
     }
 
     // First unresolved task whose hint we should surface. Returns
@@ -108,16 +120,6 @@ class TaskTracker {
                 this.complete(t.id);
             }
             if (t.type === 'use_item' && t.item && hb.item_required === t.item) {
-                this.complete(t.id);
-            }
-        }
-    }
-
-    // Called when Inventory.combine() returns a result id.
-    onItemsCombined(result) {
-        for (const t of this.tasks) {
-            if (this.completed.has(t.id)) continue;
-            if (t.type === 'combine' && t.result === result) {
                 this.complete(t.id);
             }
         }

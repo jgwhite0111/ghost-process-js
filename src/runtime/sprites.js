@@ -13,6 +13,8 @@
 // FADE_RATE per second. instant=true skips the fade for sprites that
 // must be present from frame 0 (jailbreak thug).
 
+const DESPILL_ALGORITHM_VERSION = 1;
+
 class CharacterSprite {
     constructor(characterConfig, sceneId) {
         this.character = characterConfig;
@@ -97,6 +99,20 @@ class CharacterSprite {
     }
 
     _despillGreen(img) {
+        const isAndroid = this.character && this.character.id === 'android';
+        const profile = isAndroid ? 'android' : 'default';
+        const w = img.width;
+        const h = img.height;
+        return window.Runtime.getProcessedCanvas(img, {
+            operation: 'sprite-despill',
+            version: DESPILL_ALGORITHM_VERSION,
+            width: w,
+            height: h,
+            parameters: { profile },
+        }, () => this._createDespilledCanvas(img, isAndroid));
+    }
+
+    _createDespilledCanvas(img, isAndroid) {
         // Pixel-level green-spill removal. The artist's green halo
         // is a continuous olive-green outline drawn on a green-
         // screen background, then composited at 50% alpha on body
@@ -130,7 +146,6 @@ class CharacterSprite {
         //     Green outline of silhouette still gets killed by pass 1.
         //   - everything else (convicts, etc): original behavior,
         //     byte-identical to before this patch.
-        const isAndroid = this.character && this.character.id === 'android';
         const w = img.width;
         const h = img.height;
         const c = document.createElement('canvas');

@@ -5,31 +5,38 @@ engine) + InkJS + WebAudio. Web-native.
 
 ## Quick start
 
+From the repository root:
+
 ```bash
-cd /Users/jwhite/ghost-process-js
 npm install                  # one-time
 npm run vendor               # fetch InkJS into vendor/ (no CDN)
-npm start                    # boots Express on :8765
+npm start                    # boots Express on 127.0.0.1:8765
 ```
 
 Then open:
-- **Game**: http://localhost:8765/index.html
-- **Editor**: http://localhost:8765/editor.html
+- **Game**: http://127.0.0.1:8765/index.html
+- **Editor**: http://127.0.0.1:8765/editor.html
 
-For Tailscale access, the server binds `0.0.0.0:8765` so your Tailscale IP works too.
+By default the server is local-only (`127.0.0.1`). To serve over Tailscale/LAN, opt into a non-loopback bind and provide a secret of at least 16 non-whitespace characters:
+
+```bash
+HOST=0.0.0.0 EDITOR_TOKEN='replace-with-a-long-random-secret' npm start
+```
+
+Static files and GET APIs remain readable over that bind. Mutation APIs reject cross-origin browser requests and require the exact token on non-loopback configurations. Open the editor through the server's Tailscale/LAN address; the first save prompts for the token, keeps it only in that tab's `sessionStorage`, and retries once.
 
 ## What's in this repo
 
 ```
 SPEC.md            ← architecture, data model, subsystem map
 AGENTS.md          ← style bible, asset rules
-story.json         ← all scenes, items, recipes (single source of truth)
+story.json         ← all scenes, items, and tasks (single source of truth)
 ink/               ← Ink dialogue source (one .ink per scene)
 src/               ← game engine (vanilla JS)
   dialogue.js      ← InkJS walker + typewriter presenter
   dialogue-panel.js← DOM dialogue box + choice buttons
   inventory.js     ← popup inventory UI
-  tasks.js         ← per-scene task tracker (pickup/use/goto/trigger_dialog)
+  tasks.js         ← per-scene task tracker (pickup/use_item/goto_hitbox/goto_dialog/custom)
   toast.js         ← transient status messages
   story.js         ← fetch story.json + preload assets
   scenes/_registry.js
@@ -75,4 +82,4 @@ GET  /api/list?dir=...  list filenames in a directory (relative to ROOT)
 5. Hitboxes on each scene plate, clicking picks up items
 6. Items appear in inventory popup (INV button top-right)
 7. Choices render as actual buttons that branch the Ink story
-8. A+B medleys crossfade on the seam at scene-loop boundary
+8. Each gameplay scene's ordered A→B→C→D→E medley crossfades using the destination-entry `fadeAt` timing in `story.json`

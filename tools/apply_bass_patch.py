@@ -9,9 +9,10 @@ Usage:
 import os
 import subprocess
 import sys
+from pathlib import Path
 from mido import MidiFile
 
-os.chdir('/Users/jwhite/ghost-process-js')
+os.chdir(Path(__file__).resolve().parent.parent)
 
 SCENES = [
     'terminal_lab', 'ship_engine',

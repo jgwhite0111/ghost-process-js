@@ -11,7 +11,7 @@ See `AGENTS.md` for style bible and asset rules. See `AI-HANDOFF.md` for the cur
 - **Audio**: HTMLAudioElement + manual volume ramps for crossfade (see `src/runtime/music.js`). MP3 only — no MIDI playback at runtime.
 - **Server**: Express (carried from v0.1). See `server.js`.
 - **Build tool**: None. ES2022 script tags, no bundler, no transpile.
-- **Deployment**: Static files + `node server.js` on port 8765 (binds `0.0.0.0` for Tailscale).
+- **Deployment**: Static files + `node server.js` on port 8765. Default bind is local-only `127.0.0.1`; explicit non-loopback/Tailscale serving requires `HOST` plus an `EDITOR_TOKEN` of at least 16 non-whitespace characters.
 
 ## 2. File layout
 
@@ -33,7 +33,7 @@ ghost-process-js/
 ├── src/
 │   ├── runtime/                  # the engine (~2150 LOC vanilla JS)
 │   │   ├── canvas.js             # canvas DOM + asset loader + Bayer dither
-│   │   ├── music.js              # crossfading bgm (string or A+B medley array)
+│   │   ├── music.js              # crossfading bgm (string or ordered medley array)
 │   │   ├── sprites.js            # character sprite with 16-frame talking anim
 │   │   ├── hitbox.js             # clickable regions + cursor + label hover
 │   │   ├── scene-base.js         # Scene class: bg + characters + dialogue + transitions
@@ -47,14 +47,14 @@ ghost-process-js/
 │   ├── toast.js                  # transient status messages
 │   └── story.js                  # fetch story.json + preload assets + fire story-ready
 ├── tools/
-│   ├── make_scene_loop.py        # 9 SCENES + 9 SCENES_B MIDI generators (medleys)
+│   ├── make_scene_loop.py        # MIDI generators for the A→E medley track set
 │   ├── gen_asset.py              # image-gen pipeline (style bible + dither)
 │   ├── render-midi.sh            # FluidSynth + sc55.sf2 → MP3
 │   ├── test_full_chain.py        # smoke test (renders all medleys)
 │   └── vendor-deps.js            # fetch ink-full.js
 ├── docs/
 │   ├── MUSIC_GRID.md             # per-scene music map + song shapes
-│   ├── MUSIC_BSIDE_GUIDE.md      # how B-side medleys complement A-side
+│   ├── MUSIC_BSIDE_GUIDE.md      # historical provenance for superseded A/B plan
 │   └── SC55_AB_TEST.md           # soundfont swap plan (deferred)
 └── assets/                       # scene plates, sprites, audio, fonts
     ├── backgrounds/scene_*.png
@@ -93,12 +93,12 @@ ghost-process-js/
     "intro":        { "id": "intro", "kind": "title",  "bg": "scene_intro",
                       "music": "intro_theme.mp3",
                       "hitboxes": [{ "x":0.35, "y":0.55, "w":0.30, "h":0.08,
-                                     "target":"alley", "label":"PRESS START" }] },
+                                     "target":"cold_open", "label":"PRESS START" }] },
     "cold_open":    { "id": "cold_open", "kind": "ink", "bg": "scene_intro",
-                      "music": [{"file":"cold_open.mp3"},{"file":"cold_open_b.mp3","fadeAt":51.1}],
+                      "music": [{"file":"cold_open.mp3"},{"file":"cold_open_b.mp3","fadeAt":51.1},{"file":"cold_open_c.mp3","fadeAt":82.3},{"file":"cold_open_d.mp3","fadeAt":52.8},{"file":"cold_open_e.mp3","fadeAt":82.3}],
                       "ink": "ink/cold_open.ink", "start_node": "Start" },
     "alley":        { "id": "alley", "kind": "ink", "bg": "scene_alley",
-                      "music": [{"file":"alley_confrontation.mp3"},{"file":"alley_confrontation_b.mp3","fadeAt":23.8}],
+                      "music": [{"file":"alley_confrontation.mp3"},{"file":"alley_confrontation_b.mp3","fadeAt":23.8},{"file":"alley_confrontation_c.mp3","fadeAt":41.7},{"file":"alley_confrontation_d.mp3","fadeAt":50.5},{"file":"alley_confrontation_e.mp3","fadeAt":41.7}],
                       "ink": "ink/alley.ink", "start_node": "Start",
                       "characters": [
                         { "id":"android", "speaker":"ANDROID",
@@ -119,10 +119,7 @@ ghost-process-js/
                    "description":"An old iron key, stained with verdigris...",
                    "icon": "assets/items/rusty_key.png",
                    "key": true, "pickup_message":"You found a rusty key." }
-  },
-  "recipes": [
-    { "input": ["rusty_key", "scrap_metal"], "output": "tinkered_key" }
-  ]
+  }
 }
 ```
 
@@ -144,19 +141,18 @@ Normalized coordinates `(x, y, w, h ∈ [0,1])` over the scene canvas. Two actio
 
 Each hitbox is single-use by default: clicking marks it in `STATE.spentHitboxes[sceneId:label]`, so subsequent clicks no-op. Item hitboxes additionally hide their label once the item is in `STATE.inventory` or `STATE.consumed`.
 
-### 3.3 Items + recipes
+### 3.3 Items
 
-Items are looked up in `STORY.items`. `key:true` items persist; `key:false` items are consumed on use. Recipes are `{ input: [id, id], output: id }`. v1 doesn't ship UI for combining — recipes are data-only.
+Items are looked up in `STORY.items`. `key:true` items persist; `key:false` items are consumed on use.
 
 ### 3.4 Tasks (per-scene)
 
 `scene.tasks[]` — array of small objects `src/tasks.js` (TaskTracker) reads to surface hints and auto-complete on action. Types:
 
-- `pickup` — completes when item enters inventory.
-- `use_item` — completes when a held item is used on a hitbox.
-- `goto_hitbox` — completes when a labelled hitbox is clicked.
-- `trigger_dialog` — completes when Ink `# goto:<node>` fires.
-- `combine` — completes when the named items are all in inventory.
+- `pickup { item }` — completes when `item` enters inventory (or is already held/consumed when the scene binds).
+- `use_item { item }` — completes when the player clicks a hitbox whose `item_required` matches `item`.
+- `goto_hitbox { target }` — completes when the player clicks a hitbox whose scene target matches `target`.
+- `goto_dialog { ink_node }` — completes when Ink reaches the named knot through a `goto` command.
 - `custom` — Ink calls `EXTERNAL complete_task(id)`.
 
 `hint` is shown in a toast when dialogue is dismissed and any task is still open; it disappears on completion.
@@ -201,7 +197,7 @@ Ink can call back into the game via EXTERNAL:
 
 1. Resizes the canvas to the current viewport (full for title screens; bottom strip reserved for dialogue box on gameplay).
 2. Loads its background image and runs it through `Runtime.ditherImageToCanvas` against the per-scene 16-colour palette (Bayer 8×8 ordered dither). Cached as an offscreen canvas so per-frame blit is one drawImage.
-3. Loads its music (string = single MP3, array = A+B medley crossfade) and starts `MusicHandler`.
+3. Loads its music (string = single MP3, array = ordered medley crossfades) and starts `MusicHandler`.
 4. Creates character sprites, each holding 16 preloaded `HTMLImageElement`s keyed by frame number. Animates while the sprite's `speaker` matches the current `# speaker` tag.
 5. Builds the hitbox layer — DOM overlay anchored to the canvas's bounding rect for hit-testing and labels.
 6. Spins up `DialogueRunner`, overrides its `onLine` / `onChoices` / `onCommand` hooks to route through the scene + DialoguePanel, then calls `DialoguePanel.attachRunner(runner)`. Tag handling (`speaker`, `portrait`, `give`, `take`, `transition_next`, `return_to_alley`) lives in the scene's `onCommand` router.
@@ -230,7 +226,9 @@ Background PNGs are shipped clean (full RGB). The runtime does the dither, so th
 
 `music` field can be:
 - A string `"intro_theme.mp3"` — single track.
-- An array `[{file:"a.mp3"}, {file:"b.mp3", fadeAt:<sec>}]` — A-side + B-side medley. The first track plays first; at the configured `fadeAt` (default = A's duration), it crossfades to the B-side for the second half of the loop.
+- An ordered array `[{file:"a.mp3"}, {file:"b.mp3", fadeAt:<sec>}, ...]` — medley of any supported length. Tracks play in array order. `fadeAt` is stored on the destination entry and schedules the crossfade into that entry after the current/previous track has played that many seconds; when omitted, the runtime chooses fallback timing.
+
+The current `story.json` uses one solo intro track plus five-track A→B→C→D→E arrays for all 9 gameplay scenes. Every B–E destination entry currently has an explicit `fadeAt`.
 
 MP3s are pre-rendered at build time (`tools/render-midi.sh`). MIDIs are source of truth; `.mp3` is what the browser plays.
 
@@ -242,6 +240,14 @@ Editor-specific endpoints it uses:
 - `GET /api/list?dir=assets/...` — populates the bg / music / palette pickers.
 - `PUT /api/story` — commits edits.
 
+`node server.js` / `npm start` binds `127.0.0.1:8765` by default, so same-origin local editor saves need no token. Tailscale/LAN access is an explicit launch mode:
+
+```bash
+HOST=0.0.0.0 EDITOR_TOKEN='replace-with-a-long-random-secret' npm start
+```
+
+A non-loopback startup is refused unless `EDITOR_TOKEN` contains at least 16 non-whitespace characters. Static files and GET APIs stay public/read-only. `PUT /api/story`, `PUT /api/ink/*`, and `POST /api/assets` share a mutation guard: browser `Origin` must match the request `Host`, and non-loopback configurations additionally require the exact `X-Editor-Token`. On the first remote save, the editor prompts for the token, stores it only in the current tab's `sessionStorage`, and retries that mutation once; it never places the token in a URL or `localStorage`.
+
 Sprite placement uses `placementX` / `placementY` as fractional coords `[0,1]` over the viewport (centre-X / bottom-edge-Y). Off-canvas values are allowed and preserved on save.
 
 ## 7. Scene graph
@@ -250,11 +256,11 @@ Sprite placement uses `placementX` / `placementY` as fractional coords `[0,1]` o
 intro → cold_open → alley → chase → kabukicho → corp_office → corridor → jailbreak → terminal_lab → ship_engine → alley (loop)
 ```
 
-10 scenes total. `intro` is the title screen; everything else uses A+B medley crossfade.
+10 scenes total. `intro` is the title screen with one solo track; all 9 gameplay scenes use five-track A→B→C→D→E medley crossfades.
 
 ## 8. Subsystem docs
 
 - `docs/MUSIC_GRID.md` — per-scene music map, song shapes, composer extensions.
-- `docs/MUSIC_BSIDE_GUIDE.md` — how B-side medleys complement A-side.
+- `docs/MUSIC_BSIDE_GUIDE.md` — historical provenance for the superseded A/B composition plan.
 - `docs/SC55_AB_TEST.md` — soundfont swap plan (currently deferred; current font `sc55.sf2` is `VintageDreamsWaves-v2`, a General MIDI stand-in).
 - `assets/audio/README.md` — runtime audio files + render workflow.

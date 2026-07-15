@@ -5347,21 +5347,6 @@ def _build_alley_confrontation_e_patterns():
     cfg["lead_pattern"],cfg["bass_pattern"],cfg["drum_pattern"]=lead_ev,bass_ev,drum_ev
 _build_alley_confrontation_e_patterns()
 
-MEDLEYS: dict[str, list[str]] = {
-    "alley":        ["alley_confrontation.mp3", "alley_confrontation_b.mp3", "alley_confrontation_c.mp3", "alley_confrontation_d.mp3", "alley_confrontation_e.mp3"],
-    "cold_open":    ["cold_open.mp3",    "cold_open_b.mp3", "cold_open_c.mp3", "cold_open_d.mp3", "cold_open_e.mp3"],
-    "chase":        ["chase.mp3",        "chase_b.mp3",
-                     "chase_c.mp3",      "chase_d.mp3",      "chase_e.mp3"],
-    "corridor":     ["corridor.mp3",     "corridor_b.mp3",
-                     "corridor_c.mp3",   "corridor_d.mp3",   "corridor_e.mp3"],
-    "jailbreak":    ["jailbreak.mp3",    "jailbreak_b.mp3", "jailbreak_c.mp3", "jailbreak_d.mp3", "jailbreak_e.mp3"],
-    "kabukicho":    ["kabukicho.mp3",    "kabukicho_b.mp3", "kabukicho_c.mp3", "kabukicho_d.mp3", "kabukicho_e.mp3"],
-    "corp_office":  ["corp_office.mp3",  "corp_office_b.mp3",  "corp_office_c.mp3",  "corp_office_d.mp3",  "corp_office_e.mp3"],
-    "terminal_lab": ["terminal_lab.mp3", "terminal_lab_b.mp3", "terminal_lab_c.mp3", "terminal_lab_d.mp3", "terminal_lab_e.mp3"],
-    "ship_engine":  ["ship_engine.mp3",  "ship_engine_b.mp3", "ship_engine_c.mp3", "ship_engine_d.mp3", "ship_engine_e.mp3"],
-}
-
-
 # Build the lookup the runtime + CLI uses — merges SCENES + SCENES_B so
 # `--list` and the render_midi/render_mp3 functions Just Work.
 SCENES.update(SCENES_B)

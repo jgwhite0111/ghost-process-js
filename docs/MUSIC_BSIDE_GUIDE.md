@@ -1,6 +1,14 @@
-# B-side Medley Generation Guide
+# B-side Medley Generation Guide (historical)
 
-Purpose: when an A-side has a real musical shape, the B-side should share
+> **Status: superseded design provenance, not current medley guidance.**
+> This document preserves the original placeholder plan for two-part A/B
+> medleys; the placeholder language below does not describe unfinished work.
+> Current operation is one solo intro track plus ordered five-track
+> A→B→C→D→E arrays for all nine gameplay scenes. On each destination entry,
+> `fadeAt` schedules its transition after the current/previous track has
+> played that many seconds.
+
+Original purpose: when an A-side has a real musical shape, the B-side should share
 the family (key, BPM, patches) but occupy a different **section** of the
 same song.
 
@@ -20,15 +28,18 @@ or contrast) of the same piece. Practically:
 | EP stabs → chord progression → full band → crescendo (corp_office) | Full band but at LOW dynamic the whole loop; descending bassline; everything ever-so-slightly slower (no actual BPM change, but the lead phrases drop several notes per bar — feels restrained vs. A's cresc). |
 | Layer-by-layer engine buildup (ship_engine) | Engine at FULL power throughout — no buildup, just brute pressure. |
 
-## Per-scene concrete specs (mirror after A-sides lock)
+## Historical per-scene placeholders
 
-These are placeholders — once each A-side is final, mirror as:
-- Same key + bpm + patches
-- Same bar count
-- Different dynamic curve (B-side is "the complement")
-- Tune the crossfade `fadeAt` to land at A's peak (around 60-75% through A)
+The following original wording is retained verbatim as historical provenance;
+it is not a live task:
 
-Will be filled in after A-sides commit.
+> These are placeholders — once each A-side is final, mirror as:
+> - Same key + bpm + patches
+> - Same bar count
+> - Different dynamic curve (B-side is "the complement")
+> - Tune the crossfade `fadeAt` to land at A's peak (around 60-75% through A)
+>
+> Will be filled in after A-sides commit.
 
 ## What NOT to do
 

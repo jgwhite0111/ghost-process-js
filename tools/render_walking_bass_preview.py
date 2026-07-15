@@ -6,9 +6,10 @@ slap-bass patch already applied.
 """
 import os
 import subprocess
+from pathlib import Path
 from mido import MidiFile, MidiTrack, Message
 
-os.chdir('/Users/jwhite/ghost-process-js')
+os.chdir(Path(__file__).resolve().parent.parent)
 SOUNDFONT = 'assets/audio/sc55.sf2'
 OUT_DIR = '/tmp/walking_bass_preview'
 os.makedirs(OUT_DIR, exist_ok=True)

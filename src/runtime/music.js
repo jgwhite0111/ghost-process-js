@@ -14,38 +14,39 @@
 // the music has already been preloaded by the time it arrives.
 //
 // MEDLEY support: scenes can declare a `music` field as either a
-// string (single track) or a list of track objects with optional
-// `fadeAt` overrides:
+// string (single track) or an ordered list of track objects. `fadeAt`
+// is stored on each destination entry and is the delay, in seconds,
+// before transitioning to it from its predecessor:
 //
 //   "music": "chase.mp3"          ← single track
-//   "music": [                    ← medley, A → B with default fade
+//   "music": [                    ← ordered medley
 //     { "file": "chase.mp3" },
-//     { "file": "chase_b.mp3" }
-//   ]
-//   "music": [                    ← medley with explicit fade time
-//     { "file": "chase.mp3" },
-//     { "file": "chase_b.mp3", "fadeAt": 35 }
+//     { "file": "chase_b.mp3", "fadeAt": 35 },
+//     { "file": "chase_c.mp3", "fadeAt": 42 }
 //   ]
 //
-// The default `fadeAt` is halfway through A's track duration. The
-// default crossfade overlap is 4 seconds — enough to feel like a
-// medley transition, short enough that the B-side settles in cleanly.
-// Both tracks loop independently; after the crossfade the B-side
-// becomes the steady-state and loops on its own forever.
+// If the first destination omits `fadeAt`, its delay is half the first
+// track's known duration or 30 seconds. Later omissions retain the
+// existing MEDLEY_HALF_FALLBACK + currentIndex * MEDLEY_HALF_FALLBACK
+// delay. Every medley crossfade overlaps for 4 seconds. The destination
+// becomes current, and progression continues while another entry exists.
 
 const DEFAULT_FADE_MS = 4000;          // crossfade overlap duration
-const MEDLEY_HALF_FALLBACK = 30;       // seconds — used when A's duration isn't known yet
+const MEDLEY_HALF_FALLBACK = 30;       // seconds — first unknown-duration and later-delay fallback
 
 class MusicHandler {
     constructor() {
         this.music = null;     // currently-fading-in (or steady-state) Audio
-        this.fadingOut = null; // previous Audio element being faded to 0
-        this._rampIdIn = 0;    // monotonic id for incoming-track ramps
-        this._rampIdOut = 0;   // monotonic id for outgoing-track ramps (separate counter!)
+        this.fadingOut = null; // most recent Audio element being faded to 0
+        this._rampIdIn = 0;    // latest incoming-track ramp
+        // Outgoing tracks can overlap during rapid transitions. Keep each
+        // audio's cancellation id separate so fading out a newer track does
+        // not orphan an older one before it reaches pause().
+        this._rampIdsOut = new WeakMap();
+        this._playId = 0;      // latest scene-level play request
         this._pendingResume = null; // Audio waiting for a user gesture
-        // Medley state — only set during a multi-track scene. When a
-        // scheduled fadeAt fires, the crossfade from currentTrack to
-        // nextTrack kicks off.
+        // Medley state — only set during a multi-track scene. Each
+        // scheduled destination fadeAt advances from the current track.
         this._medleyTimer = null;       // setTimeout id for the next crossfade
         this._medleyTracks = null;      // array of {file, fadeAt, volume?} for current scene
         this._medleyCurrentIndex = 0;   // which track in the medley is the steady-state
@@ -56,15 +57,16 @@ class MusicHandler {
      *   - a string filename (single-track mode)
      *   - a list of track objects with `file` keys (medley mode)
      *
-     * The two modes share the same first-track fade-in behaviour; medley
-     * mode additionally schedules a crossfade to track[1] at `fadeAt` (or
-     * half of track[0]'s duration).
+     * The two modes share the same first-track fade-in behaviour. Medley
+     * mode schedules each destination using its `fadeAt` delay, then keeps
+     * advancing while another ordered entry exists.
      *
      * @param {string|string[]} musicArg - filename OR track list
      * @param {number} baseVolume - 0..1 volume for the incoming track
      * @param {number} fadeMs - crossfade overlap duration in ms
      */
     async play(musicArg, baseVolume = 0.7, fadeMs = 1200) {
+        const playId = ++this._playId;
         // Normalise to a list — a string input becomes a one-element
         // list so the rest of the code can stay simple.
         const tracks = this._normaliseMusicArg(musicArg);
@@ -80,10 +82,14 @@ class MusicHandler {
         // Start the first track immediately using the existing single-
         // track path. Crossfades from a previous scene's music follow
         // the existing fadeMs (typically 1200ms).
-        await this._playOne(tracks[0].file, baseVolume, fadeMs);
+        const started = await this._playOne(tracks[0].file, baseVolume, fadeMs, playId);
+        // A newer scene can call play() while this request is awaiting a
+        // cached audio load/play promise. Only the latest request may own
+        // the medley schedule or become current music.
+        if (!started || playId !== this._playId) return;
         this._medleyTracks = tracks;
         this._medleyCurrentIndex = 0;
-        // If the scene has a second track, schedule the crossfade.
+        // If the scene has another track, schedule the first transition.
         if (tracks.length > 1) {
             this._scheduleMedleyCrossfade(tracks, baseVolume);
         }
@@ -104,9 +110,9 @@ class MusicHandler {
     }
 
     /**
-     * Schedule the medley's first crossfade from track[0] to track[1].
-     * Uses the track[1].fadeAt if specified, otherwise defaults to half
-     * of track[0]'s decoded duration (when known) or MEDLEY_HALF_FALLBACK.
+     * Schedule the transition to the first destination entry. Its fadeAt
+     * is the delay from the first track; when omitted, use half the first
+     * track's decoded duration (when known) or MEDLEY_HALF_FALLBACK.
      */
     _scheduleMedleyCrossfade(tracks, baseVolume) {
         const next = tracks[1];
@@ -123,10 +129,10 @@ class MusicHandler {
     }
 
     /**
-     * Decide a sensible default fadeAt when the B-side track doesn't
-     * specify one. Uses the A-side's decoded duration / 2 so the
-     * crossfade lands halfway through A's loop, near the bar boundary.
-     * Falls back to MEDLEY_HALF_FALLBACK if the duration isn't known yet.
+     * Decide the first destination's default delay when it omits fadeAt.
+     * Uses the first track's decoded duration / 2 so the crossfade lands
+     * halfway through its loop. Falls back to MEDLEY_HALF_FALLBACK if the
+     * duration isn't known yet.
      */
     _defaultFadeAt(file) {
         try {
@@ -142,28 +148,40 @@ class MusicHandler {
     }
 
     /**
-     * Crossfade from the current steady-state track to medleyTracks[1].
-     * The existing track becomes fadingOut; the new track starts at
-     * volume 0 and ramps up over DEFAULT_FADE_MS.
+     * Crossfade from the current steady-state track to the next ordered
+     * destination. The existing track becomes fadingOut; the destination
+     * starts at volume 0 and ramps up over DEFAULT_FADE_MS.
      */
     async _crossfadeToNext() {
         const tracks = this._medleyTracks;
         if (!tracks || this._medleyCurrentIndex + 1 >= tracks.length) return;
+        const playId = this._playId;
         const next = tracks[this._medleyCurrentIndex + 1];
-        // Promote current to fadingOut so its position is preserved
-        if (this.music) {
-            this.fadingOut = this.music;
-        }
         // Load the next track (cached after first preload), start at 0,
         // ramp up. We DON'T go through _playOne because we want the
         // bigger medley crossfade duration, not the scene-boundary one.
         const audio = await window.Runtime.loadAudio(`assets/audio/${next.file}`);
+        if (playId !== this._playId || this._medleyTracks !== tracks) return;
         audio.volume = 0;
+        let started = false;
         try {
             await audio.play();
+            started = true;
         } catch (e) {
+            if (playId !== this._playId || this._medleyTracks !== tracks) return;
             // Autoplay blocked mid-medley — queue a resume like _playOne does.
             this._queueResume(audio, next.volume ?? 0.7, DEFAULT_FADE_MS);
+        }
+        if (playId !== this._playId || this._medleyTracks !== tracks) {
+            if (started && this.music !== audio) {
+                try { audio.pause(); audio.currentTime = 0; } catch (e) {}
+            }
+            return;
+        }
+        // Promote current to fadingOut only after the async work confirms
+        // this medley still belongs to the active scene.
+        if (this.music) {
+            this.fadingOut = this.music;
         }
         this.music = audio;
         this._medleyCurrentIndex += 1;
@@ -176,8 +194,7 @@ class MusicHandler {
         if (!audio.paused || this._pendingResume !== audio) {
             this._ramp(audio, next.volume ?? 0.7, DEFAULT_FADE_MS, null, 'in');
         }
-        // If there's a third track in the medley, schedule the next
-        // crossfade. (Medleys with 3+ tracks are uncommon but supported.)
+        // Continue the ordered medley whenever another destination exists.
         const nextIndex = this._medleyCurrentIndex + 1;
         if (nextIndex < tracks.length) {
             const upcoming = tracks[nextIndex];
@@ -209,8 +226,9 @@ class MusicHandler {
      * for both the first track of a medley and the single-string
      * API.
      */
-    async _playOne(filename, baseVolume = 0.7, fadeMs = 1200) {
+    async _playOne(filename, baseVolume = 0.7, fadeMs = 1200, playId = this._playId) {
         const audio = await window.Runtime.loadAudio(`assets/audio/${filename}`);
+        if (playId !== this._playId) return false;
         // If a track is already playing, demote it to fadingOut so its
         // current playback position is preserved through the crossfade.
         if (this.music && this.music !== audio) {
@@ -229,14 +247,23 @@ class MusicHandler {
             this._clearResumeListeners();
         }
         audio.volume = 0;
+        let started = false;
         try {
             await audio.play();
+            started = true;
         } catch (e) {
+            if (playId !== this._playId) return false;
             // Autoplay likely blocked. The audio element is ready,
             // readyState=4, just paused. Queue a one-shot resume on
             // the first user gesture — the intro screen's PRESS START
             // click (or any click/keydown) will trigger it.
             this._queueResume(audio, baseVolume, fadeMs);
+        }
+        if (playId !== this._playId) {
+            if (started && this.music !== audio) {
+                try { audio.pause(); audio.currentTime = 0; } catch (e) {}
+            }
+            return false;
         }
         this.music = audio;
         if (this.fadingOut && this.fadingOut !== audio) {
@@ -251,6 +278,7 @@ class MusicHandler {
         if (!audio.paused || this._pendingResume !== audio) {
             this._ramp(audio, baseVolume, fadeMs, null, 'in');
         }
+        return true;
     }
 
     _queueResume(audio, baseVolume, fadeMs) {
@@ -290,17 +318,22 @@ class MusicHandler {
     }
 
     _ramp(audio, target, ms, onDone, direction = 'in') {
-        const counter = direction === 'out' ? '_rampIdOut' : '_rampIdIn';
-        const id = ++this[counter];
+        const outgoing = direction === 'out';
+        const id = outgoing
+            ? (this._rampIdsOut.get(audio) || 0) + 1
+            : ++this._rampIdIn;
+        if (outgoing) this._rampIdsOut.set(audio, id);
         const startVol = audio.volume;
         const startTime = performance.now();
         const tick = () => {
-            if (id !== this[counter]) return; // a newer ramp of the same direction took over
+            const currentId = outgoing ? this._rampIdsOut.get(audio) : this._rampIdIn;
+            if (id !== currentId) return; // a newer ramp for this audio took over
             const t = Math.min(1, (performance.now() - startTime) / ms);
             audio.volume = startVol + (target - startVol) * t;
             if (t < 1) {
                 requestAnimationFrame(tick);
             } else {
+                if (outgoing) this._rampIdsOut.delete(audio);
                 onDone && onDone(audio);
             }
         };
@@ -308,12 +341,17 @@ class MusicHandler {
     }
 
     stop(fadeMs = 600) {
+        ++this._playId;
+        // Cancelling the medley timer also invalidates a crossfade that is
+        // currently awaiting loadAudio() or audio.play().
+        this._cancelMedley();
+        if (this._pendingResume) {
+            this._pendingResume = null;
+            this._clearResumeListeners();
+        }
         if (!this.music) return;
         const a = this.music;
         this.music = null;
-        // Cancelling the medley timer prevents a crossfade from firing
-        // after we've already been asked to stop.
-        this._cancelMedley();
         this._ramp(a, 0, fadeMs, (audio) => {
             try { audio.pause(); audio.currentTime = 0; } catch (e) {}
         }, 'out');

@@ -11,9 +11,10 @@ Plus the original is kept from the prior preview batch.
 """
 import os
 import subprocess
+from pathlib import Path
 from mido import MidiFile, MidiTrack
 
-os.chdir('/Users/jwhite/ghost-process-js')
+os.chdir(Path(__file__).resolve().parent.parent)
 SOUNDFONT = 'assets/audio/sc55.sf2'
 OUT_DIR = '/tmp/mix_minus'
 os.makedirs(OUT_DIR, exist_ok=True)

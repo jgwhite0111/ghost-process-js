@@ -33,7 +33,7 @@
           "y": 0.55,
           "w": 0.3,
           "h": 0.08,
-          "target": "alley",
+          "target": "cold_open",
           "label": "PRESS START",
           "label_size": "22px",
           "label_font": "\"MadouFutoMaru\", monospace",
@@ -152,15 +152,15 @@
         },
         {
           "file": "chase_c.mp3",
-          "fadeAt": 45.0
+          "fadeAt": 45
         },
         {
           "file": "chase_d.mp3",
-          "fadeAt": 36.0
+          "fadeAt": 36
         },
         {
           "file": "chase_e.mp3",
-          "fadeAt": 36.0
+          "fadeAt": 36
         }
       ],
       "ink": "ink/chase.ink",
@@ -250,7 +250,7 @@
         },
         {
           "file": "jailbreak_d.mp3",
-          "fadeAt": 62.0
+          "fadeAt": 62
         },
         {
           "file": "jailbreak_e.mp3",
@@ -412,7 +412,6 @@
         {
           "id": "android",
           "speaker": "ANDROID",
-          "position": "left",
           "scenes": {
             "terminal_lab": {
               "frames": "assets/sprites/android/corridor/frame_*.png",
@@ -422,7 +421,8 @@
               "playReverse": true
             }
           },
-          "placementY": 1
+          "placementY": 1.0378092447916667,
+          "placementX": 0.250140380859375
         }
       ],
       "hitboxes": [],
@@ -443,15 +443,15 @@
         },
         {
           "file": "ship_engine_c.mp3",
-          "fadeAt": 72.0
+          "fadeAt": 72
         },
         {
           "file": "ship_engine_d.mp3",
-          "fadeAt": 46.0
+          "fadeAt": 46
         },
         {
           "file": "ship_engine_e.mp3",
-          "fadeAt": 72.0
+          "fadeAt": 72
         }
       ],
       "ink": "ink/ship_engine.ink",
@@ -473,7 +473,6 @@
         {
           "id": "android",
           "speaker": "ANDROID",
-          "position": "left",
           "scenes": {
             "ship_engine": {
               "frames": "assets/sprites/android/corridor/frame_*.png",
@@ -483,7 +482,8 @@
               "playReverse": true
             }
           },
-          "placementY": 1
+          "placementY": 1.0338324652777777,
+          "placementX": 0.25035400390625
         }
       ],
       "hitboxes": [],
@@ -494,7 +494,7 @@
     "rusty_key": {
       "id": "rusty_key",
       "name": "Rusty Key",
-      "description": "An old iron key, stained with verdigris. The teeth are filed in an unusual pattern \u2014 military, maybe, or police. It weighs more than it should.",
+      "description": "An old iron key, stained with verdigris. The teeth are filed in an unusual pattern — military, maybe, or police. It weighs more than it should.",
       "icon": "assets/items/rusty_key.png",
       "key": true,
       "pickup_message": "You found a rusty key."
@@ -510,7 +510,7 @@
     "battery": {
       "id": "battery",
       "name": "Battery",
-      "description": "A lithium cell still holding a partial charge. The label is in a script you can't read \u2014 Cyrillic, maybe, or something older. Smells faintly of ozone.",
+      "description": "A lithium cell still holding a partial charge. The label is in a script you can't read — Cyrillic, maybe, or something older. Smells faintly of ozone.",
       "icon": "assets/items/battery.png",
       "key": false,
       "pickup_message": "You pocketed a battery."
@@ -547,28 +547,5 @@
       "key": true,
       "pickup_message": "You fished a key out from under the grate."
     }
-  },
-  "recipes": [
-    {
-      "input": [
-        "rusty_key",
-        "scrap_metal"
-      ],
-      "output": "tinkered_key"
-    },
-    {
-      "input": [
-        "battery",
-        "oily_rag"
-      ],
-      "output": "emergency_torch"
-    },
-    {
-      "input": [
-        "datacard",
-        "rusted_cog"
-      ],
-      "output": "hacked_terminal"
-    }
-  ]
+  }
 }
