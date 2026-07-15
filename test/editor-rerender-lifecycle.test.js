@@ -176,19 +176,23 @@ async function loadEditor() {
     const filename = path.join(ROOT, 'editor.js');
     const source = fs.readFileSync(filename, 'utf8').replace(
         'main().catch(err =>',
-        `const __originalOnStatus = QueuePlayer.onStatus;
+        `const __originalSubscribe = QueuePlayer.subscribe;
+const __originalOnStatus = QueuePlayer.onStatus;
 let __activeQueueListeners = 0;
-QueuePlayer.onStatus = (fn) => {
-  __activeQueueListeners += 1;
-  const unsubscribe = __originalOnStatus(fn);
-  let active = true;
-  return () => {
-    if (!active) return;
-    active = false;
-    __activeQueueListeners -= 1;
-    unsubscribe();
-  };
+const __track = (orig) => function (a, b) {
+    __activeQueueListeners += 1;
+    const fn = orig === __originalOnStatus ? a : b;
+    const unsubscribe = orig.call(QueuePlayer, ...(orig === __originalOnStatus ? [a] : [a, b]));
+    let active = true;
+    return () => {
+      if (!active) return;
+      active = false;
+      __activeQueueListeners -= 1;
+      unsubscribe();
+    };
 };
+QueuePlayer.subscribe = function (sceneId, fn) { return __track(__originalSubscribe).call(QueuePlayer, sceneId, fn); };
+QueuePlayer.onStatus = function (fn) { return __track(__originalOnStatus).call(QueuePlayer, fn); };
 main().catch(err =>`,
     );
     vm.runInContext(source, context, { filename });
@@ -219,22 +223,22 @@ test('repeated inspector renders retain one QueuePlayer listener and one request
         );
     }
 
-    env.run('QueuePlayer.playOne("assets/audio/alley_a.mp3", { medleyIndex: 0 })');
+    env.run('QueuePlayer.playOne("assets/audio/alley_a.mp3", { medleyIndex: 0, sceneId: "alley" })');
     assert.equal(env.run('QueuePlayer._state().file'), 'alley_a.mp3');
 });
 
 test('individual music preview toggles pause/resume and seeks current audio', async () => {
     const env = await loadEditor();
-    env.run('QueuePlayer.toggleOne("assets/audio/alley_a.mp3", { medleyIndex: 0 })');
+    env.run('QueuePlayer.toggleOne("assets/audio/alley_a.mp3", { medleyIndex: 0, sceneId: "alley" })');
     await settle();
     assert.equal(env.audioInstances.at(-1).paused, false);
     assert.equal(env.run('QueuePlayer._state().paused'), false);
 
-    env.run('QueuePlayer.toggleOne("assets/audio/alley_a.mp3", { medleyIndex: 0 })');
+    env.run('QueuePlayer.toggleOne("assets/audio/alley_a.mp3", { medleyIndex: 0, sceneId: "alley" })');
     assert.equal(env.audioInstances.at(-1).paused, true);
     assert.equal(env.run('QueuePlayer._state().paused'), true);
 
-    env.run('QueuePlayer.toggleOne("assets/audio/alley_a.mp3", { medleyIndex: 0 })');
+    env.run('QueuePlayer.toggleOne("assets/audio/alley_a.mp3", { medleyIndex: 0, sceneId: "alley" })');
     env.run('QueuePlayer.seek(37.5)');
     assert.equal(env.audioInstances.at(-1).currentTime, 37.5);
     assert.equal(env.run('QueuePlayer._state().currentTime'), 37.5);
@@ -242,8 +246,8 @@ test('individual music preview toggles pause/resume and seeks current audio', as
 
 test('paused row state survives inspector rerender and structural edits stop it', async () => {
     const env = await loadEditor();
-    env.run('QueuePlayer.toggleOne("assets/audio/alley_a.mp3", { medleyIndex: 0 })');
-    env.run('QueuePlayer.toggleOne("assets/audio/alley_a.mp3", { medleyIndex: 0 })');
+    env.run('QueuePlayer.toggleOne("assets/audio/alley_a.mp3", { medleyIndex: 0, sceneId: "alley" })');
+    env.run('QueuePlayer.toggleOne("assets/audio/alley_a.mp3", { medleyIndex: 0, sceneId: "alley" })');
     env.run('renderRight()');
     await settle();
 

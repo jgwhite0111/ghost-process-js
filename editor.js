@@ -1589,6 +1589,12 @@ async function makePalettePicker(sc) {
 async function makeMusicEditor(sc, lifecycle = activeInspectorLifecycle) {
   const files = await listDir('assets/audio');
   const audio = files.filter(f => /\.(mp3|mid|ogg)$/i.test(f));
+  // Scene whose preview state this inspector renders. Snapshot
+  // the live sceneId at render time — if the user switches
+  // scenes while the async listDir is in flight, the new
+  // renderRight() will dispose this inspector's lifecycle and
+  // any further subscriptions belong to the new scene.
+  const ownerSceneId = state.sceneId;
 
   // Determine current mode from sc.music. A string (or single-track
   // shape) is "single"; an Array is "medley"; null/undefined is empty.
@@ -1672,7 +1678,10 @@ async function makeMusicEditor(sc, lifecycle = activeInspectorLifecycle) {
   singlePlay.style.cssText = 'margin-top:4px;font-size:11px;padding:3px 10px';
   singlePlay.onclick = () => {
     if (!singleSel.value) return;
-    QueuePlayer.toggleOne('assets/audio/' + singleSel.value);
+    // Tag with the owning scene so the inspector's snapshot —
+    // not whichever scene is currently the global active
+    // preview — drives the row highlight.
+    QueuePlayer.toggleOne('assets/audio/' + singleSel.value, { sceneId: ownerSceneId });
   };
   singleWrap.appendChild(singlePlay);
 
@@ -1687,7 +1696,7 @@ async function makeMusicEditor(sc, lifecycle = activeInspectorLifecycle) {
   head.appendChild(headLabel);
   const playAllBtn = document.createElement('button');
   playAllBtn.textContent = '▶ Play queue';
-  playAllBtn.onclick = () => QueuePlayer.playQueue(getMedley());
+  playAllBtn.onclick = () => QueuePlayer.playQueue(getMedley(), { sceneId: ownerSceneId });
   head.appendChild(playAllBtn);
   const stopBtn = document.createElement('button');
   stopBtn.textContent = '⏹ Stop';
@@ -1792,7 +1801,7 @@ async function makeMusicEditor(sc, lifecycle = activeInspectorLifecycle) {
       // Pass the row index so the status subscriber can highlight this row
       // even when playing a single track (mode='one'). Clicking the same
       // row again pauses/resumes it instead of creating another Audio.
-      playBtn.onclick = () => QueuePlayer.toggleOne('assets/audio/' + t.file, { medleyIndex: i });
+      playBtn.onclick = () => QueuePlayer.toggleOne('assets/audio/' + t.file, { medleyIndex: i, sceneId: ownerSceneId });
       li.appendChild(playBtn);
 
       const del = document.createElement('button');
@@ -1917,13 +1926,19 @@ async function makeMusicEditor(sc, lifecycle = activeInspectorLifecycle) {
       status.innerHTML = `<span>${s.paused ? '▶' : 'Ⅱ'}</span><span class="progress">${s.index + 1}/${getMedley().length} — ${escapeHtml(file)}</span>`;
     }
   };
-  const unsubscribeStatus = QueuePlayer.onStatus(syncPlayerStatus);
+  // Per-scene subscription — the bus hands this inspector only
+  // the snapshot for ownerSceneId, so a preview started in
+  // another scene never paints "playing" onto this scene's
+  // rows. Each call site above tagged with sceneId so the
+  // active-scene ownership survives across mounts of this
+  // inspector.
+  const unsubscribeStatus = QueuePlayer.subscribe(ownerSceneId, syncPlayerStatus);
   retainInspectorCleanup(lifecycle, unsubscribeStatus);
 
   render();
   // onStatus fires before the initial list is built. Re-apply the current
   // snapshot so a paused preview survives an inspector rerender accurately.
-  syncPlayerStatus(QueuePlayer._state());
+  syncPlayerStatus(QueuePlayer._snapshotForScene(ownerSceneId));
   return wrap;
 }
 
@@ -1933,8 +1948,27 @@ async function makeMusicEditor(sc, lifecycle = activeInspectorLifecycle) {
 // waits for each track to end before starting the next. The user
 // wants to audition each track in isolation while iterating on
 // story.json — not rehearse the crossfade timing.
+//
+// Per-scene scope: the active audio is a global singleton (only one
+// soundscape at a time), but each scene owns its own preview
+// snapshot. When the user plays a tune in scene A and then switches
+// to scene B, scene B's inspector must NOT light up a row as
+// playing — that audio isn't scene B's. The state is stored per
+// scene at the moment the preview is launched (or last resumed),
+// and the inspector renders the snapshot for the scene it belongs
+// to, not the current global active preview. Subscribers register
+// with a sceneId (`subscribe(sceneId, fn)`) so the bus can hand
+// each scene's inspector the correct snapshot without leaking the
+// other scene's "now-playing" highlight. See
+// references/editor-medley-highlight-bus.md for the row-level
+// highlight contract and this module's pub/sub shape.
 const QueuePlayer = (() => {
-  const listeners = new Set();
+  // Each subscriber is { sceneId, fn }. fn receives the snapshot
+  // resolved for that scene, not the global live state, so a
+  // subscriber whose scene differs from the active preview does
+  // not get a "this row is playing" highlight painted onto its
+  // unrelated playlist.
+  const subscribers = new Set();
   const idleState = () => ({
     mode: 'idle', index: -1, file: null,
     paused: true, currentTime: 0, duration: 0,
@@ -1944,12 +1978,31 @@ const QueuePlayer = (() => {
   let currentSource = null;
   let onEndedNext = null;
   let playbackToken = 0;
+  // sceneId of the scene whose preview is currently the active
+  // audio. null when nothing is playing. Used to route status
+  // updates to the right inspector.
+  let activeSceneId = null;
+  // Per-scene preview snapshot. When the user inspects a scene
+  // that does NOT own the active preview, we replay its stored
+  // snapshot (so a tune started in scene A still shows as
+  // paused/playing when the user navigates back to scene A,
+  // paused at its last position) instead of falling through to
+  // the wrong scene's preview. Keyed by sceneId.
+  const sceneStates = new Map();
 
+  function snapshotForScene(sceneId) {
+    if (sceneId === activeSceneId) return state;
+    const stored = sceneId == null ? null : sceneStates.get(sceneId);
+    return stored || idleState();
+  }
   function emit() {
-    for (const fn of listeners) fn(state);
+    for (const sub of subscribers) {
+      try { sub.fn(snapshotForScene(sub.sceneId)); } catch (e) { console.warn('QueuePlayer subscriber failed:', e); }
+    }
   }
   function setState(s) {
     state = s;
+    if (activeSceneId != null) sceneStates.set(activeSceneId, s);
     emit();
   }
   function progressState(mode, index, file, audio) {
@@ -1981,7 +2034,10 @@ const QueuePlayer = (() => {
     if (result && typeof result.catch === 'function') result.catch(onError);
     return result;
   }
-  function stopInternal() {
+  // Stops the active audio AND forgets the active-scene ownership
+  // of the preview. Stored scene snapshots are left intact so
+  // returning to the scene later shows the last known state.
+  function stopInternal(opts = {}) {
     playbackToken += 1;
     if (onEndedNext) { clearTimeout(onEndedNext); onEndedNext = null; }
     if (currentAudio) {
@@ -1996,10 +2052,38 @@ const QueuePlayer = (() => {
       audio.onpause = null;
       try { audio.pause(); } catch (e) {}
     }
+    if (!opts.keepSceneState && activeSceneId != null) {
+      // Drop the active-scene ownership only — keep the stored
+      // snapshot so the inspector can still show "paused at 1:23"
+      // when the user returns.
+      sceneStates.set(activeSceneId, idleState());
+      activeSceneId = null;
+    }
   }
   return {
-    onStatus(fn) { listeners.add(fn); fn(state); return () => listeners.delete(fn); },
+    // Per-scene subscribe. fn receives the snapshot resolved for
+    // sceneId (NOT the global live state unless sceneId owns the
+    // active preview). Use this from inspectors.
+    subscribe(sceneId, fn) {
+      const sub = { sceneId, fn };
+      subscribers.add(sub);
+      try { fn(snapshotForScene(sceneId)); } catch (e) { console.warn('QueuePlayer subscriber failed:', e); }
+      return () => subscribers.delete(sub);
+    },
+    // Unscoped subscribe — receives the global live state. Kept
+    // for any future non-inspector callers; the editor inspector
+    // uses subscribe(sceneId, fn) instead.
+    onStatus(fn) {
+      subscribers.add({ sceneId: null, fn });
+      try { fn(state); } catch (e) { console.warn('QueuePlayer subscriber failed:', e); }
+      return () => {
+        for (const sub of subscribers) {
+          if (sub.fn === fn) { subscribers.delete(sub); return; }
+        }
+      };
+    },
     playOne(src, opts = {}) {
+      const sceneId = opts.sceneId == null ? null : String(opts.sceneId);
       stopInternal();
       const token = ++playbackToken;
       const a = new Audio(src);
@@ -2007,6 +2091,11 @@ const QueuePlayer = (() => {
       currentSource = src;
       const index = typeof opts.medleyIndex === 'number' ? opts.medleyIndex : -1;
       const file = src.split('/').pop();
+      // sceneId of the scene whose playlist owns this preview —
+      // routes per-scene status to the right inspector and stores
+      // the snapshot keyed by scene so navigating away and back
+      // shows the same row lit, paused at the last position.
+      activeSceneId = sceneId;
       // medleyIndex (optional): the row index in the current medley that
       // owns this file. Reported to status subscribers so the row can be
       // highlighted even when we're not in queue mode. -1 = no row (e.g.
@@ -2016,6 +2105,11 @@ const QueuePlayer = (() => {
         if (currentAudio === a && token === playbackToken) {
           currentAudio = null;
           currentSource = null;
+          // End-of-track === no longer "playing this track".
+          // Clear active-scene ownership but keep the snapshot
+          // so a stale inspector view doesn't lose context.
+          if (activeSceneId != null) sceneStates.set(activeSceneId, idleState());
+          activeSceneId = null;
           setState(idleState());
         }
       });
@@ -2028,9 +2122,18 @@ const QueuePlayer = (() => {
       });
     },
     toggleOne(src, opts = {}) {
+      const sceneId = opts.sceneId == null ? null : String(opts.sceneId);
       const index = typeof opts.medleyIndex === 'number' ? opts.medleyIndex : -1;
       if (currentAudio && currentSource === src && state.mode !== 'idle' && state.index === index) {
         if (currentAudio.paused) {
+          // Re-assert ownership on resume so progress reports
+          // continue to update this scene's stored snapshot even
+          // after a scene switch in between (e.g., scene A
+          // playing → switch to scene B → click pause from B,
+          // which would not match anyway since src doesn't match;
+          // this path is only hit when the same inspector is
+          // still mounted).
+          activeSceneId = sceneId;
           playAudio(currentAudio, (e) => console.warn('audio play() rejected:', e));
         } else {
           currentAudio.pause();
@@ -2038,7 +2141,7 @@ const QueuePlayer = (() => {
         emitProgress(currentAudio);
         return;
       }
-      this.playOne(src, opts);
+      this.playOne(src, { ...opts, sceneId });
     },
     seek(seconds) {
       if (!currentAudio || !Number.isFinite(seconds)) return;
@@ -2048,15 +2151,19 @@ const QueuePlayer = (() => {
       try { currentAudio.currentTime = target; } catch (e) {}
       emitProgress(currentAudio);
     },
-    playQueue(tracks) {
+    playQueue(tracks, opts = {}) {
+      const sceneId = opts.sceneId == null ? null : String(opts.sceneId);
       stopInternal();
       if (!tracks || tracks.length === 0) return;
       const token = ++playbackToken;
+      activeSceneId = sceneId;
       const playIndex = (i) => {
         if (token !== playbackToken) return;
         if (i >= tracks.length) {
           currentAudio = null;
           currentSource = null;
+          if (activeSceneId != null) sceneStates.set(activeSceneId, idleState());
+          activeSceneId = null;
           setState(idleState());
           return;
         }
@@ -2086,6 +2193,13 @@ const QueuePlayer = (() => {
       setState(idleState());
     },
     _state() { return state; },
+    // Snapshot the inspector for `sceneId` should render right
+    // now. Returns the active global state if sceneId is the
+    // active scene, otherwise the stored scene snapshot, otherwise
+    // a fresh idle state. Test-visible: lets a parent process
+    // verify that scene B's inspector did not pick up scene A's
+    // "now playing" highlight.
+    _snapshotForScene(sceneId) { return snapshotForScene(sceneId == null ? null : String(sceneId)); },
   };
 })();
 
