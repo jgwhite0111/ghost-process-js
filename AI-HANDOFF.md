@@ -8,6 +8,29 @@ PC-98 / late-80s cyberpunk horror point-and-click visual novel. Mature proportio
 
 ## Update (2026-07-15)
 
+### Current live state
+
+- Branch: `main`; code baseline: `ab0ca13 feat: match editor preview to runtime rendering`.
+- This update is the documentation boundary on top of code commits `c1b8d6e` and `ab0ca13`; the user explicitly authorized committing and pushing all changes in this session.
+- Before this handoff commit, the branch was **83 commits ahead of `origin/main`**, 0 behind; after this documentation commit and the requested push, `origin/main` should be synchronized.
+- The working tree contained only this handoff update after the two code commits; the intended final state is clean.
+- Verification: **54/54 tests passed**; `node --check editor.js` passed; `git diff --check` passed; the live editor returned HTTP 200; browser console was clean.
+- Express is listening on `http://localhost:8765` as PID 67650.
+- `terminal_lab_c` MIDI/MP3 remain untouched. No story data was changed by the editor-preview or dialogue-typography work.
+
+### Work completed this update
+
+- The user directly requested larger PC-98-style dialogue speech on laptops and PCs. `c1b8d6e` adds a responsive desktop-only typography block: 30px speech, 24px speaker, and 22px continue indicator for viewports at least 1024×600; smaller/mobile viewports retain their existing sizing.
+- The user directly requested that the editor show scene images with the selected palette and runtime post-processing. `ab0ca13` makes the editor use the runtime palette resolution, source-resolution Bayer dither, sprite green-despill processing, scanlines, and title overlay; palette changes re-render immediately; stale asynchronous previews are revision-guarded.
+- The live editor verified 16-color selected-palette output, palette switching/restoration, sprite processed-frame caching, exact scanline CSS, title overlay rendering, and rapid palette-change correctness.
+
+### Next-session starting point
+
+- Do not redo the dialogue typography or editor runtime-preview work; both are committed and verified above.
+- This handoff is intended to be pushed with its documentation commit; a fresh session should confirm `git status --short` is empty and `git rev-list --left-right --count origin/main...HEAD` is `0 0`.
+
+## Previous update (2026-07-15)
+
 ### Live carry-over audit
 
 - Branch: `main`; latest code commit: `7b85309 fix: complete audited runtime and editor remediation`.
@@ -104,11 +127,11 @@ This was already committed before the latest follow-up. Do not rediscover or res
 Recent history:
 
 ```text
+ab0ca13 feat: match editor preview to runtime rendering
+c1b8d6e feat: enlarge desktop dialogue typography
+295d101 docs: record committed audit remediation batch
 7b85309 fix: complete audited runtime and editor remediation
 169d2d0 docs: refresh handoff for next session
-0e3fb47 fix terminal lab and jailbreak medley audio
-1ce362e AI-HANDOFF: state block reflects committed audit batch
-29bdec0 audio: sparse-pattern + monotony audit batch
 ```
 
 ## Current music/runtime state
@@ -141,12 +164,19 @@ Scene graph:
 
 Runtime implementation is `src/runtime/music.js`; the editor's queue player intentionally auditions tracks sequentially rather than rehearsing runtime crossfade timing.
 
+## Current editor/runtime state
+
+- `editor.html` loads the registered palette scripts plus `src/runtime/canvas.js` and `src/runtime/sprites.js` before `editor.js`, so the editor shares the runtime processing implementations rather than maintaining approximations.
+- `editor.js` processes background plates at source resolution before `Runtime.coverRect()`; sprite frames use `CharacterSprite._despillGreen()`; the title overlay and exact 2px multiply scanline pass are visible in the preview.
+- Palette changes call `renderPreview()` immediately. A monotonic preview revision prevents a slower earlier palette/scene request from painting over the latest selection.
+- Editor handles remain above the visual post-process layer. The editor preview is intentionally a placement/development view; it does not replace the runtime's dialogue interaction layer.
+
 ## Active carry-over
 
 ### Completed audit-remediation queue
 
 1. `AUDIT-FIX-TODO.md` is complete: all fixes 1–15 are verified. Do not continue implementing the queue or invent further work from superseded audit wording.
-2. The completed audit batch plus the verified `cold_open → alley` music-lifecycle fix are committed in `7b85309`; there is no pending dirty batch.
+2. The completed audit batch plus the verified `cold_open → alley` music-lifecycle fix are committed in `7b85309`; the later dialogue-typography and editor-preview commits are `c1b8d6e` and `ab0ca13`.
 3. Preserve the verified scope: no audio rewrites, asset generation, or unnecessary consolidation of historical one-off preview helpers.
 4. Keep the protected `story.json` editor changes byte-for-byte except for the already-verified `intro → cold_open` route correction and removal of the unsupported top-level recipes block.
 
@@ -167,7 +197,6 @@ Do not upgrade these parking-lot items into active work without fresh user direc
 
 - Replace the VintageDreams GM stand-in `assets/audio/sc55.sf2` only through the deferred A/B workflow in `docs/SC55_AB_TEST.md`.
 - Editor sidebar could eventually list every sprite in a scene rather than only the selected sprite.
-- Push the local commit stack only with explicit user approval.
 
 ## Audio diagnostic rules that matter
 
