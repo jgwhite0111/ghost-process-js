@@ -10,24 +10,26 @@ PC-98 / late-80s cyberpunk horror point-and-click visual novel. Mature proportio
 
 ### Current live state
 
-- Branch: `main`; code baseline: `ab0ca13 feat: match editor preview to runtime rendering`.
-- This update is the documentation boundary on top of code commits `c1b8d6e` and `ab0ca13`; the user explicitly authorized committing and pushing all changes in this session.
-- Before this handoff commit, the branch was **83 commits ahead of `origin/main`**, 0 behind; after this documentation commit and the requested push, `origin/main` should be synchronized.
-- The working tree contained only this handoff update after the two code commits; the intended final state is clean.
-- Verification: **54/54 tests passed**; `node --check editor.js` passed; `git diff --check` passed; the live editor returned HTTP 200; browser console was clean.
-- Express is listening on `http://localhost:8765` as PID 67650.
-- `terminal_lab_c` MIDI/MP3 remain untouched. No story data was changed by the editor-preview or dialogue-typography work.
+- Branch: `main`; verified code commit: `0d61dd9 feat: add editor music preview transport`.
+- `origin/main` is still `d09b154`; after the code and handoff commits the branch is **2 commits ahead, 0 behind**. No push was requested in this turn.
+- The working tree is clean; the separate documentation commit closes this session boundary.
+- Verification: **56/56 tests passed**; `node --check editor.js` passed; `git diff --check` passed; the live editor returned HTTP 200; browser verification was clean. Express is listening on `http://localhost:8765` as PID 67650.
+- `terminal_lab_c` MIDI/MP3 remain untouched. No story data was changed by this editor-sidebar work.
 
-### Work completed this update
+### Work completed this update — editor music preview transport
 
-- The user directly requested larger PC-98-style dialogue speech on laptops and PCs. `c1b8d6e` adds a responsive desktop-only typography block: 30px speech, 24px speaker, and 22px continue indicator for viewports at least 1024×600; smaller/mobile viewports retain their existing sizing.
-- The user directly requested that the editor show scene images with the selected palette and runtime post-processing. `ab0ca13` makes the editor use the runtime palette resolution, source-resolution Bayer dither, sprite green-despill processing, scanlines, and title overlay; palette changes re-render immediately; stale asynchronous previews are revision-guarded.
-- The live editor verified 16-color selected-palette output, palette switching/restoration, sprite processed-frame caching, exact scanline CSS, title overlay rendering, and rapid palette-change correctness.
+- The user directly requested that each individual track/medley-track play button double as play and pause, plus a nearby position slider that updates during preview and allows seeking.
+- `editor.js` now exposes the shared `QueuePlayer` transport state/API: `toggleOne(src, opts)`, `pause()`, `resume()`, and `seek(time)`, with `paused`, `currentTime`, and `duration` state. The per-track button changes between `▶` and `Ⅱ`, with matching accessible labels; the shared seek slider and elapsed/total time display remain synchronized through requestAnimationFrame status updates.
+- Paused preview identity survives inspector rerenders. Track edits, reordering/removal, mode changes, and queue edits stop playback when indices or source identity would otherwise become stale.
+- `editor.html` adds the `.medley-seek` styling and expands `.medley-row` to seven columns so the slider sits beside the per-track controls.
+- `test/editor-rerender-lifecycle.test.js` now exercises the browser-like Audio transport, pause/resume/seek behavior, rerendered paused-row state, and structural-edit cleanup. The suite moved from 54 to **56 passing tests**.
+- Live browser verification on `alley_confrontation.mp3` changed the first row from `▶` to `Ⅱ` while the position advanced (`0:05 / 0:47`), then returned to `▶` while retaining the paused position (`0:12 / 0:47`). The slider was present, enabled during preview, and seek behavior was verified.
 
 ### Next-session starting point
 
-- Do not redo the dialogue typography or editor runtime-preview work; both are committed and verified above.
-- This handoff was pushed with its documentation commit; a fresh session should confirm `git status --short` is empty and `git rev-list --left-right --count origin/main...HEAD` is `0 0`.
+- Do not redo the completed dialogue typography, runtime-style editor preview, or editor music transport work.
+- After this documentation commit, expect a clean tree with the code commit `0d61dd9` immediately below the handoff commit and the branch **2 commits ahead, 0 behind** `origin/main`. Do not push unless explicitly requested.
+- Preserve the existing scope guardrails: the audit queue is complete; `story.json` remains protected except for its already-verified route/recipes corrections; leave `terminal_lab_c` audio alone unless the user specifically requests a change.
 
 ## Previous update (2026-07-15)
 
