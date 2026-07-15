@@ -18,6 +18,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>Ghost//Process — scene editor</title>
 <style>
+  @font-face {
+    font-family: "MadouFutoMaru";
+    src: url("assets/fonts/madou-futo-maru.ttf") format("truetype");
+    font-display: swap;
+  }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; height: 100%; background: #0d1117; color: #d9dde3;
     font-family: ui-monospace, "SF Mono", "Menlo", Consolas, monospace; font-size: 13px;
@@ -110,7 +115,20 @@
     transform-origin: top center;
   }
   #bg-canvas { display: block; image-rendering: pixelated; }
-  #overlay { position: absolute; inset: 0; pointer-events: none; }
+  /* Mirrors the runtime's DOM scanline pass without blocking editor handles. */
+  #runtime-postprocess {
+    position: absolute; inset: 0; z-index: 5; pointer-events: none;
+    background-image: repeating-linear-gradient(
+      to bottom,
+      rgba(0, 0, 0, 0.55) 0px,
+      rgba(0, 0, 0, 0.55) 1px,
+      transparent 1px,
+      transparent 2px
+    );
+    background-size: 100% 2px;
+    mix-blend-mode: multiply;
+  }
+  #overlay { position: absolute; inset: 0; z-index: 10; pointer-events: none; }
   #overlay > * { pointer-events: auto; }
 
   .sprite-handle {
@@ -292,7 +310,7 @@
         <input id="vh" type="number" min="100" max="4000" style="width:70px" />
       </span>
       <span style="flex:1"></span>
-      <label style="font-size:11px;color:#6c7280">click canvas + drag = draw hitbox (tool)</label>
+      <label style="font-size:11px;color:#6c7280">runtime preview: palette + dither + scanlines</label>
     </div>
     <div id="canvas-frame">
       <!-- Canvas default size = DESKTOP 1280x720. Editor state.vpW/vpH
@@ -300,6 +318,7 @@
            runtime viewport. Users targeting mobile can switch via the
            viewport dropdown (Phone - 390x844). -->
       <canvas id="bg-canvas" width="1280" height="720"></canvas>
+      <div id="runtime-postprocess" aria-hidden="true"></div>
       <div id="overlay"></div>
     </div>
   </main>
@@ -323,6 +342,16 @@
 
 </div>
 
+<!-- Share the exact runtime palette, dither, and sprite-despill implementations
+     with the editor instead of maintaining a second approximation. -->
+<script src="assets/palettes/alley.js"></script>
+<script src="assets/palettes/indoor.js"></script>
+<script src="assets/palettes/lab_clinic.js"></script>
+<script src="assets/palettes/industrial.js"></script>
+<script src="assets/palettes/dialogue.js"></script>
+<script src="assets/palettes/terminal_lab.js"></script>
+<script src="src/runtime/canvas.js"></script>
+<script src="src/runtime/sprites.js"></script>
 <script src="editor.js"></script>
 </body>
 </html>

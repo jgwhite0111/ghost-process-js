@@ -45,6 +45,7 @@ const bgCanvas = $('#bg-canvas');
 const bgCtx = bgCanvas.getContext('2d');
 const overlay = $('#overlay');
 const frame = $('#canvas-frame');
+let previewRenderRevision = 0;
 
 // ---------- snap-to-edge ----------
 //
@@ -308,6 +309,93 @@ async function loadImage(path) {
   });
 }
 
+// The editor uses the runtime's own processed-canvas cache and algorithms so
+// a palette change cannot drift away from what the game will draw. Background
+// dither is intentionally performed at source resolution, matching
+// Scene._ditherBg(), before the viewport cover-fit.
+function processRuntimeBackground(img, sc) {
+  const Rt = window.Runtime;
+  if (!Rt) return img;
+  const palette = Rt.resolvePalette(sc.bgPalette);
+  const bgColor = palette[0] || [0, 0, 0];
+  const ditherStrength = sc.bgDitherStrength ?? 1.0;
+  const anchor = sc.bgAnchor || 'center';
+  return Rt.getProcessedCanvas(img, {
+    operation: 'background-dither',
+    version: 1,
+    width: img.width,
+    height: img.height,
+    parameters: { palette, bgColor, ditherStrength, anchor },
+  }, () => {
+    const off = document.createElement('canvas');
+    off.width = img.width;
+    off.height = img.height;
+    Rt.ditherImageToCanvas(img, off, palette, { bgColor, ditherStrength, anchor });
+    return off;
+  });
+}
+
+// Runtime sprites are despilled once before drawing. Reuse that exact
+// implementation in the editor; the fallback keeps the editor fixture-safe
+// when editor.js is evaluated without the browser's runtime script bundle.
+function processRuntimeSpriteFrame(img, charConfig, sceneId) {
+  const Sprite = window.CharacterSprite;
+  if (!Sprite || !Sprite.prototype || typeof Sprite.prototype._despillGreen !== 'function') {
+    return img;
+  }
+  return new Sprite(charConfig, sceneId)._despillGreen(img);
+}
+
+function drawTitleOverlayPreview(sc) {
+  if (!sc || sc.kind !== 'title') return;
+  const text = sc.titleText || 'GHOST PROCESS';
+  const fontFamily = sc.titleFont || '"MadouFutoMaru", monospace';
+  const color = sc.titleColor || '#ff2030';
+  const shadow = sc.titleShadow !== undefined ? sc.titleShadow : '#000000';
+  const fontSizePct = sc.titleSizePct ?? 0.10;
+  const fontSize = Math.round(Math.min(vpW(), vpH()) * fontSizePct);
+  bgCtx.save();
+  bgCtx.font = `bold ${fontSize}px ${fontFamily}`;
+  bgCtx.textAlign = 'center';
+  bgCtx.textBaseline = 'alphabetic';
+  bgCtx.imageSmoothingEnabled = false;
+  const x = vpW() / 2;
+  const y = vpH() - Math.round(vpH() * 0.08);
+  if (shadow) {
+    bgCtx.fillStyle = shadow;
+    bgCtx.fillText(text, x + 1, y + 1);
+  }
+  bgCtx.fillStyle = color;
+  bgCtx.fillText(text, x, y);
+  bgCtx.restore();
+}
+
+async function drawPreviewBase(sc, revision) {
+  let img = null;
+  let rect = null;
+  if (sc && sc.bg) {
+    try {
+      const raw = await loadImage(`assets/backgrounds/${sc.bg}.png`);
+      img = processRuntimeBackground(raw, sc);
+      const Rt = window.Runtime;
+      rect = Rt ? Rt.coverRect(img.width, img.height, vpW(), vpH(), 'center') : null;
+    } catch (e) { /* skip missing backgrounds */ }
+  }
+  // A slower earlier scene/palette request must never paint over the latest
+  // selection after its image processing finally completes.
+  if (revision !== previewRenderRevision) return false;
+  bgCtx.fillStyle = '#000';
+  bgCtx.fillRect(0, 0, vpW(), vpH());
+  if (!sc) return true;
+  if (img) {
+    if (rect) bgCtx.drawImage(img, rect.x, rect.y, rect.w, rect.h);
+    else bgCtx.drawImage(img, 0, 0, vpW(), vpH());
+  }
+  // Runtime draws this after the background even if the plate failed to load.
+  drawTitleOverlayPreview(sc);
+  return true;
+}
+
 async function loadSpriteFrame(charConfig, sceneId) {
   const key = charConfig.id + '/' + sceneId;
   // Return cached single-frame Image if we already have one (used by
@@ -348,7 +436,7 @@ async function loadSpriteFrameList(charConfig, sceneId) {
   const frames = [];
   for (const f of pngs) {
     const img = await loadImage(dir + '/' + f);
-    frames.push(img);
+    frames.push(processRuntimeSpriteFrame(img, charConfig, sceneId));
   }
   state.spriteFrameLists[key] = frames;
   // Default playback state: paused, frame 0.
@@ -575,20 +663,10 @@ function hitboxRectPx(hb) {
 function getScene() { return state.story?.scenes?.[state.sceneId] || null; }
 
 async function renderPreview() {
-  bgCtx.fillStyle = '#000';
-  bgCtx.fillRect(0, 0, vpW(), vpH());
+  const revision = ++previewRenderRevision;
   const sc = getScene();
+  if (!await drawPreviewBase(sc, revision)) return;
   if (!sc) return;
-  if (sc.bg) {
-    try {
-      const img = await loadImage(`assets/backgrounds/${sc.bg}.png`);
-      const sa = vpW() / vpH(), sb = img.width / img.height;
-      let dw, dh, dx, dy;
-      if (sb > sa) { dh = vpH(); dw = dh * sb; dx = (vpW() - dw) / 2; dy = 0; }
-      else         { dw = vpW(); dh = dw / sb; dx = 0; dy = (vpH() - dh) / 2; }
-      bgCtx.drawImage(img, dx, dy, dw, dh);
-    } catch (e) { /* skip */ }
-  }
   for (const c of (sc.characters || [])) {
     const img = state.spriteFrames[c.id + '/' + state.sceneId];
     if (!img) continue;
@@ -922,20 +1000,10 @@ function onHitboxDragEnd() {
 
 // ---------- redraw canvas-only (no DOM rebuild) ----------
 async function redrawCanvasOnly() {
-  bgCtx.fillStyle = '#000';
-  bgCtx.fillRect(0, 0, vpW(), vpH());
+  const revision = ++previewRenderRevision;
   const sc = getScene();
+  if (!await drawPreviewBase(sc, revision)) return;
   if (!sc) return;
-  if (sc.bg) {
-    try {
-      const img = await loadImage(`assets/backgrounds/${sc.bg}.png`);
-      const sa = vpW() / vpH(), sb = img.width / img.height;
-      let dw, dh, dx, dy;
-      if (sb > sa) { dh = vpH(); dw = dh * sb; dx = (vpW() - dw) / 2; dy = 0; }
-      else         { dw = vpW(); dh = dw / sb; dx = 0; dy = (vpH() - dh) / 2; }
-      bgCtx.drawImage(img, dx, dy, dw, dh);
-    } catch (e) {}
-  }
   for (const c of (sc.characters || [])) {
     const img = state.spriteFrames[c.id + '/' + state.sceneId];
     if (!img) continue;
@@ -1480,7 +1548,11 @@ async function makePalettePicker(sc) {
     const o = document.createElement('option'); o.value = f.replace(/\.(js|json)$/, ''); o.textContent = f; sel.appendChild(o);
   }
   sel.value = sc.bgPalette || '';
-  sel.onchange = () => { sc.bgPalette = sel.value || null; markDirty(); };
+  sel.onchange = () => {
+    sc.bgPalette = sel.value || null;
+    markDirty();
+    renderPreview();
+  };
   return sel;
 }
 async function makeMusicEditor(sc, lifecycle = activeInspectorLifecycle) {
