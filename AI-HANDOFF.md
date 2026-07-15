@@ -77,6 +77,101 @@ These were observed while doing the regen but not requested:
 - The v3 composer is reproducible: same SCENES dict → same `.mid` output (bit-exact), same `tools/render-midi.sh` → same `.mp3` output (within ±2.5s ffmpeg noise floor).
 - Server PID **15287** on :8765. Restart recipe as above.
 - Push policy: user authorized commit **and push** for this session's batch. On session open, do not push the next batch unless the user says so again — push is per-batch authorization, not standing permission.
+
+## Update (2026-07-15, follow-on) — audio Git LFS migration landed
+
+### Current live state (after this update)
+
+- **Branch**: `main`. Commits on origin/main since last handoff banner (oldest → newest):
+  - `499113e feat(audio): composer v3 — full 44-SCENE regen, diagnose-all green (44/44 PASS)` (rewritten SHA — was `7fd5f84` pre-migration)
+  - `b78dbc9 docs: update AI-HANDOFF for 2026-07-15 composer v3 + regen session` (rewritten SHA — was `964c514`)
+  - `e4c75df chore: add .gitattributes for Git LFS on binary audio assets`
+- **Status**: `git rev-list --left-right --count origin/main...HEAD` returns `0 0`. The history **was rewritten** by `git lfs migrate import` — every commit that touched `*.mp3`, `*.mid`, or `*.sf2` got its blob storage redirected to LFS pointers. Old commit SHAs (`7fd5f84`, `964c514`, …) are orphans that git can no longer reach from any current branch.
+- **`.git/` size**: 538 MB → **454 MB** (–84 MB). `git count-objects -vH` shows `size-pack: ~225 MB`. The remaining pack bloat is NOT audio — see "Sprite bloat cleanup" below.
+- **LFS objects** stored on `origin` (GitHub LFS): 285 objects, ~239 MB. `git lfs ls-files` returns 96 working-tree pointers (audio only — sprites, fonts, vendor are still in plain git).
+- **Working tree**: untouched. All 44 SCENES `.mid`+`.mp3` pairs, all 4 orphans, `sc55.sf2` all still in the same place byte-for-byte. Confirm with `git status -sb` returning clean.
+
+### How to continue
+
+- **Audit memory bloat**: 96 LFS-tracked audio files were counted via `git lfs ls-files`. Run `git lfs ls-files` and confirm the count matches the 88 SCENES files (44 `.mid` + 44 `.mp3`) plus 4 orphan `.mid`/`.mp3` (alley_confrontation, clinic_tension, intro_theme, smoky_club_intro) plus 2 other files = 96. If count disagrees, something stray got LFS'd — investigate before any further migration.
+- **Cold-clone test**: if you want to verify the LFS pipeline actually delivers audio on clone (vs. just recording the size locally), do `cd /tmp && git clone https://github.com/jgwhite0111/ghost-process-js.git lfs-test && cd lfs-test && git lfs pull && ls assets/audio/*.mp3 | wc -l`. Expect 44. The clone WILL pull ~239 MB of LFS objects — this is the price of cold-clone-fidelity. If a non-coder collaborator complains about clone speed, LFS was the wrong call for them — see the "fallback plan" at the end of this section.
+- **Diagnose/animate timing**: the LFS migration costs roughly nothing at commit time (packfile blob count is unchanged; pointer blobs are sub-kilobyte each). So if next session's audio regen lands a 70 MB diff in `assets/audio/*.mp3`, the COMMIT will only add ~80 KB of pointers. Confirm in 1 commit.
+
+### Sprite bloat cleanup (next-session target)
+
+The audio migration reclaimed 84 MB from `.git/`. **Remaining pack bloat is dominated by animation/sprite history** which the audio migration did NOT touch.
+
+**The numbers (post-audio-LFS, before any sprite work):**
+- `.git/objects/pack/`: **225 MB**
+- `assets/sprites/` (largest contributor): **213.9 MB across 645 blobs**
+- Of those, **129.4 MB live in `_deleted/` and `_raw_source/` directories that no longer exist in the working tree** — these are intentional scratch archives from earlier sprite iterations, fully orphaned from current tree but still preserved as reachable objects in history.
+- Remaining pack bloat: 9.9 MB backgrounds, 2.0 MB fonts (`assets/fonts/madou-futo-maru.ttf`, `assets/fonts/nouveau_ibm.ttf`), 1.4 MB vendor JS, ~3.6 MB text in `tools/`, ~3.6 MB root configs.
+
+**Why it bloats:** every `key_sprite.py` / `android_*` regeneration produces a new full PNG, even when the asset path is the same. Pack deduplicates files of IDENTICAL bytes, but the moment an encoder tweak shifts even a few pixels in a frame, the whole frame is a new blob. After 5–7 pipeline iterations you end up with 10+ versions of `frame_01.png` over time. The `_deleted/` and `_raw_source/` snapshots are the deliberate "before" archives of pre-rewrite scenes — they were committed at the time, then deleted, but their content lives in every commit that ever touched them.
+
+**Step 1: LFS-track the new runtime sprites only.**
+
+This step is SAFE — it only re-stores existing blobs as LFS pointers, doesn't lose data.
+
+1. Append to `.gitattributes`:
+   ```
+   *.png filter=lfs diff=lfs merge=lfs -text
+   *.jpg filter=lfs diff=lfs merge=lfs -text
+   *.ttf filter=lfs diff=lfs merge=lfs -text
+   ```
+   (Keep the existing `*.mp3`/`*.mid`/`*.sf2` lines.)
+
+2. Audit first. Run `git rev-list --objects --all | git cat-file --batch-check='%(objecttype) %(objectname) %(objectsize) %(rest)' | awk '$1=="blob"' > /tmp/all_blobs.txt` and group by top-level dir with the same Python summation that produced the 213.9 / 9.9 / 2.0 / 1.4 breakdown above. Sprite bloat may have shifted since this session.
+
+3. Migrate LFS only for files CURRENTLY in the working tree. Use `git lfs migrate import --include="*.png,*.jpg,*.ttf" --include-ref=refs/heads/main` (NOT `--everything`) so historical blobs that are no longer in any current tree don't get rewritten. We WANT historical sprites that the current tree still uses to migrate — we DON'T want blob-deletion from history.
+
+4. Push: `git lfs push origin main --all` then `git push --force-with-lease origin main` then `git reflog expire --expire=now --all && git gc --prune=now --aggressive`.
+
+5. After this step, working-tree PNGs/TTFs/JPGs are LFS pointers in git. Old PNGs that ARE still referenced by the current tree (e.g. `assets/sprites/android/corridor/raw/transparent_sprites/frame_01.png` up through `frame_15.png` are visible in working tree) will be reclaimable.
+
+**Expected post-Step-1:** `.git/` should drop to roughly **240 MB** (145 MB reclaimed: 213 sprite blobs → LFS pointers × ~120 bytes each). `git lfs ls-files` will report 96 + N where N is current-tree sprite/font count.
+
+**Step 2: filter-rewrite the `_deleted/` and `_raw_source/` history.**
+
+This step is RISKY and requires another force-push. It removes content from git history permanently. Only do this if:
+- The user explicitly says "delete the historical sprite archives" or similar.
+- The user understands the deleted sprites will be irrecoverable (no LFS breadcrumbs, no tags pointing at them). The `_raw_source/` PNGs are 2×-resolution originals that were downsampled to the runtime, so deletion is usually safe.
+
+If the user wants it:
+
+1. Install filter-repo: `pip install --user git-filter-repo` (or `brew install git-filter-repo`).
+2. Make a backup first: `cp -r .git /tmp/$(date +%s)_repo.bak` (this is non-negotiable — filter-repo rewrites history irreversibly).
+3. Run `git filter-repo --invert-paths --path-glob 'assets/sprites/_deleted/' --path-glob 'assets/sprites/android/_deleted/' --path-glob 'assets/sprites/android/_raw_source/'` (one invocation, multiple globs).
+4. Push: `git push --force-with-lease origin main`. The push WILL reject if anyone else has the old SHAs — this is a one-repo project so it's safe. If user has the repo on another machine, that checkout will need `git fetch origin && git reset --hard origin/main`.
+5. Re-clone or `git reflog expire --expire=now --all && git gc --prune=now --aggressive` locally. Verify `.git/` drops below 100 MB.
+6. Audit: `git log --all -- assets/sprites/_deleted/eidolon_return/idle_01.png` should return "fatal: ambiguous argument" or empty — the file is no longer in any tree.
+
+**Expected post-Step-2:** `.git/` should drop to **~80 MB** total (144 MB reclaimed: 129.4 MB historical sprite blobs + their pack overhead). Repo size becomes proportional to working-tree size, not history depth.
+
+### Why not Step 2 first?
+
+Filter-rewrite on a repo with active LFS pointer history is what filter-repo was designed for, but the order matters:
+1. **LFS first** → filter-repo rewrites pointers (compact), not blobs.
+2. **Filter-repo first** → LFS migrate then has to redo the work.
+
+So Step 1 then Step 2 is correct. If the user wants to skip Step 1 (i.e. they want raw PNG commits to stay cheap in diff display but aren't worried about the blob count), filter-repo is still safe to do alone.
+
+### Fallback plan
+
+If at any point the user changes their mind about LFS or filter-repo:
+- **LFS-only fallback**: stop after Step 1, repo sits at 240 MB. Most audio regens still get reclaimed because audio was Step 1 from this session. Sprite regen still bloats history but no worse than before this session.
+- **Filter-repo-only fallback** (NO LFS): `git filter-repo --invert-paths --path-glob 'assets/sprites/_deleted/' --path-glob 'assets/sprites/android/_deleted/' --path-glob 'assets/sprites/android/_raw_source/'` alone will reclaim the 129 MB historical dead weight but does NOTHING for the 84 MB of current runtime sprites. Music regen still inflates git history at the same 70 MB-per-regen rate. Don't recommend this; LFS is the durable fix for that.
+- **Status quo**: leave `.git/` at 454 MB. Repo is responsive, GitHub is fine, just slow on cold clones. Acceptable for a one-dev project.
+
+### What this session did NOT touch
+
+- Sprite pipeline (`tools/key_sprite.py`, `tools/key_thug_talking.py`, `tools/gen_intro_v2.py` — all unchanged since prior commits per `git log --oneline -- tools/`)
+- `story.json` (still protected from edits)
+- Music composer (v3 already landed, see prior banner)
+- Server still running on PID **15287** at :8765, HTTP 200
+- 71/71 tests still green
+- `validate-all` + `diagnose-all` still 44/44 PASS
+
 # AI-HANDOFF — ghost-process-js
 
 ## Stack assertion
