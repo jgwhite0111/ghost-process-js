@@ -10,8 +10,8 @@ PC-98 / late-80s cyberpunk horror point-and-click visual novel. Mature proportio
 
 ### Current live state
 
-- Branch: `main`; verified code commit: `4e50bbb fix(editor): scope music preview state per scene so cross-scene navigation stops false playback highlights`. Handoff commit: `e373f20 docs: record per-scene music preview snapshot fix` (new HEAD).
-- `origin/main` is `339b3bf`; the branch is **6 commits ahead, 0 behind**. The six local-ahead commits, in order, are `890a18c docs` (prior-session docs), `845521c fix(audio)` (Safari intro_theme), `92178fe docs`, `3de2343 fix(inventory)` (pickup-fly), `4e50bbb fix(editor)` (per-scene preview snapshot), and `e373f20 docs` (this boundary). **None have been pushed**; the user authorizes commits, not pushes — do not push.
+- Branch: `main`; HEAD: `b9338ce docs: bootstrap handoff for next session`. Most recent code commit: `4e50bbb fix(editor): scope music preview state per scene so cross-scene navigation stops false playback highlights`.
+- `origin/main` is `33a6159`; the branch is **3 commits ahead, 0 behind**. The three local-ahead commits, in order, are `4e50bbb fix(editor)` (per-scene preview snapshot), `e373f20 docs` (records that fix), and `b9338ce docs` (this bootstrap refresh). **None have been pushed**; the user authorizes commits, not pushes — do not push.
 - The working tree is **clean**. Express is still listening on `http://localhost:8765` as PID **15287** (from the pickup-fly refresh). Live HTTP smoke: **HTTP 200**.
 - Verification: **71/71 tests passed**. The most recent test additions are `test/editor-music-per-scene-snapshot.test.js` (4 regressions) and the `sceneId`-tagged updates to `test/editor-rerender-lifecycle.test.js`.
 - `git diff --check` passed. No dirty hunks. No audio assets rewritten this session.
@@ -20,7 +20,7 @@ PC-98 / late-80s cyberpunk horror point-and-click visual novel. Mature proportio
 
 - Read `AGENTS.md` first, then this handoff top-to-bottom before any "what was I working on" inference — the audit/carry-over sections encode the user-driven scope guardrails (audit queue is **closed**; `story.json` is **protected** except for the already-verified `intro → cold_open` correction; `terminal_lab_c` audio is **off-limits** unless the user asks for it again).
 - The most recent code work is the editor **per-scene preview snapshot** (`4e50bbb`). Do not redo it. If a related preview leak appears (seek slider writing into wrong inspector, elapsed-time text drifting across scenes), see the "post-fix follow-up candidates" in `## Previous update (2026-07-15) — per-scene preview snapshot` further down this file.
-- Do not push without explicit user direction. After this docs commit, HEAD is `e373f20`.
+- Do not push without explicit user direction. After this docs commit, HEAD is `b9338ce`.
 - Server is on PID **15287**. To restart on a clean PID: `kill 15287 && nohup node server.js > /tmp/gpjs-server.log 2>&1 &` from `/Users/jwhite/ghost-process-js`.
 - Before declaring a session "audit" or "fix" task: ground in the live tree with `cd ~/ghost-process-js && git status --short && git diff --numstat` (per the user-stated rule about losing work to paraphrasing). A clean tree is the required starting state for any new audit.
 
