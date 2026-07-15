@@ -47,6 +47,26 @@ window.SCENE_CLASSES.intro = class extends window.Scene {
             window.Inventory.setVisible(false);
         }
 
+        // Safari autoplay-unlock fallback: Safari does not credit a
+        // document-level capture-phase pointerdown listener as an
+        // autoplay gesture the way Chrome/Firefox do, so the standard
+        // MusicHandler._queueResume handler can silently no-op when
+        // the player clicks anywhere on the title viewport. Wire a
+        // one-shot pointerdown listener directly on the scene canvas
+        // (a real DOM element where Safari does credit the gesture)
+        // that asks MusicHandler to resume the pending intro audio.
+        // The listener self-removes after the first successful click.
+        const canvas = this.canvas;
+        if (canvas) {
+            const unlock = () => {
+                canvas.removeEventListener('pointerdown', unlock);
+                if (window.MusicHandler && window.MusicHandler._pendingResume) {
+                    window.MusicHandler.resumePending();
+                }
+            };
+            canvas.addEventListener('pointerdown', unlock);
+        }
+
         // NOTE: we do NOT call MusicHandler.play() here. Scene.start()
         // (the base class) already kicked off the intro theme on
         // scene load (scene-base.js:99-102), which is what triggers
@@ -70,9 +90,12 @@ window.SCENE_CLASSES.intro = class extends window.Scene {
         // playing now (5s listen clock starts on PRESS START click).
         // If the browser blocked it, MusicHandler._queueResume has
         // registered a one-shot document-level pointerdown listener
-        // (music.js:281-283) that resumes the audio on the first
-        // click anywhere — so even a click on the title-screen
-        // background or the PRESS START label itself unlocks it.
+        // (music.js:299-301) that resumes the audio on the first
+        // click anywhere. Plus, the canvas-level pointerdown wired
+        // just above in this onReady calls MusicHandler.resumePending()
+        // directly — Safari does not credit document-capture-phase
+        // listeners for autoplay gesture recognition, but it does
+        // credit the canvas-element-level one.
         //
         // On PRESS START click: leave playback initiation to the base scene's
         // load-time attempt / MusicHandler's first-gesture fallback, set the

@@ -92,3 +92,73 @@ test('title music is attempted during Scene.start and START does not initiate an
     assert.equal(pendingAudio.volume, 0.7);
     assert.equal(timers.at(-1).delay, 5000);
 });
+
+// Regression: MusicHandler exposes a public resumePending() for browsers
+// (notably Safari) where document-capture-phase listeners are NOT credited
+// as autoplay gestures, but element-level handlers ARE. Scene.onReady wires
+// a one-shot canvas pointerdown that calls resumePending(); verify the
+// method is idempotent, clears the pending state, invokes audio.play() with
+// the stashed fade params, and swallows play() rejections.
+test('MusicHandler.resumePending is idempotent, replays the queued fade, and swallows play() rejections', async () => {
+    const documentListeners = { pointerdown: 0, keydown: 0 };
+    const documentEmitter = {
+        addEventListener(type) { documentListeners[type] += 1; },
+        removeEventListener(type) { documentListeners[type] -= 1; },
+    };
+    const window = {
+        document: documentEmitter,
+        addEventListener() {},
+        removeEventListener() {},
+    };
+    let playCalls = 0;
+    const audio = {
+        play() {
+            playCalls += 1;
+            return Promise.reject(new Error('still blocked'));
+        },
+    };
+    const context = vm.createContext({
+        window,
+        document: documentEmitter,
+        console,
+        performance: { now: () => 0 },
+        requestAnimationFrame: () => 1,
+        cancelAnimationFrame() {},
+        setTimeout() { return 0; },
+        clearTimeout() {},
+    });
+    context.globalThis = context;
+    runBrowserScript(context, 'src/runtime/music.js');
+    const handler = window.MusicHandler;
+    handler._pendingResume = audio;
+    handler._pendingResumeVolume = 0.42;
+    handler._pendingResumeFadeMs = 800;
+
+    // First call: clears pending state and dispatches audio.play()
+    handler.resumePending();
+    assert.equal(handler._pendingResume, null, 'first resumePending clears _pendingResume');
+    assert.equal(handler._pendingResumeVolume, null, 'first resumePending clears stashed volume');
+    assert.equal(handler._pendingResumeFadeMs, null, 'first resumePending clears stashed fade');
+    assert.equal(playCalls, 1, 'first resumePending dispatches audio.play()');
+
+    // Subsequent calls with nothing queued are safe no-ops.
+    handler.resumePending();
+    handler.resumePending();
+    await new Promise((r) => setImmediate(r));
+    assert.equal(playCalls, 1, 'further resumePending() calls are no-ops');
+
+    // _queueResume registers a document-level pointerdown + keydown
+    // listener (one each); resumePending() must clear them so the
+    // manual fallback doesn't double-fire alongside its own success.
+    // _queueResume itself sets this._pendingResume, so pre-populating
+    // it to the same value would otherwise hit the early-return
+    // guard `if (this._pendingResume === audio) return`.
+    const freshAudio = { play() { return Promise.resolve(); } };
+    handler.resumePending(); // ensure pending state is cleared
+    handler._queueResume(freshAudio, 0.5, 600);
+    assert.equal(documentListeners.pointerdown, 1, '_queueResume registered pointerdown');
+    assert.equal(documentListeners.keydown, 1, '_queueResume registered keydown');
+    handler.resumePending();
+    assert.equal(documentListeners.pointerdown, 0, 'resumePending cleared pointerdown listener');
+    assert.equal(documentListeners.keydown, 0, 'resumePending cleared keydown listener');
+});

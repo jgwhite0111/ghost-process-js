@@ -286,27 +286,52 @@ class MusicHandler {
         // Clean up any prior resume listeners (we're replacing them).
         this._clearResumeListeners();
         this._pendingResume = audio;
-        const resume = () => {
-            // Clean up listeners so we don't resume on every subsequent click.
-            this._clearResumeListeners();
-            const target = this._pendingResume;
-            this._pendingResume = null;
-            if (!target) return;
-            target.play().then(() => {
-                // If the targeted audio is no longer the current track
-                // (some other scene's music already played() and demoted
-                // it to fadingOut in the meantime), don't ramp the old
-                // track back up — let the fadeOut complete in silence.
-                if (this.music === target) {
-                    this._ramp(target, baseVolume, fadeMs, null, 'in');
-                }
-            }).catch(() => { /* still blocked — give up */ });
-        };
+        // Stash the ramp params so a future resumePending() call
+        // (e.g. from a scene's canvas-level pointerdown fallback —
+        // Safari prefers element-level gesture handlers over
+        // document-capture ones for autoplay credit) can replay
+        // exactly the same fade this track was queued for.
+        this._pendingResumeVolume = baseVolume;
+        this._pendingResumeFadeMs = fadeMs;
+        const resume = () => this.resumePending();
         // capture: true so we fire even if the click hits the dialogue
         // box or another handler stops propagation.
         document.addEventListener('pointerdown', resume, true);
         document.addEventListener('keydown', resume, true);
         this._resumeHandler = resume;
+    }
+
+    /**
+     * Public: manually trigger the pending audio resume. Idempotent —
+     * a no-op when nothing is queued. Safe to call multiple times; the
+     * first successful call clears the pending state.
+     *
+     * Scenes can call this from a gesture-credited event listener
+     * (e.g. a one-shot pointerdown on the canvas) for browsers where
+     * document-capture-phase listeners do not gain autoplay gesture
+     * trust — Safari in particular has historically not credited
+     * document-level handlers, while element-level handlers do count.
+     */
+    resumePending() {
+        // Mirror _queueResume's cleanup so the document listener
+        // doesn't double-fire after a manual resume succeeds.
+        this._clearResumeListeners();
+        const target = this._pendingResume;
+        if (!target) return;
+        this._pendingResume = null;
+        const baseVolume = this._pendingResumeVolume ?? 0.7;
+        const fadeMs = this._pendingResumeFadeMs ?? 1200;
+        this._pendingResumeVolume = null;
+        this._pendingResumeFadeMs = null;
+        target.play().then(() => {
+            // If the targeted audio is no longer the current track
+            // (some other scene's music already played() and demoted
+            // it to fadingOut in the meantime), don't ramp the old
+            // track back up — let the fadeOut complete in silence.
+            if (this.music === target) {
+                this._ramp(target, baseVolume, fadeMs, null, 'in');
+            }
+        }).catch(() => { /* still blocked — give up */ });
     }
 
     _clearResumeListeners() {
