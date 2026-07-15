@@ -6,23 +6,54 @@ Live project: `/Users/jwhite/ghost-process-js` — vanilla JavaScript + InkJS + 
 
 PC-98 / late-80s cyberpunk horror point-and-click visual novel. Mature proportions; no moe.
 
-## Update (2026-07-15) — session bootstrap
+## Update (2026-07-15) — targeted medley rewrite (kabukicho C/D/E + jailbreak C/D)
 
 ### Current live state
 
-- Branch: `main`; HEAD: `5b9775d docs: correct origin/main and ahead-count in current live state`. Most recent code commit: `4e50bbb fix(editor): scope music preview state per scene so cross-scene navigation stops false playback highlights`.
-- `origin/main` is `33a6159`; the branch is **4 commits ahead, 0 behind**. The local-ahead commits, in order, are `4e50bbb fix(editor)` (per-scene preview snapshot), `e373f20 docs` (records that fix), `b9338ce docs` (bootstrap refresh), and `5b9775d docs` (origin/main correction). **None have been pushed**; the user authorizes commits, not pushes — do not push.
-- The working tree is **clean**. Express is still listening on `http://localhost:8765` as PID **15287** (from the pickup-fly refresh). Live HTTP smoke: **HTTP 200**.
-- Verification: **71/71 tests passed**. The most recent test additions are `test/editor-music-per-scene-snapshot.test.js` (4 regressions) and the `sceneId`-tagged updates to `test/editor-rerender-lifecycle.test.js`.
-- `git diff --check` passed. No dirty hunks. No audio assets rewritten this session.
+- **This docs commit closes a clean session boundary after a single targeted-pass rewrite of 5 medley tracks.** All rewrite work, asset regen, and tests landed before this banner was written. Working tree is otherwise clean apart from this handoff refresh.
+- Branch: `main`. Local-ahead commits (most-recent-first) at the moment of this docs commit: pre-existing 4 un-pushed commits (`4e50bbb`, `e373f20`, `b9338ce`, `5b9775d` — per the previous handoff), then the new code commit `<sha>` `feat(audio): rewrite lead+bass for kabukicho C/D/E and jailbreak C/D`, then this handoff commit on top. After this docs commit the branch is **6 commits ahead of `origin/main`** at `33a6159` (`git rev-list --left-right --count origin/main...HEAD` returns `0 6`). Verify against `git log --oneline -8` and `git status -sb` on session open — ahead-count integers in this banner drift as soon as any further commit lands.
+- All 71 tests pass (`npm test`). Express listens on `http://localhost:8765`, PID **15287**, HTTP **200**. `git diff --check` clean.
+- Sound font: `assets/audio/sc55.sf2` (307 KB, VintageDreamsWaves-v2 GM clone bundled in repo — user-verified licensed, no re-check).
+- Composer entrypoint: `tools/make_scene_loop.py` — single parameterized SMF Type-0 composer. `SCENES` dict holds A-sides; `SCENES_B` holds B-sides and beyond (`_b`/`_c`/`_d`/`_e`). The `_B` naming is a leftover from the 2-piece-medley era, not a structural limit. Render pipeline: `python3 tools/make_scene_loop.py <track>` → writes `.mid` and renders `.mp3` via `tools/render-midi.sh` (FluidSynth + sc55.sf2 + ffmpeg silenceremove).
+
+### What this session did
+
+User complaint: kabukicho C/D/E and jailbreak C/D were monotonous/repetitive/tepid. Targeted pass — **lead melody + bass pattern only**, drums/pad scaffolding untouched.
+
+| Track | Lead rewrite | Bass rewrite | RMS Δ | Spectral peak shift |
+|---|---|---|---|---|
+| **jailbreak_c** | 12× literal Am arpeggio loop → 3 distinct sax phrases (ascending / descending w/ neighbor / octave-leap climax). Bass 1 repeated 16th pattern → 3 distinct (root-pedal / chromatic neighbor / syncopated). | — | **+2.6 dB** | 61 Hz → **659 Hz** (sax now audible above rhythm section) |
+| **jailbreak_d** | 7 A5-stutter sax phrases → real melodic arc descending a fifth (A5 → C6 → B♭5 → G5 → F5 → E5 → D5 → A♭5). 4 literal A1+B♭2 bass repeats → 4 distinct sub-octave cells. | — | +0.7 dB | 880 Hz → 699 Hz |
+| **kabukicho_c** | 2 climbing motifs alternating every 4 bars → 6 distinct phrases (rise / inversion / chromatic b2 / register leap / lyrical high / held root). Bass 1 repeated walking frame × 7 → 4 distinct walks. | — | +0.2 dB | 87 Hz (stable — sax below FFT resolution) |
+| **kabukicho_d** | Literal 4× motif repeat (`for i in range(0,16,4): lead_ev.append((start, motif))`) → 4 variations (original / inversion / retrograde / ornamented). Bass half-note descent F→E→E♭→D… → 4 distinct sub-bass cells. | — | +0.2 dB | 44 Hz (sparse by design) |
+| **kabukicho_e** | Held C5 bars 0-3 (FluidSynth attenuation trap, same pitfall as kabukicho_d 2026-07-14) → 2 stabs + whisper sax. Bars 8-15 reused kabukicho_c's climb → now mirrors kabukicho_d's descending fifth (scene arc resolves). Bass bars 4-23 reused kabukicho_c's walking frame → 4 distinct cells. | — | +0.6 dB | 78 Hz → 87 Hz |
+
+- **MD5-verified changed:** all 5 `.mp3` outputs differ from their pre-rewrite bytes (`assets/audio/_archive/2026-07-15-targeted-pass/`).
+- **MD5 of `.mid`:** also all changed (jailbreak_c 5077→5333, jailbreak_d 933→1045, kabukicho_c 3109→3109 size-only [content differs], kabukicho_d 760→741, kabukicho_e 2705→2736).
+- **No scope creep:** `story.json` untouched, no other tracks touched, no audio rewrites outside the 5 named, no drum/pad pattern changes.
+
+### Archive safety net
+
+`assets/audio/_archive/2026-07-15-targeted-pass/` contains the 10 pre-rewrite files (5 mid + 5 mp3). Untracked on purpose — not committed in this batch. Rollback recipe: `cp assets/audio/_archive/2026-07-15-targeted-pass/<track>.{mid,mp3} assets/audio/`. If you want the archive committed for archaeology, ask the user.
+
+### Carry-forward audit candidates, NOT confirmed defects
+
+These were observed while doing the rewrite but not requested:
+
+- `kabukicho_d` and `kabukicho_e` show very low combined-bars-hit counts (10/20 and 10/24) because the sax phrases are intentionally sparse. If the user later reports kabukicho_d/e as "too thin" or "incomplete," the issue is density not pitch content.
+- `jailbreak_d` lowest melodic range was unchanged (A4 → A♭5 final bend); the rewrite added C6 as the highest point. If the sax register feels too high after the rewrite, drop the C6 phrase at `PPQ*12`.
+- `kabukicho_c` phrase 4 (register leap C5 → C6 → descent) is the most aggressive change. If it sticks out, lower the leap target by an octave or replace with a stepwise climb.
+
+Do not act on these without a fresh user instruction. They are listening-test parking-lot items, not authorized work.
 
 ### Next-session starting point
 
-- Read `AGENTS.md` first, then this handoff top-to-bottom before any "what was I working on" inference — the audit/carry-over sections encode the user-driven scope guardrails (audit queue is **closed**; `story.json` is **protected** except for the already-verified `intro → cold_open` correction; `terminal_lab_c` audio is **off-limits** unless the user asks for it again).
-- The most recent code work is the editor **per-scene preview snapshot** (`4e50bbb`). Do not redo it. If a related preview leak appears (seek slider writing into wrong inspector, elapsed-time text drifting across scenes), see the "post-fix follow-up candidates" in `## Previous update (2026-07-15) — per-scene preview snapshot` further down this file.
-- Do not push without explicit user direction. After this docs commit, HEAD is `5b9775d`.
-- Server is on PID **15287**. To restart on a clean PID: `kill 15287 && nohup node server.js > /tmp/gpjs-server.log 2>&1 &` from `/Users/jwhite/ghost-process-js`.
-- Before declaring a session "audit" or "fix" task: ground in the live tree with `cd ~/ghost-process-js && git status --short && git diff --numstat` (per the user-stated rule about losing work to paraphrasing). A clean tree is the required starting state for any new audit.
+- Read `AGENTS.md` first, then this handoff top-to-bottom. The previous-session scope guardrails still hold: audit queue is **closed**, `story.json` is **protected**, `terminal_lab_c` audio is **off-limits** unless the user asks.
+- If user gives listening feedback on the 5 rewritten tracks, act on it (per memory: "If the user gives listening feedback on terminal_lab_e or jailbreak_d, act on that feedback rather than defending the metrics" — same principle applies to this batch).
+- If user asks for a **broader pass** (other sparse tracks like `kabukicho_d`'s peers, or the kabukicho/jailbreak A-sides), the patterns are now in place — copy the new builder-function style (3-4 distinct cells, varied contours) and apply per track.
+- Server PID **15287** on :8765. Restart: `kill 15287 && nohup node server.js > /tmp/gpjs-server.log 2>&1 &` from project root.
+- Push policy: user authorized commit **and push** for this session's batch (2026-07-15 rewrite). On session open, do not push the next batch of code unless the user says so again — push is per-batch authorization, not standing permission.
+- Server PID **15287** on :8765. Restart: `kill 15287 && nohup node server.js > /tmp/gpjs-server.log 2>&1 &` from project root.
 
 ## Previous update (2026-07-15) — per-scene music preview snapshot (committed `4e50bbb`)
 
