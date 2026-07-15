@@ -1584,6 +1584,7 @@ async function makeMusicEditor(sc, lifecycle = activeInspectorLifecycle) {
     b.onclick = () => {
       const cur = detectMode();
       if (cur === mode) return;
+      QueuePlayer.stop();
       // Convert: single → medley (wrap in array), medley → single
       // (collapse to first track), empty → leave empty until picker
       // changes.
@@ -1626,16 +1627,21 @@ async function makeMusicEditor(sc, lifecycle = activeInspectorLifecycle) {
     ? sc.music
     : (sc.music && typeof sc.music === 'object' && !Array.isArray(sc.music) ? sc.music.file : '');
   singleSel.value = initSingle || '';
-  singleSel.onchange = () => { sc.music = singleSel.value || null; markDirty(); };
+  singleSel.onchange = () => {
+    if (QueuePlayer._state().index === -1) QueuePlayer.stop();
+    sc.music = singleSel.value || null;
+    markDirty();
+  };
   singleWrap.appendChild(singleSel);
   // Single-track preview button — lets the user audition the chosen
   // file without entering medley mode.
   const singlePlay = document.createElement('button');
   singlePlay.textContent = '▶ Play';
+  singlePlay.ariaLabel = 'play preview';
   singlePlay.style.cssText = 'margin-top:4px;font-size:11px;padding:3px 10px';
   singlePlay.onclick = () => {
     if (!singleSel.value) return;
-    QueuePlayer.playOne('assets/audio/' + singleSel.value);
+    QueuePlayer.toggleOne('assets/audio/' + singleSel.value);
   };
   singleWrap.appendChild(singlePlay);
 
@@ -1674,6 +1680,7 @@ async function makeMusicEditor(sc, lifecycle = activeInspectorLifecycle) {
   addBtn.textContent = '+ Add';
   addBtn.onclick = () => {
     if (!addSel.value) return;
+    if (QueuePlayer._state().mode === 'queue') QueuePlayer.stop();
     const tracks = getMedley();
     tracks.push({ file: addSel.value });
     writeMedley(tracks);
@@ -1682,11 +1689,6 @@ async function makeMusicEditor(sc, lifecycle = activeInspectorLifecycle) {
   };
   addRow.appendChild(addBtn);
   medleyWrap.appendChild(addRow);
-
-  const status = document.createElement('div');
-  status.className = 'medley-status';
-  status.innerHTML = '<span>idle</span>';
-  medleyWrap.appendChild(status);
 
   function getMedley() {
     if (Array.isArray(sc.music)) return sc.music;
@@ -1719,7 +1721,11 @@ async function makeMusicEditor(sc, lifecycle = activeInspectorLifecycle) {
         const o = document.createElement('option'); o.value = f; o.textContent = f; sel.appendChild(o);
       }
       sel.value = t.file || '';
-      sel.onchange = () => { t.file = sel.value; markDirty(); };
+      sel.onchange = () => {
+        if (QueuePlayer._state().index === i) QueuePlayer.stop();
+        t.file = sel.value;
+        markDirty();
+      };
       li.appendChild(sel);
 
       const fadeAt = document.createElement('input');
@@ -1751,17 +1757,17 @@ async function makeMusicEditor(sc, lifecycle = activeInspectorLifecycle) {
 
       const playBtn = document.createElement('button');
       playBtn.className = 'icon-btn play'; playBtn.textContent = '▶'; playBtn.title = 'play this track';
+      playBtn.ariaLabel = 'play this track';
       // Pass the row index so the status subscriber can highlight this row
-      // even when playing a single track (mode='one') — previously the
-      // highlight was only applied in mode='queue'.
-      playBtn.onclick = () => QueuePlayer.playOne('assets/audio/' + t.file, { medleyIndex: i });
+      // even when playing a single track (mode='one'). Clicking the same
+      // row again pauses/resumes it instead of creating another Audio.
+      playBtn.onclick = () => QueuePlayer.toggleOne('assets/audio/' + t.file, { medleyIndex: i });
       li.appendChild(playBtn);
 
-      // We need a 7th cell for delete — adjust the grid template via inline style.
-      li.style.gridTemplateColumns = '22px 1fr 56px 22px 22px 22px 22px';
       const del = document.createElement('button');
       del.className = 'icon-btn danger'; del.textContent = '✕'; del.title = 'remove';
       del.onclick = () => {
+        if (QueuePlayer._state().index >= 0) QueuePlayer.stop();
         tracks.splice(i, 1);
         writeMedley(tracks);
         renderList();
@@ -1774,6 +1780,7 @@ async function makeMusicEditor(sc, lifecycle = activeInspectorLifecycle) {
 
   function moveTrack(from, to) {
     if (to < 0 || to >= getMedley().length) return;
+    if (QueuePlayer._state().index >= 0) QueuePlayer.stop();
     const tracks = getMedley();
     const [t] = tracks.splice(from, 1);
     tracks.splice(to, 0, t);
@@ -1803,32 +1810,89 @@ async function makeMusicEditor(sc, lifecycle = activeInspectorLifecycle) {
   wrap.appendChild(singleWrap);
   wrap.appendChild(medleyWrap);
 
+  // Shared preview status and seek controls. Keeping these outside the
+  // single/medley wrappers means the same controls work for both shapes.
+  const status = document.createElement('div');
+  status.className = 'medley-status';
+  status.innerHTML = '<span>idle</span>';
+  wrap.appendChild(status);
+
+  const seekWrap = document.createElement('div');
+  seekWrap.className = 'medley-seek';
+  const seek = document.createElement('input');
+  seek.type = 'range';
+  seek.min = '0';
+  seek.max = '0';
+  seek.step = '0.1';
+  seek.value = '0';
+  seek.disabled = true;
+  seek.title = 'seek preview';
+  seek.ariaLabel = 'preview position';
+  const seekTime = document.createElement('span');
+  seekTime.className = 'seek-time';
+  seekTime.textContent = '0:00 / 0:00';
+  seek.oninput = () => QueuePlayer.seek(parseFloat(seek.value));
+  seekWrap.appendChild(seek);
+  seekWrap.appendChild(seekTime);
+  wrap.appendChild(seekWrap);
+
+  function formatTime(seconds) {
+    const value = Number.isFinite(seconds) && seconds >= 0 ? Math.floor(seconds) : 0;
+    const minutes = Math.floor(value / 60);
+    const secs = String(value % 60).padStart(2, '0');
+    return `${minutes}:${secs}`;
+  }
+
   // Subscribe to QueuePlayer status changes to highlight the
-  // currently-playing row + show progress text. The inspector owns this
+  // currently-playing row, update play/pause labels, and show progress text.
+  // The inspector owns this
   // subscription and disposes it before replacing the panel on a rerender.
-  const unsubscribeStatus = QueuePlayer.onStatus((s) => {
+  const syncPlayerStatus = (s) => {
     // Update row highlights. Both queue mode (s.index = current queue index)
     // and one mode (s.index = the row's medleyIndex if known, else -1) light
     // up the matching row. index === -1 means no row should highlight (e.g.
     // single-track preview button).
     [...list.children].forEach((row, i) => {
-      row.classList.toggle('playing', s.index === i);
+      const active = s.mode !== 'idle' && s.index === i;
+      row.classList.toggle('playing', active);
+      const rowPlay = row.children[5];
+      if (rowPlay) {
+        const isPlaying = active && !s.paused;
+        rowPlay.textContent = isPlaying ? 'Ⅱ' : '▶';
+        rowPlay.title = isPlaying ? 'pause this track' : 'play this track';
+        rowPlay.ariaLabel = rowPlay.title;
+      }
     });
+    const singleActive = s.mode === 'one' && s.index === -1 && s.file === singleSel.value;
+    singlePlay.textContent = singleActive && !s.paused ? 'Ⅱ Pause' : '▶ Play';
+    singlePlay.title = singleActive && !s.paused ? 'pause preview' : 'play preview';
+    singlePlay.ariaLabel = singlePlay.title;
+
+    const duration = Number.isFinite(s.duration) && s.duration > 0 ? s.duration : 0;
+    const currentTime = Number.isFinite(s.currentTime) && s.currentTime >= 0 ? s.currentTime : 0;
+    seek.disabled = s.mode === 'idle' || duration <= 0;
+    seek.max = String(duration);
+    seek.value = String(Math.min(currentTime, duration || currentTime));
+    seekTime.textContent = `${formatTime(currentTime)} / ${formatTime(duration)}`;
     if (s.mode === 'idle') {
       status.classList.remove('now-playing');
       status.innerHTML = '<span>idle</span>';
     } else if (s.mode === 'one') {
       status.classList.add('now-playing');
-      status.innerHTML = `<span>▶</span><span class="progress">${escapeHtml(s.file)}</span>`;
+      status.innerHTML = `<span>${s.paused ? '▶' : 'Ⅱ'}</span><span class="progress">${escapeHtml(s.file)}</span>`;
     } else if (s.mode === 'queue') {
       status.classList.add('now-playing');
       const file = getMedley()[s.index]?.file || '?';
-      status.innerHTML = `<span>▶</span><span class="progress">${s.index + 1}/${getMedley().length} — ${escapeHtml(file)}</span>`;
+      status.innerHTML = `<span>${s.paused ? '▶' : 'Ⅱ'}</span><span class="progress">${s.index + 1}/${getMedley().length} — ${escapeHtml(file)}</span>`;
     }
-  });
+  };
+  const unsubscribeStatus = QueuePlayer.onStatus(syncPlayerStatus);
   retainInspectorCleanup(lifecycle, unsubscribeStatus);
 
   render();
+  // onStatus fires before the initial list is built. Re-apply the current
+  // snapshot so a paused preview survives an inspector rerender accurately.
+  syncPlayerStatus(QueuePlayer._state());
   return wrap;
 }
 
@@ -1840,9 +1904,15 @@ async function makeMusicEditor(sc, lifecycle = activeInspectorLifecycle) {
 // story.json — not rehearse the crossfade timing.
 const QueuePlayer = (() => {
   const listeners = new Set();
-  let state = { mode: 'idle', index: -1, file: null };
+  const idleState = () => ({
+    mode: 'idle', index: -1, file: null,
+    paused: true, currentTime: 0, duration: 0,
+  });
+  let state = idleState();
   let currentAudio = null;
+  let currentSource = null;
   let onEndedNext = null;
+  let playbackToken = 0;
 
   function emit() {
     for (const fn of listeners) fn(state);
@@ -1851,69 +1921,138 @@ const QueuePlayer = (() => {
     state = s;
     emit();
   }
+  function progressState(mode, index, file, audio) {
+    const currentTime = Number(audio?.currentTime);
+    const duration = Number(audio?.duration);
+    return {
+      mode,
+      index,
+      file,
+      paused: audio ? Boolean(audio.paused) : true,
+      currentTime: Number.isFinite(currentTime) && currentTime >= 0 ? currentTime : 0,
+      duration: Number.isFinite(duration) && duration >= 0 ? duration : 0,
+    };
+  }
+  function emitProgress(audio) {
+    if (currentAudio !== audio) return;
+    setState(progressState(state.mode, state.index, state.file, audio));
+  }
+  function bindProgress(audio, onEnded) {
+    audio.ontimeupdate = () => emitProgress(audio);
+    audio.onloadedmetadata = () => emitProgress(audio);
+    audio.ondurationchange = () => emitProgress(audio);
+    audio.onplay = () => emitProgress(audio);
+    audio.onpause = () => emitProgress(audio);
+    audio.onended = onEnded;
+  }
+  function playAudio(audio, onError) {
+    const result = audio.play();
+    if (result && typeof result.catch === 'function') result.catch(onError);
+    return result;
+  }
   function stopInternal() {
+    playbackToken += 1;
     if (onEndedNext) { clearTimeout(onEndedNext); onEndedNext = null; }
     if (currentAudio) {
-      try { currentAudio.pause(); } catch (e) {}
+      const audio = currentAudio;
       currentAudio = null;
+      currentSource = null;
+      audio.onended = null;
+      audio.ontimeupdate = null;
+      audio.onloadedmetadata = null;
+      audio.ondurationchange = null;
+      audio.onplay = null;
+      audio.onpause = null;
+      try { audio.pause(); } catch (e) {}
     }
   }
   return {
     onStatus(fn) { listeners.add(fn); fn(state); return () => listeners.delete(fn); },
     playOne(src, opts = {}) {
       stopInternal();
+      const token = ++playbackToken;
       const a = new Audio(src);
       currentAudio = a;
+      currentSource = src;
+      const index = typeof opts.medleyIndex === 'number' ? opts.medleyIndex : -1;
+      const file = src.split('/').pop();
       // medleyIndex (optional): the row index in the current medley that
       // owns this file. Reported to status subscribers so the row can be
       // highlighted even when we're not in queue mode. -1 = no row (e.g.
       // the single-track preview button).
-      setState({
-        mode: 'one',
-        index: typeof opts.medleyIndex === 'number' ? opts.medleyIndex : -1,
-        file: src.split('/').pop()
+      setState(progressState('one', index, file, a));
+      bindProgress(a, () => {
+        if (currentAudio === a && token === playbackToken) {
+          currentAudio = null;
+          currentSource = null;
+          setState(idleState());
+        }
       });
-      a.play().catch((e) => {
+      playAudio(a, (e) => {
         // Browser blocked autoplay — usually means the user hasn't
         // interacted with the editor yet. The play button click
         // counts as the gesture though; this catch is for edge cases.
         console.warn('audio play() rejected:', e);
+        emitProgress(a);
       });
-      a.onended = () => {
-        if (currentAudio === a) {
-          currentAudio = null;
-          setState({ mode: 'idle', index: -1, file: null });
+    },
+    toggleOne(src, opts = {}) {
+      const index = typeof opts.medleyIndex === 'number' ? opts.medleyIndex : -1;
+      if (currentAudio && currentSource === src && state.mode !== 'idle' && state.index === index) {
+        if (currentAudio.paused) {
+          playAudio(currentAudio, (e) => console.warn('audio play() rejected:', e));
+        } else {
+          currentAudio.pause();
         }
-      };
+        emitProgress(currentAudio);
+        return;
+      }
+      this.playOne(src, opts);
+    },
+    seek(seconds) {
+      if (!currentAudio || !Number.isFinite(seconds)) return;
+      const duration = Number(currentAudio.duration);
+      const max = Number.isFinite(duration) && duration >= 0 ? duration : Infinity;
+      const target = Math.max(0, Math.min(seconds, max));
+      try { currentAudio.currentTime = target; } catch (e) {}
+      emitProgress(currentAudio);
     },
     playQueue(tracks) {
       stopInternal();
       if (!tracks || tracks.length === 0) return;
+      const token = ++playbackToken;
       const playIndex = (i) => {
+        if (token !== playbackToken) return;
         if (i >= tracks.length) {
           currentAudio = null;
-          setState({ mode: 'idle', index: -1, file: null });
+          currentSource = null;
+          setState(idleState());
           return;
         }
         const t = tracks[i];
-        const a = new Audio('assets/audio/' + t.file);
+        const src = 'assets/audio/' + t.file;
+        const a = new Audio(src);
         currentAudio = a;
-        setState({ mode: 'queue', index: i, file: t.file });
-        a.play().catch((e) => {
+        currentSource = src;
+        setState(progressState('queue', i, t.file, a));
+        bindProgress(a, () => {
+          if (currentAudio === a && token === playbackToken) {
+            currentAudio = null;
+            currentSource = null;
+            playIndex(i + 1);
+          }
+        });
+        playAudio(a, (e) => {
           console.warn('audio play() rejected:', e);
           // Skip to next track so we don't silently hang the queue.
           onEndedNext = setTimeout(() => playIndex(i + 1), 200);
         });
-        a.onended = () => {
-          if (currentAudio === a) currentAudio = null;
-          playIndex(i + 1);
-        };
       };
       playIndex(0);
     },
     stop() {
       stopInternal();
-      setState({ mode: 'idle', index: -1, file: null });
+      setState(idleState());
     },
     _state() { return state; },
   };
