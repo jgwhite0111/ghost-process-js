@@ -1000,54 +1000,107 @@ SCENES_B["jailbreak_c"] = {
 }
 
 def _build_jailbreak_c_patterns():
-    """Tempo push climax: 16th-note bass, tom-driven kit, lead screams."""
+    """Tempo push climax: 16th-note bass, tom-driven kit, lead screams.
+
+    2026-07-15 targeted rewrite: lead was a literal every-2-bars Am
+    arpeggio loop (same 4 notes 12x), bass was the same 8-note 16th
+    pattern x12. Replaced with 3 distinct lead phrases (bars 0-7,
+    8-15, 16-23) and 3 distinct bass patterns. Each phrase has a
+    different melodic contour: ascending arpeggio, descending with
+    neighbor-tone return, and octave leap + held descent.
+    """
     cfg = SCENES_B["jailbreak_c"]
     bar = PPQ * BEATS_PER_BAR
     SIXTEENTH = PPQ // 4
     EIGHTH = PPQ // 2
+    QUARTER = PPQ
     bass_ev = []
     lead_ev = []
     drum_ev = []
-    # Bass: 16th-note pulse on A, climbs in the second half
-    bass_ev.append((0, [
-        (N(9,1), SIXTEENTH, 0), (N(9,2), SIXTEENTH, 0),
-        (N(9,1), SIXTEENTH, 0), (N(0,2), SIXTEENTH, 0),
-        (N(9,1), SIXTEENTH, 0), (N(9,2), SIXTEENTH, 0),
-        (N(9,1), SIXTEENTH, 0), (N(4,2), SIXTEENTH, 0),
-    ] * 12))   # bars 0-11
-    bass_ev.append((PPQ*48, [
-        (N(9,1), SIXTEENTH, 0), (N(9,2), SIXTEENTH, 0),
-        (N(9,1), SIXTEENTH, 0), (N(0,2), SIXTEENTH, 0),
-        (N(4,2), SIXTEENTH, 0), (N(9,2), SIXTEENTH, 0),
-        (N(4,2), SIXTEENTH, 0), (N(7,2), SIXTEENTH, 0),
-    ] * 12))   # bars 12-23
+    # ---- Bass: 3 distinct 16th-note patterns ----
+    # Pattern A (bars 0-7): root + 5th pedal with octave pulse
+    bass_A = []
+    for _ in range(8):
+        bass_A += [
+            (N(9,1), SIXTEENTH, 0), (N(9,2), SIXTEENTH, 0),
+            (N(9,1), SIXTEENTH, 0), (N(4,2), SIXTEENTH, 0),
+            (N(9,1), SIXTEENTH, 0), (N(9,2), SIXTEENTH, 0),
+            (N(9,1), SIXTEENTH, 0), (N(0,2), SIXTEENTH, 0),
+        ]
+    bass_ev.append((0, bass_A))
+    # Pattern B (bars 8-15): chromatic approach with neighbor tones
+    bass_B = []
+    for _ in range(8):
+        bass_B += [
+            (N(9,1), SIXTEENTH, 0), (N(9,2), SIXTEENTH, 0),
+            (N(8,1), SIXTEENTH, 0), (N(9,1), SIXTEENTH, 0),
+            (N(9,1), SIXTEENTH, 0), (N(4,2), SIXTEENTH, 0),
+            (N(2,2), SIXTEENTH, 0), (N(4,2), SIXTEENTH, 0),
+        ]
+    bass_ev.append((PPQ*32, bass_B))
+    # Pattern C (bars 16-23): syncopated, rests on the 1 of every 2nd bar
+    bass_C = []
+    for i in range(8):
+        if i % 2 == 1:
+            # Bar starts with a rest (one 8th), then drives
+            bass_C += [
+                (None, EIGHTH, 0),
+                (N(9,2), SIXTEENTH, 0), (N(9,1), SIXTEENTH, 0),
+                (N(4,2), SIXTEENTH, 0), (N(9,2), SIXTEENTH, 0),
+                (N(9,1), SIXTEENTH, 0), (N(4,2), SIXTEENTH, 0),
+                (N(0,2), SIXTEENTH, 0), (N(4,2), SIXTEENTH, 0),
+            ]
+        else:
+            bass_C += [
+                (N(9,1), SIXTEENTH, 0), (N(9,2), SIXTEENTH, 0),
+                (N(9,1), SIXTEENTH, 0), (N(4,2), SIXTEENTH, 0),
+                (N(9,1), SIXTEENTH, 0), (N(9,2), SIXTEENTH, 0),
+                (N(4,2), SIXTEENTH, 0), (N(7,2), SIXTEENTH, 0),
+            ]
+    bass_ev.append((PPQ*64, bass_C))
     cfg["bass_pattern"] = bass_ev
-    # Lead: screaming high A minor arpeggios
-    for b in range(0, 24, 2):
+    # ---- Lead: 3 distinct phrases ----
+    # Phrase 1 (bars 0-7): ascending A minor arpeggio with chromatic pickup
+    for b in range(0, 8, 2):
         t = b * bar
-        motif = [N(9,4), N(0,5), N(4,5), N(0,5)]      # Am arpeggio
-        for i, n in enumerate(motif):
-            vel = min(20, 5 + i)
-            lead_ev.append((t + i * EIGHTH, [(n, EIGHTH, vel)]))
+        # Am arpeggio C5-A4-C5-E5 with eighth-rhythm and held descent
+        lead_ev.append((t, [
+            (N(8,4), EIGHTH, 0), (N(9,4), EIGHTH, 5),
+            (N(0,5), EIGHTH, 8), (N(4,5), EIGHTH, 5),
+            (N(0,5), EIGHTH, 0), (N(9,4), QUARTER, -3),
+        ]))
+    # Phrase 2 (bars 8-15): descending with neighbor-tone return + octave leap
+    for b in range(8, 16, 2):
+        t = b * bar
+        # Start high (E5), leap down to A4, climb back with neighbors
+        lead_ev.append((t, [
+            (N(4,5), EIGHTH, 5), (N(2,5), EIGHTH, 3),
+            (N(0,5), EIGHTH, 0), (N(9,4), EIGHTH, -3),
+            (N(9,4), EIGHTH, 0), (N(0,5), QUARTER, 3),
+            (N(4,5), QUARTER, 5),
+        ]))
+    # Phrase 3 (bars 16-23): octave leap + held descent (climax)
+    for b in range(16, 24, 2):
+        t = b * bar
+        # A4 (low) → A5 (octave leap up) → stepwise descent
+        lead_ev.append((t, [
+            (N(9,4), EIGHTH, 0),
+            (N(9,5), QUARTER, 10),
+            (N(7,5), EIGHTH, 5), (N(4,5), EIGHTH, 3),
+            (N(2,5), EIGHTH, 0), (N(0,5), EIGHTH, -3),
+            (N(9,4), QUARTER, 0),
+        ]))
     cfg["lead_pattern"] = lead_ev
     # Drums: 4-on-floor + tom fills every 4 bars
-    # 2026-07-14 bug: previous version used vdelta=0 which produced
-    # velocity 0 (silent note_on) for KICK/SNARE/TOM — only HAT
-    # played (vdelta=-15 + base 128 = 113). Now using direct absolute
-    # velocities like chase does.
     KICK = 36; SNARE = 38; TOM_HI = 50; TOM_MID = 47; TOM_LO = 45; HAT = 42; RIDE = 51
     for b in range(24):
         t = b * bar
-        # Kick on every beat
         for beat in range(4):
             drum_ev.append((t + beat * PPQ, KICK, 100))
-        # Snare on 2 and 4
         drum_ev.append((t + PPQ, SNARE, 95))
         drum_ev.append((t + PPQ*3, SNARE, 95))
-        # Hats on every 8th
         for e in range(8):
             drum_ev.append((t + e * EIGHTH, HAT, 80))
-        # Tom fill at end of bar (last 2 beats) every 4 bars
         if b % 4 == 3:
             drum_ev.append((t + PPQ*2, TOM_HI, 90))
             drum_ev.append((t + PPQ*2 + EIGHTH, TOM_MID, 85))
@@ -1085,61 +1138,73 @@ SCENES_B["jailbreak_d"] = {
 def _build_jailbreak_d_patterns():
     """Caught glimpse: heartbeat kit, sub-octave bass drone, sparse lead motif.
 
-    2026-07-14 pitfall 41: previous version held A5 for 60 beats straight.
-    FluidSynth attenuates continuous held notes to silence (~-65dB by bar 5).
-    Replaced with a sparse saxophone-like breath motif: short A5 phrases at
-    irregular bars (1, 4, 6, 9, 12) with eighth-rest gaps that keep each note
-    short enough to remain audible. The "caught glimpse" feel is preserved —
-    the listener hears the figure disappearing and reappearing, the way a
-    distant voice carries through a wall and then disappears."""
+    2026-07-15 targeted rewrite: lead was 7 sparse phrases on A5 with
+    tiny ornaments (basically one pitch). Replaced with a real melodic
+    arc: A5 → C6 → Bb5 → G5 → F5 (descending fifth across the loop) —
+    gives the breath a direction instead of a stutter. Bass replaced
+    its 4 literal A1+Bb2 repeats with 4 distinct sub-octave cells that
+    vary the rhythm and add C2/G1 movement, so the dread texture moves
+    instead of pulsing.
+    """
     cfg = SCENES_B["jailbreak_d"]
     bar = PPQ * BEATS_PER_BAR
     EIGHTH = PPQ // 2
     QUARTER = PPQ
+    HALF = PPQ * 2
     bass_ev = []
     lead_ev = []
     drum_ev = []
-    # Bass: A1 drone broken into 4-bar cells with 1-bar rests between, so
-    # the drone doesn't attenuate into silence. A1 + bb3 ghost every other
-    # bar instead of pure A1 for entire 64 beats.
+    # ---- Bass: 4 distinct sub-octave cells, not 4 literal copies ----
     bass_pattern = [
-        (0, [(N(9,1), PPQ*8, 0), (N(2,2), EIGHTH, -10)]),      # bars 0-1: A1 + Bb2 ghost
-        (PPQ*12, [(None, PPQ*4, 0)]),                            # bars 3: rest
-        (PPQ*16, [(N(9,1), PPQ*8, 0), (N(2,2), EIGHTH, -10)]),  # bars 4-5: A1 + Bb2
-        (PPQ*28, [(None, PPQ*4, 0)]),                            # bars 7: rest
-        (PPQ*32, [(N(9,1), PPQ*8, 0), (N(2,2), EIGHTH, -10)]),  # bars 8-9: A1 + Bb2
-        (PPQ*44, [(None, PPQ*4, 0)]),                            # bars 11: rest
-        (PPQ*48, [(N(9,1), PPQ*8, 0), (N(2,2), EIGHTH, -10)]),  # bars 12-13: A1 + Bb2
-        (PPQ*60, [(N(9,1), PPQ*4, 0)]),                          # bars 15: A1 (sets up the bend)
+        # Cell 1 (bars 0-3): A1 drone + Bb2 ghost on beat 3
+        (0, [(N(9,1), PPQ*12, 0), (N(2,2), EIGHTH, -10)]),
+        # Cell 2 (bars 4-7): A1 + descending ghost (A1 → G1 → A1)
+        (PPQ*16, [
+            (N(9,1), PPQ*4, 0),
+            (N(7,1), PPQ*2, -5), (N(9,1), PPQ*2, 0),
+            (N(7,1), PPQ*2, -5), (N(9,1), PPQ*2, -5),
+            (None, PPQ*2, 0),
+            (N(9,1), PPQ*2, 0),
+        ]),
+        # Cell 3 (bars 8-11): A1 + C2 (relative minor third lift)
+        (PPQ*32, [
+            (N(9,1), PPQ*8, 0),
+            (N(0,2), PPQ*4, -3),
+            (N(0,2), EIGHTH, -10), (N(9,1), PPQ*4, 0),
+        ]),
+        # Cell 4 (bars 12-15): A1 + E1 (descending fifth lift) → bend setup
+        (PPQ*48, [
+            (N(9,1), PPQ*4, 0),
+            (N(4,1), PPQ*4, -3),
+            (N(9,1), PPQ*4, 0),
+            (N(8,1), PPQ*2, -3), (N(9,1), PPQ*2, -8),
+        ]),
     ]
     cfg["bass_pattern"] = bass_pattern
-    # Lead: 5 sparse 2-beat phrases with random-feeling placement.
-    # Each phrase is short (max 2 beats) so FluidSynth keeps each note
-    # audible. Replaces the 60-beat held note that attenuated to silence.
+    # ---- Lead: real melodic arc (descending fifth), sparse placement ----
+    # Each phrase stays short (≤ 2 beats) so FluidSynth's Tenor Sax
+    # keeps each note audible (cf. pitfall from prior session).
     lead_phrases = [
-        (PPQ*4,   [(N(9,5), QUARTER, 0), (None, EIGHTH, 0), (N(9,5), EIGHTH, -5)]),    # bar 1: A5 stutter
-        (PPQ*16,  [(N(9,5), EIGHTH, 0), (None, QUARTER, 0), (N(11,5), EIGHTH, 0)]),     # bar 4: A5 + B5
-        (PPQ*24,  [(N(9,5), QUARTER, 0)]),                                              # bar 6: A5 alone
-        (PPQ*36,  [(N(9,5), EIGHTH, 0), (N(11,5), EIGHTH, 0)]),                          # bar 9: A5 + B5
-        (PPQ*48,  [(N(9,5), QUARTER, 0), (N(7,5), EIGHTH, -3)]),                          # bar 12: A5 + G5
-        (PPQ*56,  [(N(9,5), EIGHTH, 0)]),                                                # bar 14: A5 final breath
+        (PPQ*4,   [(N(9,5), QUARTER, 0), (None, EIGHTH, 0), (N(9,5), EIGHTH, -5)]),    # bar 1: A5 stutter (sets root)
+        (PPQ*12,  [(N(0,6), QUARTER, 5), (None, EIGHTH, 0), (N(0,6), EIGHTH, 0)]),     # bar 3: C6 leap up (interval of a 3rd)
+        (PPQ*20,  [(N(10,5), EIGHTH, 0), (None, QUARTER, 0), (N(10,5), EIGHTH, -3)]),  # bar 5: Bb5
+        (PPQ*28,  [(N(9,5), EIGHTH, 0), (N(7,5), QUARTER, 0), (None, EIGHTH, 0)]),     # bar 7: A5 → G5 descent
+        (PPQ*36,  [(N(7,5), EIGHTH, 0), (None, EIGHTH, 0), (N(5,5), EIGHTH, 0),
+                   (N(5,5), QUARTER, -3)]),                                          # bar 9: G5 → F5 (descent continues)
+        (PPQ*44,  [(N(5,5), QUARTER, 0), (None, EIGHTH, 0), (N(5,5), EIGHTH, -5)]),   # bar 11: F5 alone
+        (PPQ*52,  [(N(5,5), EIGHTH, 0), (N(4,5), EIGHTH, 0), (N(2,5), QUARTER, -5)]), # bar 13: F5 → E5 → D5 (descending)
         # bars 15-16: bend down a half-step (the voice catches)
-        (PPQ*60,  [(N(8,5), PPQ*4, -5)]),                                                # bar 15: Ab5 descent
+        (PPQ*60,  [(N(8,5), PPQ*4, -5)]),                                            # bar 15: Ab5 descent
     ]
     cfg["lead_pattern"] = lead_phrases
-    # Drums: heartbeat only — kick on 1, snare on 3, ghost ride
-    # 2026-07-14 bug: previous version used vdelta which produced
-    # velocity 0/negative (silent note_on) for KICK/SNARE/RIDE. Now
-    # using direct absolute velocities.
-    # "Heartbeat" feel: very quiet kit at vel 60. Lead+pad+bass carry
-    # the rest of the dread.
+    # Drums: heartbeat only — same as before (sparse kit, working as intended)
     KICK = 36; SNARE = 38; RIDE = 51
     for b in range(16):
         t = b * bar
-        drum_ev.append((t, KICK, 60))               # kick on 1
-        drum_ev.append((t + PPQ*2, SNARE, 55))        # snare on 3 (quiet)
-        drum_ev.append((t + PPQ, RIDE, 65))           # ride 2 (heartbeat ghost)
-        drum_ev.append((t + PPQ*3, RIDE, 65))         # ride 4 (heartbeat ghost)
+        drum_ev.append((t, KICK, 60))
+        drum_ev.append((t + PPQ*2, SNARE, 55))
+        drum_ev.append((t + PPQ, RIDE, 65))
+        drum_ev.append((t + PPQ*3, RIDE, 65))
     cfg["drum_pattern"] = list(drum_ev)
 _build_jailbreak_d_patterns()
 
@@ -1474,49 +1539,59 @@ SCENES_B["kabukicho_c"] = {
 }
 
 def _build_kabukicho_c_patterns():
-    """Darker: chromatic b2 on bass, sax climbs, brush ghosts."""
+    """Darker: chromatic b2 on bass, sax climbs, brush ghosts.
+
+    2026-07-15 targeted rewrite: bass used the same 8-note F-minor
+    walking frame 7 times across 24 bars. Replaced with 4 distinct
+    walking patterns (ascending arpeggio, chromatic approach, dominant
+    descent, pedal tone with neighbor). Lead climbs were also a literal
+    every-4-bars repeat of one of two motifs — replaced with 4 distinct
+    sax phrases (chromatic b2 bend, inverted descent, register leap,
+    lyrical high phrase) that don't reuse earlier contours.
+    """
     cfg = SCENES_B["kabukicho_c"]
     bar = PPQ * BEATS_PER_BAR
     EIGHTH = PPQ // 2
+    QUARTER = PPQ
     bass_ev = []
     lead_ev = []
     drum_ev = []
-    # Bass: walking with chromatic b2 approach on bar 8
-    # bars 0-3: F walking bass
+    # ---- Bass: 4 distinct walking patterns ----
+    # Walk A (bars 0-3): F arpeggio ascending
     bass_ev.append((0, [
         (N(5,1), EIGHTH, 0), (N(8,1), EIGHTH, 0),
         (N(0,2), EIGHTH, 0), (N(3,2), EIGHTH, 0),
         (N(5,2), EIGHTH, 0), (N(8,2), EIGHTH, 0),
         (N(5,2), EIGHTH, 0), (N(3,2), EIGHTH, 0),
     ]))
-    # bars 4-7: Bbm walking
+    # Walk B (bars 4-7): Bb walking with chromatic neighbor tones
     bass_ev.append((PPQ*16, [
-        (N(10,1), EIGHTH, 0), (N(1,2), EIGHTH, 0),
+        (N(10,1), EIGHTH, 0), (N(11,1), EIGHTH, -3),
+        (N(0,2), EIGHTH, 0), (N(1,2), EIGHTH, -3),
         (N(5,2), EIGHTH, 0), (N(8,2), EIGHTH, 0),
-        (N(10,2), EIGHTH, 0), (N(1,3), EIGHTH, 0),
-        (N(10,2), EIGHTH, 0), (N(8,2), EIGHTH, 0),
+        (N(5,2), EIGHTH, 0), (N(3,2), EIGHTH, 0),
     ]))
-    # bar 8: chromatic b2 approach (E natural → F)
+    # Walk C (bar 8): chromatic b2 approach (E natural → F)
     bass_ev.append((PPQ*32, [
         (N(5,1), EIGHTH, 0), (N(4,1), EIGHTH, 0),
         (N(5,2), EIGHTH, 0), (N(8,2), EIGHTH, 0),
         (N(5,2), EIGHTH, 0), (N(3,2), EIGHTH, 0),
         (N(0,2), EIGHTH, 0), (N(5,1), EIGHTH, 0),
     ]))
-    # bars 9-15: continue walking with darker color
+    # Walk D (bars 9-15): dominant descent (Bb → Ab → G → F) with pedal
     bass_ev.append((PPQ*36, [
-        (N(8,1), EIGHTH, 0), (N(0,2), EIGHTH, 0),
-        (N(3,2), EIGHTH, 0), (N(5,2), EIGHTH, 0),
-        (N(8,2), EIGHTH, 0), (N(5,2), EIGHTH, 0),
-        (N(3,2), EIGHTH, 0), (N(0,2), EIGHTH, 0),
+        (N(10,1), EIGHTH, 0), (N(8,1), EIGHTH, 0),
+        (N(7,1), EIGHTH, 0), (N(5,1), EIGHTH, 0),
+        (N(10,1), EIGHTH, 0), (N(8,2), EIGHTH, 0),
+        (N(5,2), EIGHTH, 0), (N(3,2), EIGHTH, 0),
     ]))
     bass_ev.append((PPQ*44, [
+        (N(5,1), EIGHTH, 0), (N(8,1), EIGHTH, 0),
         (N(5,2), EIGHTH, 0), (N(3,2), EIGHTH, 0),
-        (N(0,2), EIGHTH, 0), (N(3,2), EIGHTH, 0),
         (N(5,2), EIGHTH, 0), (N(8,2), EIGHTH, 0),
         (N(5,2), EIGHTH, 0), (N(3,2), EIGHTH, 0),
     ]))
-    # bars 16-23: Db walking back to F
+    # Walk E (bars 16-23): Db7 walking (dominant of F minor) back to root
     bass_ev.append((PPQ*64, [
         (N(1,1), EIGHTH, 0), (N(5,1), EIGHTH, 0),
         (N(10,1), EIGHTH, 0), (N(1,2), EIGHTH, 0),
@@ -1524,46 +1599,51 @@ def _build_kabukicho_c_patterns():
         (N(5,2), EIGHTH, 0), (N(1,2), EIGHTH, 0),
     ]))
     bass_ev.append((PPQ*72, [
-        (N(10,1), EIGHTH, 0), (N(5,2), EIGHTH, 0),
-        (N(10,2), EIGHTH, 0), (N(5,2), EIGHTH, 0),
-        (N(10,2), EIGHTH, 0), (N(8,2), EIGHTH, 0),
-        (N(5,2), EIGHTH, 0), (N(3,2), EIGHTH, 0),
+        (N(1,2), EIGHTH, 0), (N(5,2), EIGHTH, 0),
+        (N(8,2), EIGHTH, 0), (N(5,2), EIGHTH, 0),
+        (N(3,2), EIGHTH, 0), (N(0,2), EIGHTH, 0),
+        (N(5,1), EIGHTH, 0), (N(5,1), EIGHTH, 0),
     ]))
     cfg["bass_pattern"] = bass_ev
-    # Lead: sax climbs higher with bluesy bends
+    # ---- Lead: 4 distinct sax phrases (different contours) ----
+    # Phrase 1 (bars 0-3): rising arpeggio with bluesy bend on top
     lead_ev.append((0, [
         (N(5,4), EIGHTH, -5), (N(8,4), EIGHTH, -3),
         (N(0,5), EIGHTH, 0), (N(3,5), EIGHTH, 0),
-        (N(5,5), PPQ, 3),
+        (N(5,5), QUARTER, 3),
     ]))
+    # Phrase 2 (bars 4-7): inverted descent (high → low with neighbor)
     lead_ev.append((PPQ*16, [
-        (N(10,4), EIGHTH, 0), (N(1,5), EIGHTH, 3),
-        (N(5,5), EIGHTH, 5), (N(8,5), EIGHTH, 5),
-        (N(10,5), PPQ, 8),
+        (N(8,5), EIGHTH, 5), (N(7,5), EIGHTH, 3),
+        (N(5,5), EIGHTH, 0), (N(4,5), EIGHTH, -3),
+        (N(5,5), QUARTER, 0),
     ]))
-    # bar 8: chromatic b2 bend (E natural over Fm — bluesy)
+    # Phrase 3 (bar 8): chromatic b2 bend over Fm (kept as anchor moment)
     lead_ev.append((PPQ*32, [
         (N(5,5), EIGHTH, 3), (N(4,5), EIGHTH, 5),
         (N(5,5), EIGHTH, 3), (N(8,5), EIGHTH, 0),
-        (N(5,5), PPQ, 0),
+        (N(5,5), QUARTER, 0),
     ]))
+    # Phrase 4 (bars 12-15): register leap (low C5 → high C6 → descent)
     lead_ev.append((PPQ*48, [
-        (N(3,5), EIGHTH, 0), (N(5,5), EIGHTH, 3),
-        (N(8,5), EIGHTH, 5), (N(5,5), EIGHTH, 3),
-        (N(3,5), PPQ, 0),
+        (N(0,5), EIGHTH, -5), (None, EIGHTH, 0),
+        (N(0,6), EIGHTH, 8), (N(8,5), EIGHTH, 5),
+        (N(5,5), QUARTER, 0),
     ]))
-    # bars 16-23: high register descent
+    # Phrase 5 (bars 16-19): lyrical high phrase (Bb5 → Ab5 → F5)
     lead_ev.append((PPQ*64, [
-        (N(1,5), EIGHTH, 5), (N(5,5), EIGHTH, 8),
-        (N(10,5), EIGHTH, 10), (N(8,5), EIGHTH, 5),
-        (N(5,5), PPQ, 3),
+        (N(10,5), EIGHTH, 5), (N(8,5), EIGHTH, 3),
+        (N(5,5), EIGHTH, 0), (N(8,5), EIGHTH, 3),
+        (N(5,5), QUARTER, 0),
     ]))
+    # Phrase 6 (bars 20-23): held root + small ornament
     lead_ev.append((PPQ*80, [
-        (N(5,5), EIGHTH, 0), (N(8,5), EIGHTH, 0),
+        (N(5,5), QUARTER, 0),
+        (N(8,5), EIGHTH, -3), (N(5,5), QUARTER, 0),
         (N(5,5), PPQ*2, 0),
     ]))
     cfg["lead_pattern"] = lead_ev
-    # Drums: brush kit — kick on 1, brush snare sweep on 2&4, hat on 8ths
+    # Drums: brush kit — same as before (working as intended)
     KICK = 36; BRUSH = 39; HAT = 42
     for b in range(24):
         t = b * bar
@@ -1618,11 +1698,12 @@ SCENES_B["kabukicho_d"] = {
 def _build_kabukicho_d_patterns():
     """Ghost-scene sparse sax melody + breathing pad + quiet bass.
 
-    The original was a single held C5 sax for 15 bars which produced a
-    track dominated by sub-bass hum at ~-44dB with the sax at ~0.3%
-    of the spectral peak. New design: a sparse 4-bar sax motif with
-    rests, repeating with slight variation across the loop. Each
-    phrase is short (2-4 beats) so the Tenor Sax patch doesn't fade.
+    2026-07-15 targeted rewrite: the 4-bar sax motif was repeated
+    LITERALLY 4 times via `for i in range(0,16,4): lead_ev.append(...)`.
+    Replaced with 4 distinct variations: original, inversion, retrograde,
+    and ornamented. Bass was a half-note descent F → E → Eb → D → Db →
+    C held for the entire 20 bars (the "tepid" complaint) — replaced
+    with 4 distinct sub-bass cells that vary register and rhythm.
     """
     cfg = SCENES_B["kabukicho_d"]
     bar = PPQ * BEATS_PER_BAR
@@ -1631,13 +1712,13 @@ def _build_kabukicho_d_patterns():
     half = PPQ * 2
     bass_ev = []
     lead_ev = []
-    # Bar 0: F# dim7 stab (F#-A-C-Eb)
+    # Bar 0: F# dim7 stab (F#-A-C-Eb) — kept as opening marker
     lead_ev.append((0, [
         (N(6,5), quarter, 0), (N(9,5), quarter, 0),
         (N(0,6), quarter, 0), (N(3,6), quarter, 0),
     ]))
-    # Sparse sax motif: D5, F5, E5, G5 with rests between phrases.
-    motif = [
+    # Variation A (bars 1-4): original motif D5/F5/E5/G5
+    motif_A = [
         (N(2,5), half),     # D5
         (None,   eighth),   # rest
         (N(5,5), half),     # F5
@@ -1647,27 +1728,75 @@ def _build_kabukicho_d_patterns():
         (N(7,5), half),     # G5
         (None,   quarter),  # rest
     ]
-    # Four repeats across bars 1-15 (each instance starts at the bar)
-    for i in range(0, 16, 4):
-        start = bar * (i + 1)
-        lead_ev.append((start, motif))
-    # Final 4 bars (16-19): slight variation
-    final_motif = [
-        (N(2,5), half), (N(5,5), half),       # D5, F5
+    lead_ev.append((bar * 1, motif_A))
+    # Variation B (bars 5-8): inversion (G5/E5/F5/D5)
+    motif_B = [
+        (N(7,5), half),     # G5
         (None,   eighth),
-        (N(7,5), half), (N(4,5), half),       # G5, E5
+        (N(4,5), half),     # E5
+        (None,   eighth),
+        (N(5,5), half),     # F5
+        (None,   eighth),
+        (N(2,5), half),     # D5
+        (None,   quarter),
+    ]
+    lead_ev.append((bar * 5, motif_B))
+    # Variation C (bars 9-12): retrograde (G5/E5/F5/D5 → D5/F5/E5/G5 reversed)
+    # i.e. same notes in reverse order with rhythmic variation
+    motif_C = [
+        (N(7,5), quarter),
+        (N(4,5), quarter),
+        (None,   eighth),
+        (N(5,5), half),
+        (N(2,5), half),
+        (None,   eighth),
+        (N(2,5), quarter),
+    ]
+    lead_ev.append((bar * 9, motif_C))
+    # Variation D (bars 13-15): ornamented (D5 with neighbor E5/Eb5 + held F5)
+    motif_D = [
+        (N(2,5), eighth), (N(4,5), eighth), (N(2,5), eighth), (N(3,5), eighth),
+        (None,   quarter),
+        (N(5,5), PPQ * 3, 0),
+        (None,   quarter),
+    ]
+    lead_ev.append((bar * 13, motif_D))
+    # Bars 16-19 (final): lyrical descent (D5 → F5 → G5 → E5)
+    final_motif = [
+        (N(2,5), half), (N(5,5), half),
+        (None,   eighth),
+        (N(7,5), half), (N(4,5), half),
         (None,   quarter),
     ]
     lead_ev.append((bar * 16, final_motif))
     cfg["lead_pattern"] = lead_ev
-    # Bass: F2 drone bar 0, then sparse half-note descent through each
-    # 4-bar motif group. Short notes keep the sax on top.
-    bass_ev.append((0, [(N(5,1), PPQ*4, 0)]))
-    for bar_num in range(1, 16):
-        semis = [5, 4, 3, 2, 1, 0][(bar_num - 1) % 6]
-        bass_ev.append((bar * bar_num, [(N(semis, 1), half, 0)]))
-    # Bars 16-19: return to root F2 held for 4 bars
-    bass_ev.append((bar * 16, [(N(5,1), PPQ * 12, 0)]))
+    # ---- Bass: 4 distinct sub-bass cells instead of the literal descent ----
+    # Cell 1 (bar 0): F#2 stab (matches the F#dim7 opening chord)
+    bass_ev.append((0, [(N(6,1), quarter, 0), (None, PPQ*3, 0)]))
+    # Cell 2 (bars 1-4): F drone + Eb2 ghost (descending semitone)
+    bass_ev.append((bar * 1, [
+        (N(5,1), PPQ*12, 0), (N(3,1), eighth, -10),
+    ]))
+    # Cell 3 (bars 5-8): Ab2 pedal (contrasts Gdim7) + C2 ghost
+    bass_ev.append((bar * 5, [
+        (N(8,1), PPQ*8, 0),
+        (N(0,2), quarter, -8),
+        (N(8,1), PPQ*4, 0),
+    ]))
+    # Cell 4 (bars 9-12): Bb2 walk (resolves Gdim7 motion) → F2
+    bass_ev.append((bar * 9, [
+        (N(10,1), half, 0),
+        (N(8,1), half, -3),
+        (N(5,1), PPQ*6, 0),
+    ]))
+    # Cell 5 (bars 13-15): F drone + neighbor G2 (returns to root in motion)
+    bass_ev.append((bar * 13, [
+        (N(5,1), PPQ*8, 0),
+        (N(7,1), quarter, -5),
+        (N(5,1), PPQ*4, 0),
+    ]))
+    # Bars 16-19: return to root F2 (held for 4 bars — sets up loop seam)
+    bass_ev.append((bar * 16, [(N(5,1), PPQ * 16, 0)]))
     cfg["bass_pattern"] = bass_ev
 _build_kabukicho_d_patterns()
 
@@ -1701,22 +1830,34 @@ SCENES_B["kabukicho_e"] = {
 }
 
 def _build_kabukicho_e_patterns():
-    """Recovery: held C5 fades, sax returns to A's register, walking bass."""
+    """Recovery: sax returns to A's register, walking bass.
+
+    2026-07-15 targeted rewrite: lead bars 0-3 were a held C5 for 8
+    beats (FluidSynth attenuates long-held Tenor Sax to silence, same
+    pitfall as kabukicho_d 2026-07-14). Replaced with breathing sax
+    that fades gradually. Lead bars 8-15 used the same climbing shape
+    as kabukicho_c — replaced with a distinct contour (Bb5 → Ab5 →
+    G5 → F5 descent, mirroring kabukicho_d's final motif so the scene
+    arc resolves). Bass bars 4-23 reused kabukicho_c's F walking frame
+    — replaced with 4 distinct cells (F walk, Bb dominant, Ab pedal,
+    F arpeggio climax).
+    """
     cfg = SCENES_B["kabukicho_e"]
     bar = PPQ * BEATS_PER_BAR
     EIGHTH = PPQ // 2
+    QUARTER = PPQ
     bass_ev = []
     lead_ev = []
     drum_ev = []
-    # Bass: walking bass returns at bar 2
-    # bars 0-1: F drone (held from D)
+    # ---- Bass: 4 distinct cells ----
+    # bars 0-1: F drone (carries over from D's final held F2)
     bass_ev.append((0, [(N(5,1), PPQ*8, -10)]))
-    # bars 2-7: F walking
+    # bars 2-7: F walking with neighbor tones (return of the breath)
     bass_ev.append((PPQ*8, [
-        (N(5,1), EIGHTH, -5), (N(8,1), EIGHTH, -3),
-        (N(0,2), EIGHTH, 0), (N(3,2), EIGHTH, 0),
-        (N(5,2), EIGHTH, 0), (N(8,2), EIGHTH, 0),
+        (N(5,1), EIGHTH, -5), (N(6,1), EIGHTH, -8),
+        (N(8,1), EIGHTH, 0), (N(0,2), EIGHTH, 0),
         (N(5,2), EIGHTH, 0), (N(3,2), EIGHTH, 0),
+        (N(0,2), EIGHTH, -3), (N(5,2), EIGHTH, 0),
     ]))
     bass_ev.append((PPQ*16, [
         (N(5,2), EIGHTH, 0), (N(8,2), EIGHTH, 0),
@@ -1724,21 +1865,22 @@ def _build_kabukicho_e_patterns():
         (N(0,2), EIGHTH, 0), (N(3,2), EIGHTH, 0),
         (N(5,2), EIGHTH, 0), (N(3,2), EIGHTH, 0),
     ]))
-    # bars 8-15: Ab walking
+    # bars 8-15: Bb dominant walking (contrasts Ab from chord set; adds tension)
     bass_ev.append((PPQ*32, [
-        (N(8,1), EIGHTH, 0), (N(0,2), EIGHTH, 0),
-        (N(3,2), EIGHTH, 0), (N(5,2), EIGHTH, 0),
-        (N(8,2), EIGHTH, 0), (N(5,2), EIGHTH, 0),
-        (N(3,2), EIGHTH, 0), (N(0,2), EIGHTH, 0),
+        (N(10,1), EIGHTH, 0), (N(1,2), EIGHTH, 0),
+        (N(5,2), EIGHTH, 0), (N(8,2), EIGHTH, 0),
+        (N(10,2), EIGHTH, 0), (N(8,2), EIGHTH, 0),
+        (N(5,2), EIGHTH, 0), (N(3,2), EIGHTH, 0),
     ]))
     bass_ev.append((PPQ*40, [
+        (N(10,1), EIGHTH, 0), (N(8,2), EIGHTH, 0),
         (N(5,2), EIGHTH, 0), (N(3,2), EIGHTH, 0),
-        (N(0,2), EIGHTH, 0), (N(3,2), EIGHTH, 0),
         (N(5,2), EIGHTH, 0), (N(8,2), EIGHTH, 0),
         (N(5,2), EIGHTH, 0), (N(3,2), EIGHTH, 0),
     ]))
-    # bars 16-23: Fm walking (seam to A)
+    # bars 16-23: Ab pedal (anchors Ab chord) → Fm arpeggio (seam to A)
     bass_ev.append((PPQ*64, [
+        (N(8,1), PPQ*4, 0),
         (N(5,1), EIGHTH, 0), (N(8,1), EIGHTH, 0),
         (N(0,2), EIGHTH, 0), (N(3,2), EIGHTH, 0),
         (N(5,2), EIGHTH, 0), (N(8,2), EIGHTH, 0),
@@ -1751,40 +1893,52 @@ def _build_kabukicho_e_patterns():
         (N(5,2), PPQ*2, 0),
     ]))
     cfg["bass_pattern"] = bass_ev
-    # Lead: held C5 fades, sax returns at bar 4 with A's shape
-    lead_ev.append((0, [(N(0,5), PPQ*8, -5)]))           # bars 0-1: held C5 fading
-    lead_ev.append((PPQ*8, [(N(0,5), PPQ*8, -10)]))       # bars 2-3: continues fading
-    # bars 4-7: whisper sax
+    # ---- Lead: 5 distinct phrases, no held C5 (FluidSynth attenuation pitfall) ----
+    # bars 0-1: 2 short sax stabs (fades in, doesn't hold)
+    lead_ev.append((0, [
+        (N(0,5), QUARTER, -8), (None, QUARTER, 0),
+        (N(0,5), EIGHTH, -12), (None, QUARTER, 0),
+        (None, QUARTER, 0),
+    ]))
+    # bars 2-3: whisper sax, low register
+    lead_ev.append((PPQ*8, [
+        (N(5,4), EIGHTH, -15), (None, EIGHTH, 0),
+        (N(8,4), EIGHTH, -10), (None, QUARTER, 0),
+        (N(0,5), EIGHTH, -8), (None, EIGHTH, 0),
+        (N(5,4), QUARTER, -10),
+    ]))
+    # bars 4-7: ascending whisper (4-note climb)
     lead_ev.append((PPQ*16, [
         (N(5,4), EIGHTH, -10), (N(8,4), EIGHTH, -8),
         (N(0,5), EIGHTH, -5), (N(3,5), EIGHTH, -3),
-        (N(5,5), PPQ, 0),
+        (N(5,5), QUARTER, 0),
     ]))
-    # bars 8-15: climbing
+    # bars 8-15: NEW contour (descending fifth — mirrors kabukicho_d's final
+    # motif so the scene arc resolves). NOT a repeat of kabukicho_c's climb.
     lead_ev.append((PPQ*32, [
-        (N(8,4), EIGHTH, 0), (N(0,5), EIGHTH, 3),
-        (N(3,5), EIGHTH, 5), (N(5,5), EIGHTH, 5),
-        (N(8,5), PPQ, 8),
+        (N(10,5), EIGHTH, 0), (None, EIGHTH, 0),
+        (N(8,5), QUARTER, 3),
+        (N(5,5), QUARTER, 0), (None, EIGHTH, 0),
+        (N(3,5), QUARTER, 0),
     ]))
     lead_ev.append((PPQ*48, [
-        (N(5,5), EIGHTH, 5), (N(3,5), EIGHTH, 3),
-        (N(0,5), EIGHTH, 0), (N(3,5), EIGHTH, 0),
-        (N(5,5), PPQ, 0),
+        (N(5,5), EIGHTH, 3), (N(3,5), EIGHTH, 0),
+        (N(5,5), EIGHTH, 3), (N(8,5), EIGHTH, 5),
+        (N(5,5), QUARTER, 0),
     ]))
-    # bars 16-23: A's opening shape
+    # bars 16-23: A's opening shape (matches kabukicho_a for seamless loop)
     lead_ev.append((PPQ*64, [
         (N(5,4), EIGHTH, 0), (N(8,4), EIGHTH, 0),
         (N(0,5), EIGHTH, 3), (N(3,5), EIGHTH, 5),
-        (N(5,5), PPQ, 5),
+        (N(5,5), QUARTER, 5),
     ]))
     lead_ev.append((PPQ*80, [
         (N(8,5), EIGHTH, 5), (N(5,5), EIGHTH, 3),
         (N(3,5), PPQ*2, 0),
     ]))
     cfg["lead_pattern"] = lead_ev
-    # Drums: brush kit, heartbeat returns
+    # Drums: brush kit, heartbeat returns (unchanged)
     KICK = 36; BRUSH = 39; HAT = 42
-    # bars 0-3: silence (post-scare)
     for b in range(4, 24):
         t = b * bar
         drum_ev.append((t, [(KICK, EIGHTH, -5)]))
