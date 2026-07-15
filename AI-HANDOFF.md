@@ -1,3 +1,61 @@
+## Update (2026-07-15) — corridor android frame_16 splash-exit fix, pushed
+
+### Live state after this update
+
+- **Branch**: `main`. Code commit `959b3c2` landed and pushed; this docs commit sits on top. After both land, `git rev-list --left-right --count origin/main...HEAD` returns `0 0`. Verify against `git log --oneline -3` and `git status -sb` on session open.
+- **Tests**: 71/71 pass (`npm test`, 603 ms). `git diff --check` clean.
+- **Server**: Express on `:8765`, PID **69653**, HTTP **200**. New `frame_16.png` served byte-for-byte (MD5 `933f389b481c5f2fcc1feee831a114fa`).
+- **Working tree**: clean after this docs commit lands.
+
+### What this session did
+
+User reported the corridor android sprite's `frame_16` showed a hard edge where the laser splash exits the canvas; frame_15 was fine. The simplest fix (delete frame_16) was rejected because all other sprites follow a 16-frame standard, so dropping the frame would create future confusion.
+
+**Root cause.** `assets/sprites/android/corridor/raw/sprite_extractor.py:74` picked keyframes with `np.linspace(1, total - 2, 16, dtype=int)`. The 141-frame source MP4 produced picks at indices `1, 10, 19, 28, 37, 47, 56, 65, 74, 83, 93, 102, 111, 120, 129, 139` — the **last pick landed on MP4 idx 139/139**, the literal final frame, which is where the splash-exit happens. Every other pick was inside the well-formed arc.
+
+**Fix.** Patched the extractor to support a configurable end-cap so future sprites with similar tail problems don't repeat the investigation:
+
+1. Added `DEFAULT_END_OFFSET = 12` and `--end-offset N` CLI arg in `sprite_extractor.py`. New sample range is `np.linspace(1, total - 1 - end_offset, 16, dtype=int)` = MP4 idx `1..128` for the corridor clip (default 12). Frame 16 is now MP4 idx 129 (= the old frame 15, which the user confirmed was fine). Frames 1..15 each shift earlier by 1..9 source frames; the well-formed arc is preserved end-to-end.
+2. Regenerated the runtime strip + keyed intermediates via `python3 assets/sprites/android/corridor/raw/sprite_extractor.py` (aspect-preserving shrink + paste-centred install). Old strip backed up to `/private/tmp/WT_pre_corridor_install_20260715_165808/` (extractable for rollback if the new arc feels worse).
+3. `story.json` untouched. All 4 references (`corridor.android.scenes.corridor.frames`, `jailbreak.android.scenes.corridor.frames`, `terminal_lab.android.scenes.corridor.frames`, `ship_engine.android.scenes.corridor.frames`) use the glob `assets/sprites/android/corridor/frame_*.png`, so the runtime auto-resolves to the new strip.
+4. Vision-verified the new `frame_16` against the contact sheet: clean, no hard edge, no truncation, naturally extends the arc from frame_15. The orb is slightly more luminous than frame_15 — peak/climax frame, consistent with the arc.
+
+**Backup MP4 sanity check.** The user mentioned the original MP4 is at `/Users/jwhite/raw-sprite-backup/historical_46ab7347_assets_sprites_android__raw_source_i2v_clip_android_corridor.mp4`. MD5 matches the repo copy at `assets/sprites/android/corridor/raw/i2v_clip_android_corridor.mp4` (`320519ce69bd0e902a0700c166b1e2cb`) — same source.
+
+### Recipe for future sprite-tail trim
+
+```bash
+# Default (corridor): discard last 12 MP4 frames
+python3 assets/sprites/android/corridor/raw/sprite_extractor.py
+
+# Different tail length for a future sprite:
+python3 <path>/sprite_extractor.py --end-offset 8   # discard last 8
+
+# Re-install only (no re-extract) after tweaking the script:
+python3 <path>/sprite_extractor.py install-only
+```
+
+### Files changed
+
+- `assets/sprites/android/corridor/raw/sprite_extractor.py` (+34/-5)
+- `assets/sprites/android/corridor/frame_01.png` … `frame_16.png` (regenerated)
+- `assets/sprites/android/corridor/raw/transparent_sprites/frame_01.png` … `frame_15.png` (regenerated; `frame_00.png` unchanged because both old and new linspaces start at MP4 idx 1)
+
+32 files in commit `959b3c2`. Origin main = `959b3c2` after push.
+
+### Recovery paths
+
+- **Old runtime strip**: `/private/tmp/WT_pre_corridor_install_20260715_165808/` — 16 frame_NN.png pre-fix. To rollback: `cp /private/tmp/WT_pre_corridor_install_20260715_165808/frame_*.png assets/sprites/android/corridor/`.
+- **Old extractor behaviour**: `git show 959b3c2^:assets/sprites/android/corridor/raw/sprite_extractor.py` — the `linspace(1, total - 2, ...)` version.
+
+### Next-session starting point
+
+- Read `AGENTS.md` first, then this handoff top-to-bottom. Previous-session scope guardrails still hold: audit queue is **closed**, `story.json` is **protected** (corridor android edit was done entirely via regen, no `story.json` change), `terminal_lab_c` audio is **off-limits** unless the user asks.
+- The corridor android arc is now inside the well-formed region. If the user later reports the loop "feels too fast" or "too compressed", re-run with a smaller `--end-offset` (e.g. `--end-offset 6`) to extend the arc back toward the original 1..139 range.
+- Sprite LFS-track (the *second-half* of the original audio-LFS two-step recipe in the older banner) is still **NOT done**. `.git/` sprite bloat at 213 MB remains; runtime sprites are still in plain git. The user has not asked for this. Don't volunteer.
+- Server PID **69653** on :8765. Restart: `kill 69653 && nohup node server.js > /tmp/gpjs-server.log 2>&1 &` from project root.
+- Push policy: per-batch authorization, not standing permission. User explicitly authorized commit + push for this session's batch. On session open, do not push the next batch unless the user says so again.
+
 ## Update (2026-07-15) — sprite history filter-repo complete + pushed
 
 ### What was done
