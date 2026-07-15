@@ -117,11 +117,15 @@ app.get('/api/list', (req, res) => {
 app.use(express.static(ROOT, {
     extensions: ['html'],
     setHeaders: (res, p) => {
-        // Source JS + story + ink + assets get no-cache so a fresh edit lands without hard refresh.
+        // Source JS + CSS + story + ink + assets + index.html get
+        // no-cache so a fresh edit lands without a hard refresh.
+        // Without this, Chrome happily serves a stale styles.css for
+        // 304 roundtrips and CSS-only fixes look like nothing changed.
         const rel = p.replace(/^.*\/+/, '');
         if (rel === 'story.json' || p.includes('/ink/') ||
             p.includes('/src/') || p.includes('/runtime/') ||
-            p.includes('/assets/') || rel === 'boot.js') {
+            p.includes('/assets/') || rel === 'boot.js' ||
+            rel === 'styles.css' || rel === 'index.html') {
             res.setHeader('Cache-Control', 'no-cache');
         }
     }

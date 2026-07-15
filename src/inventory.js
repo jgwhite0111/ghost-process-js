@@ -254,9 +254,9 @@ class Inventory {
         const dx = tx - originX;
         const dy = ty - originY;
         const dist = Math.hypot(dx, dy);
-        const duration = 700;
+        const duration = 1500;
         const start = performance.now();
-        const arcHeight = Math.min(80, dist * 0.25);
+        const arcHeight = Math.min(100, dist * 0.3);
         const animate = (now) => {
             const t = Math.min(1, (now - start) / duration);
             // Ease-out cubic.

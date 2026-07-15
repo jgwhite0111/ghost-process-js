@@ -295,6 +295,37 @@ html, body {
     min-height: 1.4em;
 }
 
+/* Flying icon spawned by Inventory.addWithFly() during a pickup.
+   The JS arc/scale logic in inventory.js writes inline left/top/
+   transform/opacity each frame; the role of this rule is to give
+   the <img> a fixed-positioning context, a baseline size, and a
+   z-index above the scene canvas but below the scanline overlay. */
+.inv-fly {
+    position: fixed;
+    width: 96px;
+    height: 96px;
+    pointer-events: none;
+    z-index: 900;           /* above everything except scanlines (1000) */
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    /* Bright amber background + multi-layer glow so the icon
+       reads clearly against the dark alley scene as it travels
+       from the pickup point up to the INV button. */
+    background: rgba(20, 14, 6, 0.65);
+    border-radius: 12px;
+    box-shadow:
+        0 0 0 2px rgba(244, 216, 120, 0.9),
+        0 0 16px 4px rgba(244, 216, 120, 0.85),
+        0 0 32px 12px rgba(212, 160, 69, 0.5);
+    filter:
+        drop-shadow(0 0 6px rgba(255, 230, 150, 1))
+        drop-shadow(0 0 18px rgba(244, 200, 80, 0.8))
+        brightness(1.4) saturate(1.3);
+    padding: 4px;
+    will-change: transform, opacity, left, top;
+    transform-origin: center center;
+}
+
 /* Inventory button (top-right of viewport) */
 .inventory-button {
     position: fixed;

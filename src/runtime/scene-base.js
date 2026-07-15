@@ -125,7 +125,7 @@ class Scene {
             canvas: this.canvas,
             sceneId: this.sceneId,
             sceneConfig: this.sceneConfig,
-            onTrigger: (hb) => this._triggerHitbox(hb)
+            onTrigger: (hb, clientX, clientY) => this._triggerHitbox(hb, clientX, clientY)
         });
         // Ink.
         if (this.sceneConfig.ink) {
