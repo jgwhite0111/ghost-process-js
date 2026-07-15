@@ -10,26 +10,35 @@ PC-98 / late-80s cyberpunk horror point-and-click visual novel. Mature proportio
 
 ### Current live state
 
-- Branch: `main`; verified code commit: `339b3bf feat: hitbox lifecycle + editor/title button hitbox tests`.
-- `origin/main` is `339b3bf`; the branch is **0 commits ahead, 0 behind** (synced). The user explicitly requested the push in this turn; it completed with `d09b154..339b3bf` on `origin/main`.
-- The working tree is clean; the documentation commit that closes this session boundary is the next commit after `339b3bf`.
-- Verification: **60/60 tests passed** (was 56; the +4 from the three new test files in this commit); `git diff --check` passed; the live editor returned HTTP 200; Express is still listening on `http://localhost:8765` as PID 67650.
-- `terminal_lab_c` MIDI/MP3 remain untouched. The 1-line `story.json` change in this commit is the verified editor-routing correction (already in scope from prior sessions).
+- Branch: `main`; verified code commit: `845521c fix(audio): unlock intro_theme on Safari by wiring a canvas-level pointerdown fallback`.
+- `origin/main` is `339b3bf`; the branch is **2 commits ahead, 0 behind**. Both ahead commits are uncommitted work I produced and committed this session in response to direct user instruction: `890a18c docs: refresh handoff after hitbox work push` (uncommitted docs refresh from the prior session boundary, but actually already committed — the handoff just hadn't been updated since) and `845521c` (the Safari audio fix). Neither has been pushed; the user authorized commits, not pushes — do not push.
+- The working tree is clean; the documentation commit that closes this session boundary is the next commit after `845521c`.
+- Verification: **61/61 tests passed** (was 60; the +1 from the new `MusicHandler.resumePending` regression test). `git diff --check` passed; the live server returns HTTP 200; Express is still listening on `http://localhost:8765` as PID 67650.
+- `terminal_lab_c` MIDI/MP3 remain untouched. No audio assets were rewritten in this update.
 
-### Work completed this update — hitbox lifecycle + editor/title button hitbox tests
+### Work completed this update — Safari intro_theme autoplay unlock
 
-- The user requested a commit + push; before pushing, `git status --short` showed the working tree already contained the completed work, so the commit was straightforward. The pushed commit (`339b3bf`) is real code + tests, not a docs-only refresh.
-- `src/runtime/hitbox.js` now tracks a typed set of created hitbox refs for cleanup safety and deduplicates attach so double-mounts do not double-fire. `_registry.js` exposes the helper used by scenes.
-- `editor.js` / `editor.html` / `styles.css` wire the per-button hitboxes (the editor's existing transport buttons now use the shared `Hitbox` machinery), plus matching styling.
-- `test/editor-button-hitbox.test.js` and `test/title-music-start.test.js` are new; `test/hitbox-lifecycle.test.js` was extended. The suite moved from 56 to **60 passing tests**.
+- The user reported that `intro_theme.mp3` does not start playing when the title viewport is clicked, and suggested it could be Safari-specific. Headless-Chrome reproduction in this session reproduced the same symptom: the document-level capture-phase `pointerdown` fallback in `MusicHandler._queueResume` (music.js) fires, but Safari does not credit that listener as an autoplay gesture, so `audio.play()` is silently rejected.
+- Root cause: Safari only credits element-level event handlers (call-stack `play()` invoked inside a real handler on a real DOM element) for autoplay-unlock gesture recognition, while document-level capture-phase listeners do not qualify. Chrome and Firefox are more permissive.
+- Fix: refactored the resume body out of the inline `_queueResume` closure into a new public `MusicHandler.resumePending()` method (music.js). The intro scene's `onReady` (`src/scenes/_registry.js`) now wires a one-shot `pointerdown` listener directly on the canvas — Safari credits that as a gesture. `_pendingResumeVolume` and `_pendingResumeFadeMs` are stashed alongside `_pendingResume` so a late `resumePending()` call replays exactly the queued fade.
+- Existing document-level fallback is left intact (other scenes / browsers / non-intro flows still rely on it). The existing click handler in `_triggerHitbox` is untouched, so the title-music-start test contract ("START relies on MusicHandler first-gesture fallback instead of calling audio.play itself") still holds.
+- Diff stat: `src/runtime/music.js` +41/-16, `src/scenes/_registry.js` +26/-3, `test/title-music-start.test.js` +70/0. Suite moved from 60 to **61 passing tests**.
+- Code commit: `845521c fix(audio): unlock intro_theme on Safari by wiring a canvas-level pointerdown fallback`.
 
 ### Next-session starting point
 
-- Do not redo the hitbox lifecycle, editor music transport, dialogue typography, or runtime-style editor preview work.
-- After this documentation commit, expect a clean tree with code commit `339b3bf` immediately below, the branch **0 commits ahead, 0 behind** `origin/main`. Do not push unless explicitly requested.
+- Do not redo the Safari intro_theme fix, the hitbox lifecycle work, the editor music transport, dialogue typography, or runtime-style editor preview work.
+- After this documentation commit, expect a clean tree with code commit `845521c` immediately below, the branch **2 commits ahead, 0 behind** `origin/main` (`890a18c docs` + `845521c fix`, neither pushed yet). Do not push unless explicitly requested.
 - Preserve the existing scope guardrails: the audit queue is complete; `story.json` remains protected except for its already-verified editor-routing correction; leave `terminal_lab_c` audio alone unless the user specifically requests a change.
 
-## Previous update (2026-07-15) — editor music preview transport
+## Previous update (2026-07-15) — hitbox lifecycle + editor/title button hitbox tests (already on `main` as `339b3bf`, superseded by the current update)
+
+- The user's direct request was a commit + push; the working tree already contained the completed work, so the commit + push was straightforward. Pushed commit `339b3bf` is real code + tests.
+- `src/runtime/hitbox.js` now tracks a typed set of created hitbox refs for cleanup safety and deduplicates attach so double-mounts do not double-fire. `_registry.js` exposes the helper used by scenes.
+- `editor.js` / `editor.html` / `styles.css` wire the per-button hitboxes (the editor's existing transport buttons now use the shared `Hitbox` machinery), plus matching styling.
+- `test/editor-button-hitbox.test.js` and `test/title-music-start.test.js` are new; `test/hitbox-lifecycle.test.js` was extended. The suite moved from 56 to 60 passing tests at this point (and the current Safari fix pushed it to 61).
+
+## Earlier update (2026-07-15) — editor music preview transport (committed `0d61dd9`)
 
 - The user directly requested that each individual track/medley-track play button double as play and pause, plus a nearby position slider that updates during preview and allows seeking.
 - `editor.js` exposes the shared `QueuePlayer` transport state/API: `toggleOne(src, opts)`, `pause()`, `resume()`, and `seek(time)`, with `paused`, `currentTime`, and `duration` state. The per-track button changes between `▶` and `Ⅱ`, with matching accessible labels; the shared seek slider and elapsed/total time display remain synchronized through requestAnimationFrame status updates.
@@ -37,7 +46,7 @@ PC-98 / late-80s cyberpunk horror point-and-click visual novel. Mature proportio
 - `editor.html` adds the `.medley-seek` styling and expands `.medley-row` to seven columns so the slider sits beside the per-track controls.
 - `test/editor-rerender-lifecycle.test.js` exercises the browser-like Audio transport, pause/resume/seek behavior, rerendered paused-row state, and structural-edit cleanup. Suite was 54 → **56 passing tests** at this point.
 - Live browser verification on `alley_confrontation.mp3` changed the first row from `▶` to `Ⅱ` while the position advanced (`0:05 / 0:47`), then returned to `▶` while retaining the paused position (`0:12 / 0:47`). The slider was present, enabled during preview, and seek behavior was verified.
-- Code commit: `0d61dd9 feat: add editor music preview transport`. Already superseded by the current hitbox-lifecycle update.
+- Code commit: `0d61dd9 feat: add editor music preview transport`. Already superseded by the hitbox-lifecycle update.
 
 ## Earlier carry-over audit (2026-07-15)
 
@@ -183,10 +192,16 @@ Runtime implementation is `src/runtime/music.js`; the editor's queue player inte
 
 ## Active carry-over
 
-### Hitbox lifecycle + button hitbox tests (current update, `339b3bf`)
+### Hitbox lifecycle + button hitbox tests (commit `339b3bf`, superseded by the current Safari-audio update; do not redo)
 
 - The hitbox machinery in `src/runtime/hitbox.js` is now ref-counted and dedup-safe; scenes using the shared helper should not need to track manual cleanup. If a future scene reports double-fire or stale-hit symptoms, audit against this ref-tracking before adding scene-side workarounds.
 - The three new test files (`test/hitbox-lifecycle.test.js`, `test/editor-button-hitbox.test.js`, `test/title-music-start.test.js`) define the lifecycle contract. Any new hitbox user should sit inside that contract, not next to it.
+
+### Safari intro_theme autoplay unlock (commit `845521c`, just landed)
+
+- `MusicHandler.resumePending()` is the new public method that scene-level event handlers can call when Safari requires an element-level `pointerdown` to credit the autoplay gesture. Document-level capture-phase fallback remains the first line of defense for Chrome/Firefox.
+- The intro scene wires it from a one-shot canvas `pointerdown` in `onReady`. Other scenes that hit similar Safari autoplay-credits-only-on-element-handlers quirks can do the same.
+- A new regression in `test/title-music-start.test.js` pins the `resumePending` idempotency and listener-cleanup contract.
 
 ### Completed audit-remediation queue
 
