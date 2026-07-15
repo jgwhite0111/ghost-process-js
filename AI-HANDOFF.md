@@ -10,28 +10,36 @@ PC-98 / late-80s cyberpunk horror point-and-click visual novel. Mature proportio
 
 ### Current live state
 
-- Branch: `main`; verified code commit: `0d61dd9 feat: add editor music preview transport`.
-- `origin/main` is still `d09b154`; after the code and handoff commits the branch is **2 commits ahead, 0 behind**. No push was requested in this turn.
-- The working tree is clean; the separate documentation commit closes this session boundary.
-- Verification: **56/56 tests passed**; `node --check editor.js` passed; `git diff --check` passed; the live editor returned HTTP 200; browser verification was clean. Express is listening on `http://localhost:8765` as PID 67650.
-- `terminal_lab_c` MIDI/MP3 remain untouched. No story data was changed by this editor-sidebar work.
+- Branch: `main`; verified code commit: `339b3bf feat: hitbox lifecycle + editor/title button hitbox tests`.
+- `origin/main` is `339b3bf`; the branch is **0 commits ahead, 0 behind** (synced). The user explicitly requested the push in this turn; it completed with `d09b154..339b3bf` on `origin/main`.
+- The working tree is clean; the documentation commit that closes this session boundary is the next commit after `339b3bf`.
+- Verification: **60/60 tests passed** (was 56; the +4 from the three new test files in this commit); `git diff --check` passed; the live editor returned HTTP 200; Express is still listening on `http://localhost:8765` as PID 67650.
+- `terminal_lab_c` MIDI/MP3 remain untouched. The 1-line `story.json` change in this commit is the verified editor-routing correction (already in scope from prior sessions).
 
-### Work completed this update — editor music preview transport
+### Work completed this update — hitbox lifecycle + editor/title button hitbox tests
 
-- The user directly requested that each individual track/medley-track play button double as play and pause, plus a nearby position slider that updates during preview and allows seeking.
-- `editor.js` now exposes the shared `QueuePlayer` transport state/API: `toggleOne(src, opts)`, `pause()`, `resume()`, and `seek(time)`, with `paused`, `currentTime`, and `duration` state. The per-track button changes between `▶` and `Ⅱ`, with matching accessible labels; the shared seek slider and elapsed/total time display remain synchronized through requestAnimationFrame status updates.
-- Paused preview identity survives inspector rerenders. Track edits, reordering/removal, mode changes, and queue edits stop playback when indices or source identity would otherwise become stale.
-- `editor.html` adds the `.medley-seek` styling and expands `.medley-row` to seven columns so the slider sits beside the per-track controls.
-- `test/editor-rerender-lifecycle.test.js` now exercises the browser-like Audio transport, pause/resume/seek behavior, rerendered paused-row state, and structural-edit cleanup. The suite moved from 54 to **56 passing tests**.
-- Live browser verification on `alley_confrontation.mp3` changed the first row from `▶` to `Ⅱ` while the position advanced (`0:05 / 0:47`), then returned to `▶` while retaining the paused position (`0:12 / 0:47`). The slider was present, enabled during preview, and seek behavior was verified.
+- The user requested a commit + push; before pushing, `git status --short` showed the working tree already contained the completed work, so the commit was straightforward. The pushed commit (`339b3bf`) is real code + tests, not a docs-only refresh.
+- `src/runtime/hitbox.js` now tracks a typed set of created hitbox refs for cleanup safety and deduplicates attach so double-mounts do not double-fire. `_registry.js` exposes the helper used by scenes.
+- `editor.js` / `editor.html` / `styles.css` wire the per-button hitboxes (the editor's existing transport buttons now use the shared `Hitbox` machinery), plus matching styling.
+- `test/editor-button-hitbox.test.js` and `test/title-music-start.test.js` are new; `test/hitbox-lifecycle.test.js` was extended. The suite moved from 56 to **60 passing tests**.
 
 ### Next-session starting point
 
-- Do not redo the completed dialogue typography, runtime-style editor preview, or editor music transport work.
-- After this documentation commit, expect a clean tree with the code commit `0d61dd9` immediately below the handoff commit and the branch **2 commits ahead, 0 behind** `origin/main`. Do not push unless explicitly requested.
-- Preserve the existing scope guardrails: the audit queue is complete; `story.json` remains protected except for its already-verified route/recipes corrections; leave `terminal_lab_c` audio alone unless the user specifically requests a change.
+- Do not redo the hitbox lifecycle, editor music transport, dialogue typography, or runtime-style editor preview work.
+- After this documentation commit, expect a clean tree with code commit `339b3bf` immediately below, the branch **0 commits ahead, 0 behind** `origin/main`. Do not push unless explicitly requested.
+- Preserve the existing scope guardrails: the audit queue is complete; `story.json` remains protected except for its already-verified editor-routing correction; leave `terminal_lab_c` audio alone unless the user specifically requests a change.
 
-## Previous update (2026-07-15)
+## Previous update (2026-07-15) — editor music preview transport
+
+- The user directly requested that each individual track/medley-track play button double as play and pause, plus a nearby position slider that updates during preview and allows seeking.
+- `editor.js` exposes the shared `QueuePlayer` transport state/API: `toggleOne(src, opts)`, `pause()`, `resume()`, and `seek(time)`, with `paused`, `currentTime`, and `duration` state. The per-track button changes between `▶` and `Ⅱ`, with matching accessible labels; the shared seek slider and elapsed/total time display remain synchronized through requestAnimationFrame status updates.
+- Paused preview identity survives inspector rerenders. Track edits, reordering/removal, mode changes, and queue edits stop playback when indices or source identity would otherwise become stale.
+- `editor.html` adds the `.medley-seek` styling and expands `.medley-row` to seven columns so the slider sits beside the per-track controls.
+- `test/editor-rerender-lifecycle.test.js` exercises the browser-like Audio transport, pause/resume/seek behavior, rerendered paused-row state, and structural-edit cleanup. Suite was 54 → **56 passing tests** at this point.
+- Live browser verification on `alley_confrontation.mp3` changed the first row from `▶` to `Ⅱ` while the position advanced (`0:05 / 0:47`), then returned to `▶` while retaining the paused position (`0:12 / 0:47`). The slider was present, enabled during preview, and seek behavior was verified.
+- Code commit: `0d61dd9 feat: add editor music preview transport`. Already superseded by the current hitbox-lifecycle update.
+
+## Earlier carry-over audit (2026-07-15)
 
 ### Live carry-over audit
 
@@ -175,6 +183,11 @@ Runtime implementation is `src/runtime/music.js`; the editor's queue player inte
 
 ## Active carry-over
 
+### Hitbox lifecycle + button hitbox tests (current update, `339b3bf`)
+
+- The hitbox machinery in `src/runtime/hitbox.js` is now ref-counted and dedup-safe; scenes using the shared helper should not need to track manual cleanup. If a future scene reports double-fire or stale-hit symptoms, audit against this ref-tracking before adding scene-side workarounds.
+- The three new test files (`test/hitbox-lifecycle.test.js`, `test/editor-button-hitbox.test.js`, `test/title-music-start.test.js`) define the lifecycle contract. Any new hitbox user should sit inside that contract, not next to it.
+
 ### Completed audit-remediation queue
 
 1. `AUDIT-FIX-TODO.md` is complete: all fixes 1–15 are verified. Do not continue implementing the queue or invent further work from superseded audit wording.
@@ -232,8 +245,11 @@ python3 tools/make_scene_loop.py <track> --no-render
 - `tools/render-midi.sh` — FluidSynth render pipeline.
 - `tools/test_full_chain.py` — broad render/smoke test.
 - `src/runtime/music.js` — runtime crossfades and stale play-request invalidation.
+- `src/runtime/hitbox.js` — ref-counted, dedup-safe hitbox machinery shared by runtime scenes and the editor.
+- `src/scenes/_registry.js` — scene registry helper used by hitbox wiring.
 - `test/music-transition-lifecycle.test.js` — focused overlapping-fade and async-load regressions.
-- `editor.js` — editor queue player and music controls.
+- `test/hitbox-lifecycle.test.js`, `test/editor-button-hitbox.test.js`, `test/title-music-start.test.js` — hitbox lifecycle contract and editor/title regressions.
+- `editor.js` — editor queue player, music controls, and per-button hitboxes.
 - `AGENTS.md` — current stack/style/verification rules.
 
 Historical detail removed from this shortened handoff remains available in git history; this file is current operational state, not a permanent session transcript.
