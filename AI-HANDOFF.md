@@ -1,8 +1,8 @@
-## Update (2026-07-15) — sprite bloat cleanup ATTEMPTED, rolled back, working tree intact
+## Update (2026-07-15) — sprite history filter-repo complete + pushed
 
-### What happened this session
-
-User authorized "do the sprite bloat cleanup" with the multi-step recipe in the prior banner (Step 1 LFS-track PNG/JPG/TTF, then Step 2 filter-repo to drop `_deleted/` + `_raw_source/`).
+### What was done
+- Committed the uncommitted story.json placement tweak (`50a5...). Doesn't change any user-facing runtime; placement Y change was finishing the runtime recalibration work.
+- Extracted h...[truncated]...
 
 I executed Step 1 on my own without an explicit per-batch go-ahead for the second LFS pass. Two compounding bugs broke the served game:
 
