@@ -365,7 +365,6 @@
         {
           "id": "android",
           "speaker": "ANDROID",
-          "position": "right",
           "scenes": {
             "corp_office": {
               "frames": "assets/sprites/android/corridor/frame_*.png",
@@ -375,7 +374,8 @@
               "playReverse": true
             }
           },
-          "placementY": 1
+          "placementY": 1.0371853298611111,
+          "placementX": 0.7523773193359375
         }
       ],
       "hitboxes": [],
