@@ -6,44 +6,44 @@ Live project: `/Users/jwhite/ghost-process-js` — vanilla JavaScript + InkJS + 
 
 PC-98 / late-80s cyberpunk horror point-and-click visual novel. Mature proportions; no moe.
 
-## Update (2026-07-15) — editor music preview scoped per scene
+## Update (2026-07-15) — session bootstrap
 
 ### Current live state
 
-- Branch: `main`; verified code commit: `4e50bbb fix(editor): scope music preview state per scene so cross-scene navigation stops false playback highlights`.
-- `origin/main` is `339b3bf`; the branch is **5 commits ahead, 0 behind**. The five local-ahead commits, in order, are `890a18c docs` (prior-session docs), `845521c fix(audio)` (Safari intro_theme), `92178fe docs`, `3de2343 fix(inventory)` (pickup-fly), and `4e50bbb fix(editor)` (this session's per-scene preview snapshot). **None have been pushed**; the user authorized commits, not pushes — do not push.
-- The working tree is **clean** after this session. Express is still listening on `http://localhost:8765` as PID **15287** (from the prior pickup-fly refresh). Live HTTP smoke: **HTTP 200**.
-- Verification: **71/71 tests passed** (was 67; the +4 are the new `test/editor-music-per-scene-snapshot.test.js` cases — scene-switch must not falsely highlight new scene's rows, single-track preview state survives navigation, Stop from any inspector clears the global preview, and rerender without scene switch still re-resolves the live snapshot). The existing `test/editor-rerender-lifecycle.test.js` was retagged with `sceneId` on its `playOne`/`toggleOne` calls and now wraps both `QueuePlayer.subscribe` and `QueuePlayer.onStatus` in its listener-counting harness.
-- `git diff --check` passed. No dirty hunks unrelated to the fix. No audio assets rewritten.
+- Branch: `main`; verified code commit: `4e50bbb fix(editor): scope music preview state per scene so cross-scene navigation stops false playback highlights`. Handoff commit: `e373f20 docs: record per-scene music preview snapshot fix` (new HEAD).
+- `origin/main` is `339b3bf`; the branch is **6 commits ahead, 0 behind**. The six local-ahead commits, in order, are `890a18c docs` (prior-session docs), `845521c fix(audio)` (Safari intro_theme), `92178fe docs`, `3de2343 fix(inventory)` (pickup-fly), `4e50bbb fix(editor)` (per-scene preview snapshot), and `e373f20 docs` (this boundary). **None have been pushed**; the user authorizes commits, not pushes — do not push.
+- The working tree is **clean**. Express is still listening on `http://localhost:8765` as PID **15287** (from the pickup-fly refresh). Live HTTP smoke: **HTTP 200**.
+- Verification: **71/71 tests passed**. The most recent test additions are `test/editor-music-per-scene-snapshot.test.js` (4 regressions) and the `sceneId`-tagged updates to `test/editor-rerender-lifecycle.test.js`.
+- `git diff --check` passed. No dirty hunks. No audio assets rewritten this session.
 
-### Work completed this update — cross-scene playback false-highlight fix
+### Next-session starting point
+
+- Read `AGENTS.md` first, then this handoff top-to-bottom before any "what was I working on" inference — the audit/carry-over sections encode the user-driven scope guardrails (audit queue is **closed**; `story.json` is **protected** except for the already-verified `intro → cold_open` correction; `terminal_lab_c` audio is **off-limits** unless the user asks for it again).
+- The most recent code work is the editor **per-scene preview snapshot** (`4e50bbb`). Do not redo it. If a related preview leak appears (seek slider writing into wrong inspector, elapsed-time text drifting across scenes), see the "post-fix follow-up candidates" in `## Previous update (2026-07-15) — per-scene preview snapshot` further down this file.
+- Do not push without explicit user direction. After this docs commit, HEAD is `e373f20`.
+- Server is on PID **15287**. To restart on a clean PID: `kill 15287 && nohup node server.js > /tmp/gpjs-server.log 2>&1 &` from `/Users/jwhite/ghost-process-js`.
+- Before declaring a session "audit" or "fix" task: ground in the live tree with `cd ~/ghost-process-js && git status --short && git diff --numstat` (per the user-stated rule about losing work to paraphrasing). A clean tree is the required starting state for any new audit.
+
+## Previous update (2026-07-15) — per-scene music preview snapshot (committed `4e50bbb`)
 
 - User complaint: "the playlist for the player in the right sidebar updates with the tracks for the selected scene, but still shows the track highlighted as playing with its play button in the playing state, when it is actually not that track playing, so the state needs to be remembered per the scene it was started in so as not to give false info".
-- **Root cause:** `QueuePlayer` was a single global pub/sub. Its state snapshot was painted onto whichever inspector was currently mounted. Every non-intro scene in `story.json` happens to have a 5-track medley, so a preview of `alley_confrontation_b.mp3` (alley row 2, index 1) made `state.index === 1` stick globally, and any scene whose playlist also had 5 rows falsely lit row 2 as playing on switch. The `syncPlayerStatus` subscriber in `makeMusicEditor` toggled `.playing` based on `state.index === i` regardless of which scene owned the audio.
+- **Root cause:** `QueuePlayer` (in `editor.js`) was a single global pub/sub. Its state snapshot was painted onto whichever inspector was currently mounted. Every non-intro scene in `story.json` happens to have a 5-track medley, so a preview of `alley_confrontation_b.mp3` (alley row 2, index 1) made `state.index === 1` stick globally, and any scene whose playlist also had 5 rows falsely lit row 2 as playing on switch. The `syncPlayerStatus` subscriber in `makeMusicEditor` toggled `.playing` based on `state.index === i` regardless of which scene owned the audio.
 - **Fix, two parts.** Audio playback remains a global singleton (one soundscape at a time, no per-scene audio graph), but preview state is now **per-scene**:
 
-  1. `QueuePlayer` gains a `sceneStates` Map keyed by sceneId and an `activeSceneId` field. When `playOne` / `playQueue` / `toggleOne` is called, the caller's `sceneId` becomes the owner of the active preview. `setState` writes the snapshot into both the global `state` and `sceneStates.get(activeSceneId)`. End-of-track and `stop()` clear `activeSceneId` but keep the stored entry so a returning inspector sees the last known row / position.
-  2. New API `QueuePlayer.subscribe(sceneId, fn)`. Each subscriber receives the snapshot resolved for its own sceneId: if sceneId owns the active preview, the live state; otherwise the stored scene snapshot, otherwise a fresh idle state. The unscoped `onStatus(fn)` is preserved for any future non-inspector callers — all current production callers moved through `subscribe`.
+  1. `QueuePlayer` gained a `sceneStates` Map keyed by sceneId and an `activeSceneId` field. When `playOne` / `playQueue` / `toggleOne` is called, the caller's `sceneId` becomes the owner of the active preview. `setState` writes the snapshot into both the global `state` and `sceneStates.get(activeSceneId)`. End-of-track and `stop()` clear `activeSceneId` but keep the stored entry so a returning inspector sees the last known row / position.
+  2. New API `QueuePlayer.subscribe(sceneId, fn)`. Each subscriber receives the snapshot resolved for its own sceneId: if sceneId owns the active preview, the live state; otherwise the stored scene snapshot, otherwise a fresh idle state. The unscoped `onStatus(fn)` is preserved for future non-inspector callers. `_snapshotForScene(sceneId)` is the read-side helper.
 
-  `makeMusicEditor` snapshots `state.sceneId` as `ownerSceneId` at render time, passes it into every per-row `toggleOne`, the `Play queue` button, and the single-track `▶ Play`, and subscribes via the scoped API. Existing `QueuePlayer.stop()` guard calls inside mode toggle / reorder / delete / `+ Add` stay global by user intent (they're deciding "is something playing, if so stop it" before mutating scene data).
+  `makeMusicEditor` snapshots `state.sceneId` as `ownerSceneId` at render time, passes it into every per-row `toggleOne`, the `Play queue` button, and the single-track `▶ Play`, and subscribes via the scoped API. `QueuePlayer.stop()` guard calls inside mode toggle / reorder / delete / `+ Add` stay global by user intent (they're "is something playing, if so stop it" before mutating scene data).
 
 - **Live-browser verification** on `http://localhost:8765/editor.html`:
   - Click alley row 2 → `medley-row playing` + `Ⅱ` icon on row 2, `state.mode === 'one'`, `state.file === 'alley_confrontation_b.mp3'`. ✓
   - Switch to chase → all 5 chase rows: `classes: "medley-row"`, `playText: "▶"`. `snapshotForScene('chase').mode === 'idle'`, `snapshotForScene('alley')` still returns the playing state. ✓
-  - Switch back to alley → row 2 highlight restored (`medley-row playing`, `▶` because playback paused). ✓
+  - Switch back to alley → row 2 highlight restored. ✓
   - `getComputedStyle` shows `.playing` rows render at `rgb(31, 77, 128)` background while siblings render `rgba(0, 0, 0, 0)` — the CSS highlight hook still fires correctly. ✓
-- Diff stat: `editor.js` +147/-29 (mostly QueuePlayer body + 4 `sceneId` tags), `test/editor-rerender-lifecycle.test.js` +18/-20 (legacy `onStatus` call shape updated, harness covers both `subscribe` and `onStatus`), `test/editor-music-per-scene-snapshot.test.js` +357 (new). Suite moved from 67 to **71 passing tests**.
-- Code commit: `4e50bbb fix(editor): scope music preview state per scene so cross-scene navigation stops false playback highlights`.
+- Diff stat: `editor.js` +147/-29, `test/editor-rerender-lifecycle.test.js` +18/-20 (legacy `onStatus` call shape updated), `test/editor-music-per-scene-snapshot.test.js` +357 (new). Suite moved from 67 to **71 passing tests**.
+- **Post-fix follow-up candidates, not confirmed defects.** If the user reports a *related* preview leak — e.g. the range slider's seek oninput painting into the wrong inspector's state bar, or the elapsed-time text drifting across scenes — first check whether `QueuePlayer.subscribe(sceneId, fn)` is being used everywhere. `syncPlayerStatus` is now scene-scoped but `seek.oninput = () => QueuePlayer.seek(...)` is unscoped. Mirror the snapshot logic onto `seek({sceneId})` only if the user asks.
 
-### Next-session starting point
-
-- Do not redo the inventory pickup-fly fix, the Safari intro_theme autoplay unlock, the hitbox lifecycle / editor / title hitbox tests, the editor music transport, the dialogue typography, the runtime-style editor preview work, or this per-scene preview snapshot fix.
-- After this documentation commit, expect a clean tree with code commit `4e50bbb` at HEAD, the branch **5 commits ahead, 0 behind** `origin/main` (which is at `339b3bf`). Do not push unless explicitly requested.
-- Server is still listening on PID **15287**. To restart on a clean PID: `kill 15287 && nohup node server.js > /tmp/gpjs-server.log 2>&1 &` from `/Users/jwhite/ghost-process-js`.
-- Preserve the existing scope guardrails: the audit queue is complete; `story.json` remains protected except for its already-verified editor-routing correction; leave `terminal_lab_c` audio alone unless the user specifically requests a change.
-- If the user reports a *related* preview leak (e.g., seeks of the range slider painting into the wrong inspector's state bar, or the elapsed-time text drifting across scenes), first check whether `QueuePlayer.subscribe(sceneId, fn)` is being used everywhere — `syncPlayerStatus` is now scene-scoped but `seek.oninput = () => QueuePlayer.seek(...)` is unscoped and writes to the active preview regardless. If the user wants seek to also stop on scene switch, add an `opts.sceneId` to `seek` and mirror the snapshot logic.
-
-### Work completed this update — inventory pickup-fly visible and going to the right place
+## Previous update (2026-07-15) — inventory pickup-fly animation fix (committed `3de2343`)
 
 - User complaint: the inventory pickup icon appeared in the wrong corner and was barely visible. Investigation via headless Chrome CDP with real `Input.dispatchMouseEvent` clicks (no monkey-patching) showed the icon pinning to **bottom-left viewport** at (0, 633) instead of traveling up-right to the INV button at (1234, 26).
 - **Root cause:** `src/runtime/scene-base.js:128` registered `onTrigger: (hb) => this._triggerHitbox(hb)`. The hitbox layer was already passing client coords (`onTrigger(hb, e.clientX, e.clientY)`), but the wrapper arrow function dropped them. So `addWithFly(itemId, originX, originY, …)` always received `undefined, undefined`, the rAF loop wrote `style.left/top` from `NaN`, and CSS positioned the fixed node at (0, viewportHeight) — bottom-left.
@@ -54,14 +54,14 @@ PC-98 / late-80s cyberpunk horror point-and-click visual novel. Mature proportio
 - Diff stat: `server.js` +8/-1, `src/inventory.js` +2/-2 (duration + arc), `src/runtime/scene-base.js` +1/-1 (signature), `styles.css` +20/-7, `test/inventory-fly-animation.test.js` +355/-0 (new). Suite moved from 61 to **67 passing tests**.
 - Code commit: `3de2343 fix(inventory): pickup-fly starts at click point and arcs to INV button`.
 
-### Next-session starting point
+### Next-session starting point (carried over from this update's boundary)
 
 - Do not redo the inventory pickup-fly fix, the Safari intro_theme autoplay unlock, the hitbox lifecycle / editor / title hitbox tests, the editor music transport, the dialogue typography, or the runtime-style editor preview work.
-- After this documentation commit, expect a clean tree with code commit `3de2343` immediately below, the branch **4 commits ahead, 0 behind** `origin/main` (which is at `339b3bf`). Do not push unless explicitly requested.
-- Server is listening on PID **15287** (not 67650 — that PID was killed during this session to refresh the no-cache header). To restart on a clean PID: `kill 15287 && nohup node server.js > /tmp/gpjs-server.log 2>&1 &` from `/Users/jwhite/ghost-process-js`.
+- After the post-pickup-fly docs commit (`33a6159`), the branch was **4 commits ahead, 0 behind** `origin/main` (`339b3bf`). The next commits stacked on top in order are `4e50bbb fix(editor)` (per-scene preview snapshot) and `e373f20 docs` (handoff refresh for that fix).
+- Server listen PID drifted from 67650 → 15287 across updates. As of the per-scene snapshot fix, server is **PID 15287**. To restart on a clean PID: `kill 15287 && nohup node server.js > /tmp/gpjs-server.log 2>&1 &` from `/Users/jwhite/ghost-process-js`.
 - Preserve the existing scope guardrails: the audit queue is complete; `story.json` remains protected except for its already-verified editor-routing correction; leave `terminal_lab_c` audio alone unless the user specifically requests a change.
 
-## Previous update (2026-07-15) — Safari intro_theme autoplay unlock (committed `845521c`; was the active banner before this session)
+## Previous update (2026-07-15) — Safari intro_theme autoplay unlock (committed `845521c`; was the active banner before the inventory pickup-fly update)
 
 - The user reported that `intro_theme.mp3` does not start playing when the title viewport is clicked, and suggested it could be Safari-specific. Headless-Chrome reproduction in this session reproduced the same symptom: the document-level capture-phase `pointerdown` fallback in `MusicHandler._queueResume` (music.js) fires, but Safari does not credit that listener as an autoplay gesture, so `audio.play()` is silently rejected.
 - Root cause: Safari only credits element-level event handlers (call-stack `play()` invoked inside a real handler on a real DOM element) for autoplay-unlock gesture recognition, while document-level capture-phase listeners do not qualify. Chrome and Firefox are more permissive.
@@ -70,7 +70,7 @@ PC-98 / late-80s cyberpunk horror point-and-click visual novel. Mature proportio
 - Diff stat: `src/runtime/music.js` +41/-16, `src/scenes/_registry.js` +26/-3, `test/title-music-start.test.js` +70/0. Suite moved from 60 to **61 passing tests** at this point (now 67 after the inventory-fly fix).
 - Code commit: `845521c fix(audio): unlock intro_theme on Safari by wiring a canvas-level pointerdown fallback`.
 
-## Previous update (2026-07-15) — hitbox lifecycle + editor/title button hitbox tests (already on `main` as `339b3bf`, superseded by the current update)
+## Previous update (2026-07-15) — hitbox lifecycle + editor/title button hitbox tests (already on `main` as `339b3bf`, superseded by Safari audio, pickup-fly, and the per-scene preview snapshot fixes)
 
 - The user's direct request was a commit + push; the working tree already contained the completed work, so the commit + push was straightforward. Pushed commit `339b3bf` is real code + tests.
 - `src/runtime/hitbox.js` now tracks a typed set of created hitbox refs for cleanup safety and deduplicates attach so double-mounts do not double-fire. `_registry.js` exposes the helper used by scenes.
@@ -231,7 +231,16 @@ Runtime implementation is `src/runtime/music.js`; the editor's queue player inte
 
 ## Active carry-over
 
-### Inventory pickup-fly animation (commit `3de2343`, this session)
+### Editor music preview per-scene snapshot (commit `4e50bbb`; not currently active work)
+
+- `QueuePlayer.sceneStates` (a `Map` keyed by sceneId) and `QueuePlayer.activeSceneId` are how preview ownership is tracked. The single `<audio>` element stays global; only the visual snapshot is per-scene.
+- `QueuePlayer.subscribe(sceneId, fn)` is the per-scene pub/sub API used by `makeMusicEditor` via `syncPlayerStatus`. Each listener receives `_snapshotForScene(sceneId)` — the live state if it owns the preview, the stored scene snapshot otherwise, or fresh idle if no entry yet.
+- When wiring *any* new `playOne` / `playQueue` / `toggleOne` / future mutator, **always pass `opts.sceneId`** equal to the inspector's `ownerSceneId` (= `state.sceneId` at render time). The legacy unscoped `onStatus(fn)` is still there for non-inspector callers but should not be added to.
+- `QueuePlayer.stop()` inside data-mutation guards (mode toggle / reorder / delete / `+ Add` / structural-edit cleanup) **stays global by user intent** — its job is "is something playing, if so stop it so the rebuild is clean", not "manage preview ownership". Do not add `sceneId` plumbing to those guards.
+- `seek.oninput = () => QueuePlayer.seek(...)` is **not yet scene-scoped**. If a related preview leak ever shows up (slider painting into wrong inspector, elapsed-time drifting across scenes), the surgical follow-up is to mirror the snapshot logic onto `seek({sceneId})`, not to refactor the bus. Do not pre-emptively touch it.
+- Read the test contract in `test/editor-music-per-scene-snapshot.test.js` (4 cases) and the `sceneId`-tagged updates in `test/editor-rerender-lifecycle.test.js` before changing any QueuePlayer API.
+
+### Inventory pickup-fly animation (commit `3de2343`, pickup-fly session)
 
 - The hitbox → scene-base wiring at `src/runtime/scene-base.js:128` and any peer scene must be `onTrigger: (hb, clientX, clientY) => this._triggerHitbox(hb, clientX, clientY)`. A single-argument arrow will silently drop the click coords and pin the fly icon to bottom-left.
 - `Inventory.addWithFly(itemId, originX, originY, label, onComplete)` expects viewport-space coords (matching `position: fixed`); the JS arc interpolates over `duration` ms and calls `this.add(itemId)` at completion. The signature is now frozen by `test/inventory-fly-animation.test.js` (icon creation, DOM lifecycle, arc interpolation, scale/opacity phases, late completion, popup parity).
@@ -310,6 +319,7 @@ python3 tools/make_scene_loop.py <track> --no-render
 - `test/music-transition-lifecycle.test.js` — focused overlapping-fade and async-load regressions.
 - `test/hitbox-lifecycle.test.js`, `test/editor-button-hitbox.test.js`, `test/title-music-start.test.js` — hitbox lifecycle contract and editor/title regressions.
 - `test/inventory-fly-animation.test.js` — pickup-fly arc/icon lifecycle toward the INV button.
+- `test/editor-music-per-scene-snapshot.test.js` — per-scene preview snapshot: scene switch during preview does not falsely highlight new scene's rows; preview ownership survives navigation; single-track (non-medley) preview state survives navigation; Stop from any inspector clears the global preview. Read alongside `test/editor-rerender-lifecycle.test.js` before touching `QueuePlayer`.
 - `editor.js` — editor queue player, music controls, and per-button hitboxes.
 - `src/inventory.js` — `Inventory.addWithFly()` arcs an icon from `(originX, originY)` to the `.inventory-button` rect; `onComplete` commits the pickup.
 - `src/runtime/scene-base.js` — `onTrigger(hb, clientX, clientY)` wiring on scene hitbox configs; must forward both coords or the icon pins to bottom-left.
