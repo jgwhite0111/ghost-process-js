@@ -1,4 +1,5 @@
 node_modules/
+package-lock.json
 # vendor/ IS tracked — phaser.min.js and ink-full.js are part of the
 # offline-first deliverable per SPEC.md §89. `npm run vendor` regenerates
 # them if a fresh checkout needs updates.
