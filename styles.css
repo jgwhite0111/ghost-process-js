@@ -581,3 +581,25 @@ html, body {
         letter-spacing: 0.06em;
     }
 }
+
+/* Desktop dialogue typography. PC-98 speech was meant to be read as
+   chunky CRT text, not as a tiny web-font label. Keep the 22px mobile /
+   small-viewport default, then give genuinely roomy laptop and desktop
+   viewports a larger speech face without making short-height windows
+   unusable. Choices already receive their desktop bump above. */
+@media (min-width: 1024px) and (min-height: 600px) {
+    .dialogue-box {
+        font-size: 30px;
+        line-height: 1.35;
+        padding: 20px 32px;
+    }
+    .dialogue-box .speaker {
+        font-size: 24px;
+        margin-bottom: 8px;
+    }
+    .continue-indicator {
+        right: 24px;
+        bottom: 10px;
+        font-size: 22px;
+    }
+}
