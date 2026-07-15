@@ -1,5 +1,5 @@
-# Git LFS — binary audio assets
-# LFS these to prevent .git/ from bloating on every composer regen.
+# Git LFS — binary assets
+# LFS these to prevent .git/ from bloating on every regen.
 # Files stay in working tree; only the blob storage moves.
 *.mp3 filter=lfs diff=lfs merge=lfs -text
 *.mid filter=lfs diff=lfs merge=lfs -text
