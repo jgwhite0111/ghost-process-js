@@ -27,7 +27,7 @@ PC-98 / late-80s cyberpunk horror point-and-click visual novel. Mature proportio
 ### Next-session starting point
 
 - Do not redo the dialogue typography or editor runtime-preview work; both are committed and verified above.
-- This handoff is intended to be pushed with its documentation commit; a fresh session should confirm `git status --short` is empty and `git rev-list --left-right --count origin/main...HEAD` is `0 0`.
+- This handoff was pushed with its documentation commit; a fresh session should confirm `git status --short` is empty and `git rev-list --left-right --count origin/main...HEAD` is `0 0`.
 
 ## Previous update (2026-07-15)
 
