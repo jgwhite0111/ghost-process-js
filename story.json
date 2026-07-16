@@ -519,7 +519,7 @@
           "placementY": 0.82,
           "scenes": {
             "exploration_demo": {
-              "frames": "assets/sprites/protagonist/obe_lab/walk_frames_v4/frame_*.png",
+              "frames": "assets/sprites/protagonist/obe_lab/walk_frames_hold/frame_*.png",
               "fps": 8,
               "loop": true
             }
