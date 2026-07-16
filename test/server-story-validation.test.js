@@ -139,6 +139,28 @@ test('production story validator rejects every present invalid scene id', () => 
     }
 });
 
+test('production story accepts the data-driven exploration scene contract', () => {
+    const story = makeValidStory();
+    story.scenes.explore = {
+        id: 'explore',
+        kind: 'exploration',
+        exploration: {
+            spawn: { x: 0.4, y: 0.8 },
+            walkSpeed: 140,
+            walkableArea: { x: 0.1, y: 0.4, w: 0.8, h: 0.5 },
+        },
+        hitboxes: [],
+    };
+    assert.equal(validateStory(story), null);
+});
+
+test('live story includes the exploration demo and its Ink bridge', () => {
+    const liveStory = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'story.json'), 'utf8'));
+    assert.equal(liveStory.scenes.exploration_demo.kind, 'exploration');
+    assert.equal(liveStory.scenes.exploration_demo.ink, 'ink/exploration_demo.ink');
+    assert.equal(validateStory(liveStory), null);
+});
+
 test('production story contains no dead recipe or combination data and passes validation', () => {
     const liveStory = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'story.json'), 'utf8'));
     assert.equal(validateStory(liveStory), null);

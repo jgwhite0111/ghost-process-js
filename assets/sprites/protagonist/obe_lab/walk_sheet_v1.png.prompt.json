@@ -1,0 +1,10 @@
+{
+  "asset": "assets/sprites/protagonist/obe_lab/walk_sheet_v1.png",
+  "kind": "sprite_sheet",
+  "timestamp_utc": "2026-07-16T12:30:01Z",
+  "provider": "minimax",
+  "model": "image-01",
+  "aspect_ratio": "16:9",
+  "prompt": "Eight-panel horizontal walk-cycle reference sheet for one adult human protagonist in a mature cyberpunk horror point-and-click adventure. Same character repeated in every panel, strict side profile facing right: late-thirties investigator, realistic angular face, short practical black hair, dark graphite field jacket with restrained oxblood collar, narrow black utility trousers, flat worn boots, clinical gloves and a small neural-interface jack behind one ear. Human, not an android, no weapon. Panels show a clear loop: neutral standing rest, right step, passing pose, left step, opposite contact, passing pose, returning step, rest. Full body head to boots in every panel, identical scale, identical feet baseline, no cropping, generous panel spacing. Flat saturated chroma-magenta background everywhere, no gradient, no floor, no cast shadow. Smooth detailed cel-painted source art for later runtime palette quantization and Bayer dithering, not pixel art. No extra characters, no duplicate limbs, no front or three-quarter view, no text, borders, UI, big anime eyes, oversized head, moe or cheerful styling.",
+  "source": "tools/gen_exploration_assets.py"
+}

@@ -1,0 +1,10 @@
+{
+  "asset": "assets/backgrounds/scene_obe_lab_v2.png",
+  "kind": "background",
+  "timestamp_utc": "2026-07-16T12:31:39Z",
+  "provider": "minimax",
+  "model": "image-01",
+  "aspect_ratio": "4:3",
+  "prompt": "Side-elevation room plate for a mature 1990s point-and-click cyberpunk horror game. The camera is exactly parallel to a long back wall, like a theatre set viewed from the side: NO vanishing-point tunnel, NO central perspective corridor, NO first-person view, NO isometric view. Show a wide rectangular computer laboratory from left to right, built to induce out-of-body experiences. Back wall equipment: reclining medical induction couch, EEG crown, old CRT monitors with abstract waveforms and no readable text, oscilloscopes, signal amplifiers, copper induction coils, sensory-deprivation pod and Faraday mesh. Put all major machinery along the back wall. Keep the entire lower 40 percent as a continuous clear horizontal floor strip for a character to walk left/right and slightly toward/away from camera; no object blocks its center. Include a clear near floor edge and a back floor edge so the walk plane has depth. Foreground occluders may touch only the extreme left and right borders. Standing eye-level, fixed medium-wide zoom, important content inside a centered 4:3 safe crop. Oppressive cyan and dim red practical light, hard shadows, stained concrete, steel and beige computer plastic. Smooth detailed source illustration for later palette quantization and Bayer dithering, not chunky pixel art. No people, figures, silhouettes, androids, mannequins, statues, protagonist, text, labels, logos, UI, close-up, fisheye, cheerful colours or cute anime styling.",
+  "source": "tools/gen_exploration_assets.py"
+}

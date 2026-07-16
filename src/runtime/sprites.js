@@ -25,6 +25,7 @@ class CharacterSprite {
         this.isSpeaking = false;
         this.currentFrame = 0;
         this.elapsed = 0;     // ms since last frame advance
+        this.character.flipX = this.character.flipX === true;
 
         // Fade-in/out state. Opacity is multiplied into the canvas
         // draw at render time. _tickOpacity() eases toward
@@ -516,7 +517,13 @@ class CharacterSprite {
         const drawY = y - h;
         ctx.save();
         ctx.globalAlpha = this.opacity;
-        ctx.drawImage(img, drawX, drawY, w, h);
+        if (this.character.flipX) {
+            ctx.translate(x, 0);
+            ctx.scale(-1, 1);
+            ctx.drawImage(img, -w / 2, drawY, w, h);
+        } else {
+            ctx.drawImage(img, drawX, drawY, w, h);
+        }
         ctx.restore();
     }
 }

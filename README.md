@@ -15,7 +15,9 @@ npm start                    # boots Express on 127.0.0.1:8765
 
 Then open:
 - **Game**: http://127.0.0.1:8765/index.html
+- **Exploration demo**: http://127.0.0.1:8765/index.html?scene=exploration_demo
 - **Editor**: http://127.0.0.1:8765/editor.html
+- **Asset desk**: http://127.0.0.1:8765/asset-generator.html
 
 By default the server is local-only (`127.0.0.1`). To serve over Tailscale/LAN, opt into a non-loopback bind and provide a secret of at least 16 non-whitespace characters:
 

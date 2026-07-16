@@ -37,7 +37,16 @@ async function boot() {
     // Wait only for the start scene's background, complete medley, and sprite
     // frames. Remaining scene stages continue opportunistically in parallel
     // with play and Scene.start retains its on-demand fallback.
-    const startSceneId = window.STORY.start;
+    const search = window.location && typeof window.location.search === 'string'
+        ? window.location.search
+        : '';
+    const requestedMatch = search.match(/[?&]scene=([^&]+)/);
+    const requestedScene = requestedMatch
+        ? decodeURIComponent(requestedMatch[1].replace(/\+/g, ' '))
+        : null;
+    const startSceneId = requestedScene && window.STORY.scenes[requestedScene]
+        ? requestedScene
+        : window.STORY.start;
     await window.STORY_BG_PROMISE;
     goTo(startSceneId);
 }

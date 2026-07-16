@@ -489,6 +489,80 @@
       ],
       "hitboxes": [],
       "tasks": []
+    },
+    "exploration_demo": {
+      "id": "exploration_demo",
+      "kind": "exploration",
+      "bg": "scene_obe_lab_v2",
+      "bgPalette": "lab_clinic",
+      "music": "alley_confrontation.mp3",
+      "ink": "ink/exploration_demo.ink",
+      "start_node": "Start",
+      "exploration": {
+        "playerId": "player",
+        "spawn": { "x": 0.48, "y": 0.82 },
+        "walkSpeed": 150,
+        "walkableArea": [
+          { "x": 0.11, "y": 0.61 },
+          { "x": 0.89, "y": 0.61 },
+          { "x": 0.96, "y": 0.91 },
+          { "x": 0.04, "y": 0.91 }
+        ],
+        "depth": { "farY": 0.61, "nearY": 0.91, "farScale": 0.78, "nearScale": 1.08 }
+      },
+      "characters": [
+        {
+          "id": "player",
+          "speaker": "PLAYER",
+          "targetH": 0.42,
+          "placementX": 0.48,
+          "placementY": 0.82,
+          "scenes": {
+            "exploration_demo": {
+              "frames": "assets/sprites/protagonist/obe_lab/walk_frames_v1/frame_*.png",
+              "fps": 8,
+              "loop": true
+            }
+          }
+        }
+      ],
+      "hitboxes": [
+        {
+          "x": 0.42,
+          "y": 0.43,
+          "w": 0.17,
+          "h": 0.19,
+          "label": "Inspect the terminal",
+          "walkTo": [0.5, 0.67],
+          "ink": "Terminal"
+        },
+        {
+          "x": 0.22,
+          "y": 0.72,
+          "w": 0.13,
+          "h": 0.13,
+          "label": "Search the bins",
+          "item": "scrap_metal",
+          "walkTo": [0.29, 0.79]
+        },
+        {
+          "x": 0.78,
+          "y": 0.47,
+          "w": 0.16,
+          "h": 0.25,
+          "label": "Return to the alley",
+          "target": "alley",
+          "walkTo": [0.78, 0.75]
+        }
+      ],
+      "tasks": [
+        {
+          "id": "inspect_terminal",
+          "type": "goto_hitbox",
+          "hitbox": "Inspect the terminal",
+          "hint": "The dead terminal still has a standby light."
+        }
+      ]
     }
   },
   "items": {

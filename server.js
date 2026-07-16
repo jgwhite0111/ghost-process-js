@@ -88,10 +88,21 @@ const upload = multer({
 });
 app.post('/api/assets', mutationGuard, upload.single('file'), (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'no file' });
+    let provenancePath = null;
+    if (req.body.provenance) {
+        try {
+            const provenance = JSON.parse(req.body.provenance);
+            provenancePath = `${req.file.path}.prompt.json`;
+            fs.writeFileSync(provenancePath, JSON.stringify(provenance, null, 2) + '\n');
+        } catch (err) {
+            return res.status(400).json({ error: `invalid provenance: ${err.message}` });
+        }
+    }
     res.json({
         ok: true,
         name: req.file.filename,
-        path: `assets/${req.file.filename}`
+        path: `assets/${req.file.filename}`,
+        provenance: provenancePath ? `assets/${path.basename(provenancePath)}` : null
     });
 });
 
@@ -244,11 +255,28 @@ function validateStory(s) {
             }
             if (sc.id !== id) return `scene key "${id}" has id "${sc.id}" (must match key)`;
         }
-        if (!['ink', 'choice', 'end', 'title'].includes(sc.kind)) {
+        if (!['ink', 'choice', 'end', 'title', 'exploration'].includes(sc.kind)) {
             return `scene "${id}" has invalid kind "${sc.kind}" (must be ink|choice|end|title)`;
         }
         if (!Array.isArray(sc.hitboxes)) return `scene "${id}" hitboxes must be an array`;
         if (sc.ink && typeof sc.ink !== 'string') return `scene "${id}" ink must be a string path`;
+        if (sc.kind === 'exploration') {
+            if (!sc.exploration || typeof sc.exploration !== 'object') {
+                return `${scenePath}.exploration must be an object`;
+            }
+            const exploration = sc.exploration;
+            numericError = validateFiniteNumber(exploration, 'walkSpeed', `${scenePath}.exploration.walkSpeed`);
+            if (numericError) return numericError;
+            for (const [part, keys] of [['spawn', ['x', 'y']], ['walkableArea', ['x', 'y', 'w', 'h']]]) {
+                if (!exploration[part] || typeof exploration[part] !== 'object') {
+                    return `${scenePath}.exploration.${part} must be an object`;
+                }
+                for (const key of keys) {
+                    numericError = validateFiniteNumber(exploration[part], key, `${scenePath}.exploration.${part}.${key}`);
+                    if (numericError) return numericError;
+                }
+            }
+        }
         if (Array.isArray(sc.tasks)) {
             for (let index = 0; index < sc.tasks.length; index++) {
                 if (sc.tasks[index]?.type === 'combine') {

@@ -1,0 +1,10 @@
+{
+  "asset": "assets/backgrounds/scene_obe_lab_v1.png",
+  "kind": "background",
+  "timestamp_utc": "2026-07-16T12:29:56Z",
+  "provider": "minimax",
+  "model": "image-01",
+  "aspect_ratio": "4:3",
+  "prompt": "Wide fixed-camera side-on interior for a mature 1990s point-and-click cyberpunk horror game. A clandestine computer laboratory for inducing out-of-body experiences: reclining medical induction couch against the back wall, EEG crown, old CRT monitors with abstract waveforms and no readable text, oscilloscopes, signal amplifiers, copper induction coils, sensory-deprivation pod, Faraday mesh, cable bundles and improvised clinical equipment. Wall parallel to the camera, standing eye-level, medium-wide zoom, readable left-to-right room. Keep the lower 42 percent as one continuous unobstructed shallow-depth floor walk plane with clear near and far boundaries; equipment stays mostly against the back wall, with foreground machinery only at extreme edges for occlusion. Important composition fits a centered 4:3 crop. Oppressive cyan and dim red practical light, hard shadows, rain-stained concrete, steel and beige computer plastic. Smooth detailed source illustration for later palette quantization and Bayer dithering, not chunky pixel art. No people, figures, silhouettes, androids, mannequins, statues, protagonist, text, labels, logos, UI, close-up, top-down, isometric, fisheye, cheerful colours or cute anime styling.",
+  "source": "tools/gen_exploration_assets.py"
+}

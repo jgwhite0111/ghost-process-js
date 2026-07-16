@@ -1,0 +1,11 @@
+{
+  "source": "assets/sprites/protagonist/obe_lab/walk_sheet_v1.png",
+  "frames": "assets/sprites/protagonist/obe_lab/walk_frames_v1",
+  "frame_count": 8,
+  "frame_size": [
+    240,
+    426
+  ],
+  "key": "magenta: R>175, G<82, B>68; source y<648 removes generated reflection",
+  "source_prompt_sidecar": "assets/sprites/protagonist/obe_lab/walk_sheet_v1.png.prompt.json"
+}

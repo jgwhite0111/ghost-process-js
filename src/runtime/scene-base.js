@@ -30,6 +30,7 @@ class Scene {
         this.ctx = null;
         this.bgImage = null;
         this.characters = [];      // CharacterSprite[]
+        this.exploration = null;
         this.hitboxLayer = null;
         this.dialogueRunner = null;
         this.music = null;
@@ -127,6 +128,19 @@ class Scene {
             sceneConfig: this.sceneConfig,
             onTrigger: (hb, clientX, clientY) => this._triggerHitbox(hb, clientX, clientY)
         });
+        if (this.sceneConfig.kind === 'exploration') {
+            const playerId = this.sceneConfig.exploration?.playerId || 'player';
+            const playerSprite = this.characters.find((sprite) =>
+                sprite.character && sprite.character.id === playerId
+            ) || this.characters[0];
+            if (playerSprite && window.ExplorationController) {
+                this.exploration = new window.ExplorationController({
+                    scene: this,
+                    sprite: playerSprite,
+                    config: this.sceneConfig.exploration,
+                });
+            }
+        }
         // Ink.
         if (this.sceneConfig.ink) {
             await this._startDialogue();
@@ -320,7 +334,11 @@ class Scene {
         // inside InkJS.
     }
 
-    _triggerHitbox(hb, pageX, pageY) {
+    _triggerHitbox(hb, pageX, pageY, fromExploration = false) {
+        if (this.exploration && !fromExploration) {
+            this.exploration.handleHotspot(hb, pageX, pageY);
+            return;
+        }
         // Notify the task tracker BEFORE the action runs so it can
         // mark use_item / goto_hitbox tasks as completed even if the
         // hitbox itself consumes the click without transitioning
@@ -353,6 +371,21 @@ class Scene {
         if (hb.target) {
             this._transition(hb.target);
         }
+    }
+
+    _activateExplorationHotspot(hb, pageX, pageY) {
+        if (hb.ink && this.dialogueRunner) {
+            if (window.TaskTracker) window.TaskTracker.onHitboxClicked(hb);
+            try {
+                this.dialogueRunner.story.ChoosePathString(hb.ink);
+                this.dialogueRunner.step();
+                if (window.DialoguePanel) window.DialoguePanel.show();
+            } catch (e) {
+                console.warn(`[${this.sceneId}] hotspot Ink path ${hb.ink} failed`, e);
+            }
+            return;
+        }
+        this._triggerHitbox(hb, pageX, pageY, true);
     }
 
     // Configure an item-gated Ink scene. A first-time pickup keeps the
@@ -420,6 +453,16 @@ class Scene {
     }
 
     _handlePointerDown(e) {
+        if (this.exploration) {
+            const point = window.Runtime.pageToCanvasCoords(this.canvas, e.clientX, e.clientY);
+            this.exploration.handleCanvasPoint(
+                point.x / (window.Runtime.INTERNAL_W || 640),
+                point.y / (window.Runtime.INTERNAL_H || 480),
+                e.clientX,
+                e.clientY,
+            );
+            return;
+        }
         // Hitbox layer handled its own pointerdown before this fires
         // (it stops propagation on success). If we get here, we're
         // either in empty space OR there's a hitbox that has no action
@@ -643,7 +686,13 @@ class Scene {
         // GHOST PROCESS logo (canvas overlay — never cropped by cover-fit).
         this._drawTitleOverlay();
         const deltaSec = delta / 1000;
-        for (const c of this.characters) {
+        if (this.exploration) this.exploration.update(delta);
+        const drawCharacters = this.exploration
+            ? [...this.characters].sort((a, b) =>
+                (a.character?.placementY || 0) - (b.character?.placementY || 0)
+            )
+            : this.characters;
+        for (const c of drawCharacters) {
             c.update(delta);
             c._tickOpacity(deltaSec);
             if (c.opacity > 0) c.draw(this.ctx);
@@ -666,6 +715,7 @@ class Scene {
         // cached by the engine, so release them here instead of appending a
         // duplicate set the next time this scene starts.
         this.characters = [];
+        this.exploration = null;
     }
 }
 
