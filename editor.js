@@ -636,20 +636,24 @@ function startAnimTick() {
       }
     }
     if (anyPlaying) {
-      renderPreview();
-      // renderOverlay() is intentionally NOT called here. Earlier
-      // revisions did; the cost was a destroy-and-recreate of the
-      // whole overlay (including the play/pause button) on every
-      // animation frame. That destroyed pointer events that happened
-      // to span the mousedown/mouseup boundary - the canonical case
-      // was clicking pause no-op'ing, because the button under the
-      // cursor had been swapped out between mousedown and mouseup so
-      // the browser never fired a `click` event. The play button's
-      // icon + class are now updated via applyPlayButtonState(),
-      // called only when the overlay is rebuilt for a real reason
-      // (toggle, drag, scene change). The animation tick stays
-      // responsible for canvas-only work (drawSpriteFrames redraws
-      // the bg canvas with the new anim.idx).
+      // Canvas-only redraw. We deliberately call redrawCanvasOnly()
+      // instead of renderPreview() because renderPreview() ends with
+      // renderOverlay() (line 793 area). renderOverlay() does
+      // overlay.innerHTML = '' and rebuilds every DOM node on every
+      // call, including the play/pause button - so even though
+      // 64eeef2 removed the explicit renderOverlay() call from
+      // this tick, going through renderPreview() still rebuilt the
+      // overlay every frame. That destroyed the play button between
+      // mousedown and mouseup on every animation frame, so the
+      // browser dropped the `click` event (mousedown and mouseup
+      // landed on different DOM nodes), making pause no-op while
+      // the animation was running. redrawCanvasOnly() draws the
+      // new anim.idx frame via drawSpriteFrames (called inside
+      // drawPreviewBase) without ever touching the overlay. The
+      // play/pause button's icon is updated via applyPlayButtonState()
+      // only when togglePlay itself fires, which renders the
+      // overlay once for that real reason.
+      redrawCanvasOnly();
     }
     else state._animTickHandle = null;
   };
