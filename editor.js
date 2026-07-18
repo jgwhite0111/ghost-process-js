@@ -1907,7 +1907,7 @@ function setupDrawTool() {
 
 function setTool(t) {
   state.tool = t;
-  $$('.bottombar .tool-group button').forEach(b => b.classList.remove('active'));
+  $$('#bottombar .tool-group button').forEach(b => b.classList.remove('active'));
   // Only the exploration tools get an "active" highlight - they're
   // the only modes. The action buttons (+ Hitbox, + Sprite) and the
   // implicit "select" (no tool engaged) state have no button
