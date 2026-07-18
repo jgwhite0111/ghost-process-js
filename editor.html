@@ -392,6 +392,48 @@
     color: #0d1117;
     cursor: grabbing;
   }
+
+  /* ---------- exploration tools' button states (toggleable) ----------
+     The 4 cyan-themed exploration buttons share a distinct visual
+     identity from the blue primary-tool highlight. Border is
+     always cyan so they read as a sibling set; active state adds
+     a brighter cyan glow on top of the standard blue background
+     so it's unambiguously "this tool is engaged". */
+  #exploration-tools button {
+    border-color: #4ba3c7;
+    color: #9bd0e6;
+  }
+  #exploration-tools button:hover {
+    background: #1c3845;
+    border-color: #5cb8e0;
+  }
+  #exploration-tools button.active {
+    background: #1f4d80;
+    border-color: #5cb8e0;
+    color: #cceaf3;
+    box-shadow: 0 0 0 2px rgba(112, 220, 255, 0.35);
+  }
+
+  /* Exploration tool SVG backgrounds stay click-transparent. Without
+     this rule the polygon fill (#walkable-svg), grid lines
+     (#grid-svg), and blocked-tile rects (#blocked-svg) - all
+     blanket-covered, all direct children of #overlay - capture
+     clicks across the entire walkable area via the
+     #overlay > * { pointer-events: auto } rule. That blocks the
+     protagonist's sprite-handle from receiving clicks (including
+     the play button), so neither drag nor preview animation can
+     fire while any exploration overlay is visible. Setting the
+     decorative SVGs to pointer-events: none lets clicks fall
+     through to the bg canvas (which routes to onFrameDown /
+     onBlockedPaintDown via bubbling) or to the underlying
+     handle divs (.walkable-corner / .grid-origin-handle /
+     .grid-angle-notch / .spawn-marker) which keep pointer-events:
+     auto from the #overlay > * rule. */
+  #overlay > .walkable-svg,
+  #overlay > .grid-svg,
+  #overlay > .blocked-svg {
+    pointer-events: none;
+  }
 </style>
 </head>
 <body>

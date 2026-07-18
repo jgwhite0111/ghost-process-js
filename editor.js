@@ -1876,14 +1876,22 @@ function setupDrawTool() {
   $('#tool-add-sprite').onclick = () => addNewSprite();
   // Exploration-only buttons; null-safe in tests whose DOM fixture
   // doesn't add them.
+  // Exploration-only buttons - toggleable so clicking the active tool
+  // deactivates it (returns to 'select'). Null-safe for tests whose
+  // DOM fixture doesn't add them. Matches the cyan-accent styling in
+  // editor.html so the "on" state reads cleanly.
   const walkableBtn = $('#tool-walkable-area');
-  if (walkableBtn) walkableBtn.onclick = () => setTool('walkable-area');
+  if (walkableBtn) walkableBtn.onclick = () =>
+    setTool(state.tool === 'walkable-area' ? 'select' : 'walkable-area');
   const gridBtn = $('#tool-grid');
-  if (gridBtn) gridBtn.onclick = () => setTool('grid');
+  if (gridBtn) gridBtn.onclick = () =>
+    setTool(state.tool === 'grid' ? 'select' : 'grid');
   const blockedBtn = $('#tool-blocked');
-  if (blockedBtn) blockedBtn.onclick = () => setTool('blocked');
+  if (blockedBtn) blockedBtn.onclick = () =>
+    setTool(state.tool === 'blocked' ? 'select' : 'blocked');
   const spawnBtn = $('#tool-spawn');
-  if (spawnBtn) spawnBtn.onclick = () => setTool('spawn');
+  if (spawnBtn) spawnBtn.onclick = () =>
+    setTool(state.tool === 'spawn' ? 'select' : 'spawn');
   // All four exploration tools wired. The null-safety guards keep
   // editor-rerender-lifecycle.test.js bootstrap clean (its DOM
   // fixture does not add the exploration-only buttons).
