@@ -790,6 +790,10 @@ function renderOverlay() {
   // canvas pointermove path (drawn separately by the paint
   // handler so it tracks without re-rendering).
   if (state.tool === 'blocked') renderBlockedOverlay();
+
+  // Spawn marker surface: faded grid background + the
+  // draggable orange spawn-point indicator.
+  if (state.tool === 'spawn') renderSpawnOverlay();
 }
 
 function dragKey(d) {
@@ -1321,6 +1325,136 @@ function renderBlockedOverlay() {
   overlay.appendChild(blockedSvg);
 }
 
+// ---------- exploration: spawn marker ----------
+//
+// Visible only when state.tool === 'spawn'. Renders a faded grid
+// background (reuses .grid-svg.dimming) plus a single draggable
+// orange marker at exploration.spawn.{x,y}. Drag mutates the
+// coordinates in canvas fractions; markDirty() fires once on
+// pointerup. No schema change - exploration.spawn is already on
+// the scene config (used by ExplorationController at runtime).
+
+function ensureExplorationSpawn(ex) {
+  if (!ex.spawn || !Number.isFinite(ex.spawn.x) || !Number.isFinite(ex.spawn.y)) {
+    // Default: x-mid of polygon's horizontal extent, ~95% down
+    // vertically so the character starts safely inside the floor
+    // (matches the runtime default of 0.5/0.78 when no spawn is
+    // configured).
+    let defX = 0.5, defY = 0.82;
+    if (Array.isArray(ex.walkableArea) && ex.walkableArea.length > 0) {
+      let minX = ex.walkableArea[0].x, maxX = minX;
+      let maxY = ex.walkableArea[0].y;
+      for (const p of ex.walkableArea) {
+        if (p.x < minX) minX = p.x;
+        if (p.x > maxX) maxX = p.x;
+        if (p.y > maxY) maxY = p.y;
+      }
+      defX = (minX + maxX) / 2;
+      // Just inside the polygon's bottom edge.
+      defY = Math.max(minX > 0 ? 0.5 : 0.5, maxY - 0.05);
+    }
+    ex.spawn = { x: defX, y: defY };
+  }
+}
+
+function renderSpawnOverlay() {
+  const sc = getScene();
+  if (!sc || sc.kind !== 'exploration') return;
+  ensureExplorationDefaults(sc);
+  ensureExplorationSpawn(sc);
+  const ex = sc.exploration;
+  const tileSize = Number.isFinite(ex.tileSize) ? ex.tileSize : 0.04;
+  const angle = Number.isFinite(ex.gridAngle) ? ex.gridAngle : 0;
+  const origin = (ex.gridOrigin && Number.isFinite(ex.gridOrigin.x) && Number.isFinite(ex.gridOrigin.y))
+    ? ex.gridOrigin
+    : defaultExplorationOrigin(ex);
+  const w = vpW(), h = vpH();
+  const ts = Math.max(8, tileSize * w);
+  const ox = origin.x * w, oy = origin.y * h;
+
+  // Local grid->screen closure (mirrors renderBlockedOverlay).
+  function g2s(col, row) {
+    const cx = col * ts, cy = row * ts;
+    const c = Math.cos(angle), s = Math.sin(angle);
+    return { x: ox + cx * c - cy * s, y: oy + cx * s + cy * c };
+  }
+
+  const SVG = 'http://www.w3.org/2000/svg';
+
+  // Faded grid background for orientation. Reuses .grid-svg.dimming.
+  const gridSvg = document.createElementNS(SVG, 'svg');
+  gridSvg.setAttribute('class', 'grid-svg dimming');
+  gridSvg.setAttribute('width', String(w));
+  gridSvg.setAttribute('height', String(h));
+  const range = Math.ceil(Math.hypot(w, h) / ts) + 4;
+  for (let col = -range; col <= range; col++) {
+    const p1 = g2s(col, -range);
+    const p2 = g2s(col,  range);
+    const line = document.createElementNS(SVG, 'line');
+    line.setAttribute('x1', String(p1.x));
+    line.setAttribute('y1', String(p1.y));
+    line.setAttribute('x2', String(p2.x));
+    line.setAttribute('y2', String(p2.y));
+    line.setAttribute('class', col % 5 === 0 ? 'grid-line-major' : '');
+    gridSvg.appendChild(line);
+  }
+  for (let row = -range; row <= range; row++) {
+    const p1 = g2s(-range, row);
+    const p2 = g2s( range, row);
+    const line = document.createElementNS(SVG, 'line');
+    line.setAttribute('x1', String(p1.x));
+    line.setAttribute('y1', String(p1.y));
+    line.setAttribute('x2', String(p2.x));
+    line.setAttribute('y2', String(p2.y));
+    line.setAttribute('class', row % 5 === 0 ? 'grid-line-major' : '');
+    gridSvg.appendChild(line);
+  }
+  overlay.appendChild(gridSvg);
+
+  // Spawn marker - a single draggable div at the spawn point.
+  const spawn = ex.spawn;
+  const div = document.createElement('div');
+  div.className = 'spawn-marker';
+  div.textContent = '\u2302';  // house symbol - reads as a person/arrival point
+  div.style.left = (spawn.x * w) + 'px';
+  div.style.top  = (spawn.y * h) + 'px';
+  attachSpawnDrag(div, spawn);
+  overlay.appendChild(div);
+}
+
+function attachSpawnDrag(div, spawn) {
+  div.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    div.setPointerCapture(e.pointerId);
+    div.classList.add('dragging');
+    const r = frame.getBoundingClientRect();
+    const scale = r.width / vpW();
+    let lastClientX = e.clientX, lastClientY = e.clientY;
+    const move = (ev) => {
+      const dx = (ev.clientX - lastClientX) / scale / vpW();
+      const dy = (ev.clientY - lastClientY) / scale / vpH();
+      lastClientX = ev.clientX;
+      lastClientY = ev.clientY;
+      spawn.x = Math.max(-0.1, Math.min(1.1, spawn.x + dx));
+      spawn.y = Math.max(-0.1, Math.min(1.1, spawn.y + dy));
+      // In-place move so pointer capture survives.
+      div.style.left = (spawn.x * vpW()) + 'px';
+      div.style.top  = (spawn.y * vpH()) + 'px';
+    };
+    const up = () => {
+      div.removeEventListener('pointermove', move);
+      div.removeEventListener('pointerup', up);
+      div.removeEventListener('pointercancel', up);
+      div.classList.remove('dragging');
+      markDirty();
+    };
+    div.addEventListener('pointermove', move);
+    div.addEventListener('pointerup', up);
+    div.addEventListener('pointercancel', up);
+  });
+}
+
 // ---------- sprite drag (incremental deltas) ----------
 function attachSpriteDrag(div, charConfig) {
   div.addEventListener('pointerdown', (e) => {
@@ -1637,7 +1771,11 @@ function setupDrawTool() {
   if (gridBtn) gridBtn.onclick = () => setTool('grid');
   const blockedBtn = $('#tool-blocked');
   if (blockedBtn) blockedBtn.onclick = () => setTool('blocked');
-  // Spawn button is wired in its own follow-up commit.
+  const spawnBtn = $('#tool-spawn');
+  if (spawnBtn) spawnBtn.onclick = () => setTool('spawn');
+  // All four exploration tools wired. The null-safety guards keep
+  // editor-rerender-lifecycle.test.js bootstrap clean (its DOM
+  // fixture does not add the exploration-only buttons).
 
   frame.addEventListener('pointerdown', onFrameDown);
 }
@@ -1659,19 +1797,26 @@ function setTool(t) {
     const btn = $('#tool-blocked');
     if (btn) btn.classList.add('active');
   }
+  if (t === 'spawn') {
+    const btn = $('#tool-spawn');
+    if (btn) btn.classList.add('active');
+  }
   const banner = $('#tool-banner');
   banner.style.display = (t === 'draw-hitbox') ? 'inline' : 'none';
   const exBanner = $('#tool-exploration-banner');
   const isWalkable = (t === 'walkable-area');
   const isGrid = (t === 'grid');
   const isBlocked = (t === 'blocked');
-  exBanner.style.display = (isWalkable || isGrid || isBlocked) ? 'inline' : 'none';
+  const isSpawn = (t === 'spawn');
+  exBanner.style.display = (isWalkable || isGrid || isBlocked || isSpawn) ? 'inline' : 'none';
   exBanner.textContent = isWalkable
     ? 'Walkable area: drag any cyan corner to reshape the polygon (4-corner quadrilateral).'
     : isGrid
     ? 'Grid: drag the green dot to move the rotation pivot; drag the orange \u21bb handle to rotate the angle.'
     : isBlocked
     ? 'Blocked tiles: click or drag across tiles to toggle them as blocked (the red squares).'
+    : isSpawn
+    ? 'Spawn: drag the orange marker to set where the character stands at scene start.'
     : '';
 }
 
