@@ -284,6 +284,40 @@
   .medley-seek input[type=range] { flex: 1; min-width: 0; accent-color: #6cba6c; }
   .medley-seek input[type=range]:disabled { opacity: 0.35; }
   .medley-seek .seek-time { min-width: 72px; color: #6c7280; font-size: 10px; text-align: right; }
+
+  /* ---------- exploration tools (visible only when scene kind === 'exploration') ---------- */
+  .walkable-svg {
+    position: absolute; inset: 0; pointer-events: none; z-index: 8;
+  }
+  .walkable-svg polygon {
+    fill: rgba(112, 220, 255, 0.10);
+    stroke: #70dcff;
+    stroke-width: 1.5;
+    stroke-dasharray: 4 3;
+  }
+  .walkable-corner {
+    position: absolute;
+    width: 14px; height: 14px;
+    margin: -7px 0 0 -7px;
+    background: #0d1117;
+    border: 2px solid #70dcff;
+    border-radius: 50%;
+    cursor: grab;
+    touch-action: none;
+    z-index: 11;
+    box-sizing: border-box;
+  }
+  .walkable-corner.selected {
+    background: #70dcff;
+    box-shadow: 0 0 0 1px #0d1117, 0 0 0 3px rgba(112, 220, 255, 0.35);
+  }
+  .walkable-corner.dragging { cursor: grabbing; }
+  .walkable-corner .corner-label {
+    position: absolute; top: -16px; left: 50%; transform: translateX(-50%);
+    font-size: 9px; color: #70dcff; background: #0d1117;
+    padding: 0 3px; pointer-events: none; white-space: nowrap;
+  }
+  #tool-exploration-banner { color: #70dcff; font-size: 12px; margin-left: 12px; }
 </style>
 </head>
 <body>
@@ -351,7 +385,14 @@
       <button id="tool-draw-hitbox">Draw hitbox</button>
       <button id="tool-add-sprite">+ Sprite</button>
     </div>
+    <div class="tool-group" id="exploration-tools" style="display:none">
+      <button id="tool-walkable-area" data-exploration-only>Walkable area</button>
+      <button id="tool-grid" data-exploration-only>Grid</button>
+      <button id="tool-blocked" data-exploration-only>Blocked</button>
+      <button id="tool-spawn" data-exploration-only>Spawn</button>
+    </div>
     <span id="tool-banner" style="display:none">Draw hitbox: click + drag inside the canvas</span>
+    <span id="tool-exploration-banner" style="display:none"></span>
   </footer>
 
 </div>

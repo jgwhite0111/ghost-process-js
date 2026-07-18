@@ -208,6 +208,7 @@ function switchScene(sceneId, { render = true } = {}) {
     clearActiveDrag();
   }
   if (render) renderAll();
+  updateExplorationTools();
   return true;
 }
 
@@ -773,10 +774,146 @@ function renderOverlay() {
     if (state.drag?.ref === hb) div.classList.add('dragging');
     overlay.appendChild(div);
   }
+
+  // Exploration-only: walkable-area polygon outline + corner
+  // handles. Always re-drawn fresh (no dragKey preservation
+  // needed for the polygon since dragging mutates the corner
+  // div in place via attachWalkableCornerDrag).
+  renderWalkableOverlay();
 }
 
 function dragKey(d) {
   return d.targetKind + ':' + (d.targetKind === 'sprite' ? d.ref.id : state.story.scenes[state.sceneId].hitboxes.indexOf(d.ref));
+}
+
+// ---------- exploration: walkable area polygon ----------
+//
+// Opt-in for scenes whose `kind` is "exploration". The
+// #exploration-tools group in the bottom toolbar only shows for
+// adventure scenes; the cyan-bordered walkable-corner handles let
+// the user reshape the polygon by dragging. No schema change -
+// `exploration.walkableArea` already lives on the scene config and
+// the runtime (`src/runtime/exploration.js`) reads it directly.
+
+function updateExplorationTools() {
+  const sc = getScene();
+  const exMode = !!(sc && sc.kind === 'exploration');
+  const group = $('#exploration-tools');
+  if (group) group.style.display = exMode ? 'flex' : 'none';
+}
+
+function ensureExplorationDefaults(sc) {
+  if (!sc.exploration) sc.exploration = {};
+  const ex = sc.exploration;
+  if (!Array.isArray(ex.walkableArea) || ex.walkableArea.length < 3) {
+    // Default trapezoid: wide at the back, wider at the front,
+    // covering the lower two-thirds of the canvas. Mirrors the
+    // exploration_demo entry already in story.json so a fresh
+    // scene behaves the same out-of-the-box.
+    ex.walkableArea = [
+      { x: 0.12, y: 0.55 },
+      { x: 0.88, y: 0.55 },
+      { x: 0.95, y: 0.92 },
+      { x: 0.05, y: 0.92 },
+    ];
+  }
+}
+
+function renderWalkableOverlay() {
+  const sc = getScene();
+  if (!sc || sc.kind !== 'exploration') return;
+  ensureExplorationDefaults(sc);
+  const area = sc.exploration.walkableArea;
+  if (!Array.isArray(area) || area.length < 3) return;
+
+  // SVG polygon outline (drawn under the corner-handle divs).
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('class', 'walkable-svg');
+  svg.setAttribute('width', String(vpW()));
+  svg.setAttribute('height', String(vpH()));
+  svg.setAttribute('viewBox', '0 0 ' + vpW() + ' ' + vpH());
+  const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+  poly.setAttribute(
+    'points',
+    area.map(p => (p.x * vpW()) + ',' + (p.y * vpH())).join(' '),
+  );
+  svg.appendChild(poly);
+  overlay.appendChild(svg);
+
+  // Corner handles - one div per polygon point. Drag mutates the
+  // underlying walkableArea array in place; the SVG polygon
+  // points are kept in sync during the drag so the outline
+  // visibly tracks the corner the user is pulling.
+  for (let i = 0; i < area.length; i++) {
+    const p = area[i];
+    const div = document.createElement('div');
+    div.className = 'walkable-corner';
+    div.dataset.index = String(i);
+    div.style.left = (p.x * vpW()) + 'px';
+    div.style.top = (p.y * vpH()) + 'px';
+    const lbl = document.createElement('span');
+    lbl.className = 'corner-label';
+    lbl.textContent = String(i);
+    div.appendChild(lbl);
+    attachWalkableCornerDrag(div, i);
+    overlay.appendChild(div);
+  }
+}
+
+// Mirrors attachHitboxDrag: pointerdown captures the handle,
+// pointermove translates the cursor to fractional-canvas deltas
+// and mutates sc.exploration.walkableArea[idx] in place,
+// pointerup releases. The corner div and the SVG polygon are
+// mutated in place during the drag so we never need to re-render
+// the overlay mid-drag (which would orphan `div` and drop pointer
+// events). markDirty() fires once on release.
+function attachWalkableCornerDrag(div, idx) {
+  div.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    div.setPointerCapture(e.pointerId);
+    div.classList.add('dragging');
+    const r = frame.getBoundingClientRect();
+    const scale = r.width / vpW();
+    let lastClientX = e.clientX;
+    let lastClientY = e.clientY;
+    const move = (ev) => {
+      const dx = (ev.clientX - lastClientX) / scale / vpW();
+      const dy = (ev.clientY - lastClientY) / scale / vpH();
+      lastClientX = ev.clientX;
+      lastClientY = ev.clientY;
+      const sc = getScene();
+      if (!sc || !sc.exploration || !Array.isArray(sc.exploration.walkableArea)) return;
+      const p = sc.exploration.walkableArea[idx];
+      if (!p) return;
+      p.x = Math.max(-0.1, Math.min(1.1, p.x + dx));
+      p.y = Math.max(-0.1, Math.min(1.1, p.y + dy));
+      // In-place move so pointer capture survives.
+      div.style.left = (p.x * vpW()) + 'px';
+      div.style.top = (p.y * vpH()) + 'px';
+      // Update the polygon outline to match.
+      const poly = overlay.querySelector('.walkable-svg polygon');
+      if (poly) {
+        poly.setAttribute(
+          'points',
+          sc.exploration.walkableArea.map(q => (q.x * vpW()) + ',' + (q.y * vpH())).join(' '),
+        );
+      }
+    };
+    const up = (ev) => {
+      div.removeEventListener('pointermove', move);
+      div.removeEventListener('pointerup', up);
+      div.removeEventListener('pointercancel', up);
+      div.classList.remove('dragging');
+      // Mark story dirty once per drag (matches the hitbox/sprite
+      // convention - state.dirty flips on pointerup, not on every
+      // move event).
+      markDirty();
+    };
+    div.addEventListener('pointermove', move);
+    div.addEventListener('pointerup', up);
+    div.addEventListener('pointercancel', up);
+  });
 }
 
 // ---------- sprite drag (incremental deltas) ----------
@@ -1087,6 +1224,13 @@ function setupDrawTool() {
   $('#tool-select').onclick = () => setTool('select');
   $('#tool-draw-hitbox').onclick = () => setTool('draw-hitbox');
   $('#tool-add-sprite').onclick = () => addNewSprite();
+  // Walkable-area button only exists in the editor's real DOM (added
+  // to editor.html). The editor-rerender-lifecycle test stubs the
+  // original 3 tool buttons but not the new exploration-only ones,
+  // so this is null-safe rather than crashing main() in tests.
+  const walkableBtn = $('#tool-walkable-area');
+  if (walkableBtn) walkableBtn.onclick = () => setTool('walkable-area');
+  // Grid / Blocked / Spawn buttons are wired in their own follow-up commits.
 
   frame.addEventListener('pointerdown', onFrameDown);
 }
@@ -1096,8 +1240,17 @@ function setTool(t) {
   $$('.bottombar .tool-group button').forEach(b => b.classList.remove('active'));
   if (t === 'select') $('#tool-select').classList.add('active');
   if (t === 'draw-hitbox') $('#tool-draw-hitbox').classList.add('active');
+  if (t === 'walkable-area') $('#tool-walkable-area').classList.add('active');
   const banner = $('#tool-banner');
   banner.style.display = (t === 'draw-hitbox') ? 'inline' : 'none';
+  const exBanner = $('#tool-exploration-banner');
+  const isWalkable = (t === 'walkable-area');
+  exBanner.style.display = isWalkable ? 'inline' : 'none';
+  if (isWalkable) {
+    exBanner.textContent = 'Walkable area: drag any cyan corner to reshape the polygon (4-corner quadrilateral).';
+  } else {
+    exBanner.textContent = '';
+  }
 }
 
 function onFrameDown(e) {
