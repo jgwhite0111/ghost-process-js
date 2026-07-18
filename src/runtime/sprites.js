@@ -24,6 +24,8 @@ class CharacterSprite {
         this.loop = true;
         this.isSpeaking = false;
         this.currentFrame = 0;
+        this.idleFrame = 0;
+        this.loopStartFrame = 0;
         this.elapsed = 0;     // ms since last frame advance
         this.character.flipX = this.character.flipX === true;
 
@@ -44,6 +46,10 @@ class CharacterSprite {
         if (!cfg || !cfg.frames) return;
         this.frameRate = cfg.fps || 4;
         this.loop = cfg.loop !== false;
+        this.idleFrame = Number.isFinite(cfg.idleFrame)
+            ? Math.max(0, Math.floor(cfg.idleFrame)) : 0;
+        this.loopStartFrame = Number.isFinite(cfg.loopStartFrame)
+            ? Math.max(0, Math.floor(cfg.loopStartFrame)) : 0;
         this._globPrefix = cfg.frames;
         // One-shot intro: play the full frame range once, then switch
         // to looping `holdFrames` (inclusive) indefinitely. Used by
@@ -96,6 +102,12 @@ class CharacterSprite {
             const img = Rt.assets.images[url];
             if (!img) continue;
             this.frames.push(this._despillGreen(img));
+        }
+        if (this.frames.length > 0) {
+            const last = this.frames.length - 1;
+            this.idleFrame = Math.min(this.idleFrame, last);
+            this.loopStartFrame = Math.min(this.loopStartFrame, last);
+            if (!this.isSpeaking) this.currentFrame = this.idleFrame;
         }
     }
 
@@ -353,9 +365,15 @@ class CharacterSprite {
     setSpeaking(isSpeaking) {
         if (this.isSpeaking === isSpeaking) return;
         this.isSpeaking = isSpeaking;
-        if (!isSpeaking) {
-            // Freeze on the rest pose.
-            this.currentFrame = 0;
+        if (isSpeaking) {
+            // Exploration uses speaking as its existing movement-animation
+            // signal. A configured loopStartFrame keeps idle out of the
+            // walking loop while preserving frame 0 as the rest pose.
+            this.currentFrame = this.loopStartFrame;
+            this.elapsed = 0;
+        } else {
+            // Freeze on the configured rest pose.
+            this.currentFrame = this.idleFrame;
             this.elapsed = 0;
         }
     }
@@ -378,7 +396,7 @@ class CharacterSprite {
         // the player first sees it at frame 2 or 3, not the rest pose.
         // Force a fresh start at frame 0 so the player always sees the
         // animation begin from its intended starting frame.
-        this.currentFrame = 0;
+        this.currentFrame = this.idleFrame;
         this._phase = 0;
         this.elapsed = 0;
         this._hasFiredOneShot = false;
@@ -423,7 +441,7 @@ class CharacterSprite {
             }
             // DONE phase: frozen on frame 0, no further motion.
             if (this._phase === 2) {
-                this.currentFrame = 0;
+                this.currentFrame = this.idleFrame;
                 continue;
             }
             // REVERSE phase: frames descend N-1 → 0.
@@ -464,7 +482,7 @@ class CharacterSprite {
                         this.currentFrame = lastFrame;
                     }
                 } else if (this.loop) {
-                    this.currentFrame = 0;
+                    this.currentFrame = this.loopStartFrame;
                 } else {
                     this.currentFrame = this.frames.length - 1;
                 }

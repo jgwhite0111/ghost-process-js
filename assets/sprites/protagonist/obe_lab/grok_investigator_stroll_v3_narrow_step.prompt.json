@@ -1,0 +1,13 @@
+{
+  "kind": "protagonist_walk_i2v_prompt",
+  "provider": "xai",
+  "model": "grok-imagine-video",
+  "mode": "image-to-video",
+  "source_original": "/Users/jwhite/.openclaw/media/ghost-process-protagonist-final-magenta-9x16.png",
+  "source_video": "/Users/jwhite/.openclaw/media/tool-video-generation/ghost-process-grok-i2v-investigator-stroll-v3-narrow-step---4b11c4c4-a14d-4595-b081-87274ce79529.mp4",
+  "runtime_frames": "assets/sprites/protagonist/obe_lab/walk_frames_grok_stroll_v3_narrow_step_16/frame_*.png",
+  "status": "approved_current",
+  "approved_date": "2026-07-18",
+  "prompt": "Locked static camera, strict side profile facing right. The same adult male investigator performs one complete slow, ordinary corridor stroll in place, calm and understated, not exercise and not a power walk. Use a compact short-step gait: feet stay close to the body and pass directly under the hips, each step only a small fraction beyond the supporting foot, no long separation between the boots, no leg reaching far forward or far backward. Keep both soles low near the ground with a gentle heel-to-toe roll, relaxed softly bent knees, subtle weight transfer, quiet upright torso with almost no vertical bounce, and a modest natural opposite arm swing with elbows close to the body. Clearly show alternating heel contact, passing, toe-off, and low swing for both legs, but spread the phases smoothly through the cycle without exaggerating the stride. Keep him centered at identical scale, full body head through both boots inside frame, both feet following one horizontal baseline. Preserve exact face, hair, burgundy jacket, black trousers, boots, proportions, lighting, and uniform chroma-magenta background. No camera movement, zoom, crop, turn, front view, wide stride, long lunge, legs split far apart, high knees, exaggerated leg extension, running, marching, hiking, stairs, jumping, sliding, stiff military gait, fitness walking, power walking, props, scenery, floor, shadow, text, or background change. End near the starting pose for a loop.",
+  "notes": "Exact prompt used for the approved narrow-step Grok stroll generation on 2026-07-18. This is the current live protagonist walk animation; retain Grok v2 as the previous approved fallback."
+}

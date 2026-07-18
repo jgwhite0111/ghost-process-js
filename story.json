@@ -519,9 +519,11 @@
           "placementY": 0.82,
           "scenes": {
             "exploration_demo": {
-              "frames": "assets/sprites/protagonist/obe_lab/walk_frames_hold/frame_*.png",
+              "frames": "assets/sprites/protagonist/obe_lab/walk_frames_grok_stroll_v3_narrow_step_16/frame_*.png",
               "fps": 8,
-              "loop": true
+              "loop": true,
+              "idleFrame": 0,
+              "loopStartFrame": 0
             }
           }
         }

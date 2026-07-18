@@ -1,0 +1,13 @@
+{
+  "kind": "protagonist_walk_i2v_prompt",
+  "provider": "xai",
+  "model": "grok-imagine-video",
+  "mode": "image-to-video",
+  "source_original": "/Users/jwhite/Downloads/protagonist-final.png",
+  "source_video": "/Users/jwhite/.openclaw/media/tool-video-generation/ghost-process-grok-i2v-investigator-stroll-v2---19185de8-2fd6-4bce-b9a9-df2e8a9d7e9e.mp4",
+  "runtime_frames": "assets/sprites/protagonist/obe_lab/walk_frames_grok_stroll_v2_16/frame_*.png",
+  "status": "approved_fallback",
+  "approved_date": "2026-07-18",
+  "prompt": "Locked static camera, strict side profile facing right. The same adult male investigator takes a slow, relaxed, ordinary stroll in place, like a calm detective walking through a corridor—not exercise, not a power walk, not marching. Unhurried small-to-moderate steps, low feet close to the ground, gentle heel-to-toe roll, subtle weight transfer, relaxed knees, quiet upright torso with almost no vertical bounce, natural modest opposite arm swing with elbows close to the body. Complete one readable walk cycle with alternating heel contact, passing, toe-off, and low swing, but keep the gait understated and effortless. Keep him centered at identical scale, full body head through both boots inside frame, both feet on one horizontal baseline. Preserve exact face, hair, burgundy jacket, black trousers, boots, proportions, lighting, and uniform chroma-magenta background. No camera movement, zoom, crop, turn, front view, high knees, exaggerated stride, long lunges, running, hiking, stairs, jumping, sliding, stiff marching, military gait, fitness walking, power walking, props, scenery, floor, shadow, text, or background change. End near the starting pose for a loop.",
+  "notes": "Exact prompt used for the approved investigator-stroll generation on 2026-07-18. Preserve as a reusable fallback; v3 narrow-step is the current live animation."
+}
