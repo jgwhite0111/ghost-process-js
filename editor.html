@@ -432,6 +432,18 @@
   #overlay > .blocked-svg {
     pointer-events: none;
   }
+
+  /* ---------- bottom toolbar focus ring ----------
+     Mouse-click focus on these toggle/action buttons would otherwise
+     leave a blue focus outline that reads as 'brighter blue' and gets
+     confused with the .active highlighter. Suppress the focus outline
+     on plain :focus (mouse / touch), keep a cyan focus outline on
+     :focus-visible so keyboard navigation still gets a visible cue. */
+  #bottombar button:focus:not(:focus-visible) { outline: none; }
+  #bottombar button:focus-visible {
+    outline: 2px solid #5cb8e0;
+    outline-offset: 2px;
+  }
 </style>
 </head>
 <body>

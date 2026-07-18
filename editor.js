@@ -562,6 +562,19 @@ async function togglePlay(charConfig) {
   renderOverlay(); // refresh play/pause icon
 }
 
+// Format an existing play/pause button so its icon + class match the
+// current animation state. Called from both code paths in
+// renderOverlay:
+//   - new-div creation path (so the button is correct from the very
+//     first render rather than starting life as a hard-coded '▶')
+//   - reuse-div reflection path (covers drag-in-progress etc.)
+function applyPlayButtonState(playBtn, c) {
+  const animKey = c.id + '/' + state.sceneId;
+  const anim = state.spriteAnim[animKey];
+  playBtn.textContent = (anim && anim.playing) ? '❚❚' : '▶';
+  playBtn.classList.toggle('playing', !!(anim && anim.playing));
+}
+
 function startAnimTick() {
   if (state._animTickHandle) return;
   const tick = (t) => {
@@ -624,9 +637,19 @@ function startAnimTick() {
     }
     if (anyPlaying) {
       renderPreview();
-      // Re-render the overlay too so the play/pause icon stays in sync
-      // if the sprite's bounding box needs to refresh.
-      renderOverlay();
+      // renderOverlay() is intentionally NOT called here. Earlier
+      // revisions did; the cost was a destroy-and-recreate of the
+      // whole overlay (including the play/pause button) on every
+      // animation frame. That destroyed pointer events that happened
+      // to span the mousedown/mouseup boundary - the canonical case
+      // was clicking pause no-op'ing, because the button under the
+      // cursor had been swapped out between mousedown and mouseup so
+      // the browser never fired a `click` event. The play button's
+      // icon + class are now updated via applyPlayButtonState(),
+      // called only when the overlay is rebuilt for a real reason
+      // (toggle, drag, scene change). The animation tick stays
+      // responsible for canvas-only work (drawSpriteFrames redraws
+      // the bg canvas with the new anim.idx).
     }
     else state._animTickHandle = null;
   };
@@ -801,7 +824,7 @@ function renderOverlay() {
         const playBtn = document.createElement('button');
         playBtn.className = 'play-btn';
         playBtn.title = 'Preview animation';
-        playBtn.textContent = '▶';
+        applyPlayButtonState(playBtn, c);
         playBtn.addEventListener('pointerdown', (e) => { e.stopPropagation(); });
         playBtn.addEventListener('click', (e) => {
           e.stopPropagation();
@@ -817,12 +840,7 @@ function renderOverlay() {
     // re-binds only the icon, keeps the click handler). No-op for
     // placeholders (no play button appended above).
     const playBtn = div.querySelector('.play-btn');
-    if (playBtn) {
-      const animKey = c.id + '/' + state.sceneId;
-      const anim = state.spriteAnim[animKey];
-      playBtn.textContent = (anim && anim.playing) ? '❚❚' : '▶';
-      playBtn.classList.toggle('playing', !!(anim && anim.playing));
-    }
+    if (playBtn) applyPlayButtonState(playBtn, c);
     div.style.left = r.x + 'px';
     div.style.top = r.y + 'px';
     div.style.width = r.w + 'px';
