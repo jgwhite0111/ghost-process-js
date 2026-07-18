@@ -780,6 +780,10 @@ function renderOverlay() {
   // needed for the polygon since dragging mutates the corner
   // div in place via attachWalkableCornerDrag).
   renderWalkableOverlay();
+
+  // Grid overlay lines + origin + angle-notch handle, only when
+  // the grid tool is active (otherwise the overlay is busy).
+  if (state.tool === 'grid') renderGridOverlay();
 }
 
 function dragKey(d) {
@@ -908,6 +912,201 @@ function attachWalkableCornerDrag(div, idx) {
       // Mark story dirty once per drag (matches the hitbox/sprite
       // convention - state.dirty flips on pointerup, not on every
       // move event).
+      markDirty();
+    };
+    div.addEventListener('pointermove', move);
+    div.addEventListener('pointerup', up);
+    div.addEventListener('pointercancel', up);
+  });
+}
+
+// ---------- exploration: grid tool ----------
+//
+// Visible only when state.tool === 'grid'. Renders a rotated tile
+// grid over the canvas (lines run in canvas-px but rotated around
+// the grid origin), a green grid-origin drag handle, and an orange
+// "rotate" handle at a fixed offset from the origin so the user
+// can visually yank the angle. No schema change - exploration.
+// tileSize / gridOrigin / gridAngle already exist on the scene
+// config (added by the runtime slice edd0eb4) and are read by
+// ExplorationController at runtime.
+
+function defaultExplorationOrigin(ex) {
+  const area = ex && ex.walkableArea;
+  if (Array.isArray(area) && area.length > 0) {
+    // Top-center of the polygon (top-edge midpoint). Mirrors
+    // _computeGridOrigin in src/runtime/exploration.js so the
+    // editor and the runtime agree when gridOrigin is unset.
+    let minY = area[0].y, topMinX = area[0].x, topMaxX = area[0].x;
+    for (const p of area) {
+      if (p.y < minY) { minY = p.y; topMinX = p.x; topMaxX = p.x; }
+      else if (p.y === minY) {
+        if (p.x < topMinX) topMinX = p.x;
+        if (p.x > topMaxX) topMaxX = p.x;
+      }
+    }
+    return { x: (topMinX + topMaxX) / 2, y: minY };
+  }
+  return { x: 0.5, y: 0.5 };
+}
+
+function renderGridOverlay() {
+  const sc = getScene();
+  if (!sc || sc.kind !== 'exploration') return;
+  ensureExplorationDefaults(sc);
+  const ex = sc.exploration;
+  const tileSize = Number.isFinite(ex.tileSize) ? ex.tileSize : 0.04;
+  const angle = Number.isFinite(ex.gridAngle) ? ex.gridAngle : 0;
+  const origin = (ex.gridOrigin && Number.isFinite(ex.gridOrigin.x) && Number.isFinite(ex.gridOrigin.y))
+    ? ex.gridOrigin
+    : defaultExplorationOrigin(ex);
+
+  const w = vpW(), h = vpH();
+  const ox = origin.x * w, oy = origin.y * h;
+  const ts = Math.max(8, tileSize * w);  // px; floor ensures visibility on small tile sizes
+
+  const SVG = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(SVG, 'svg');
+  svg.setAttribute('class', 'grid-svg');
+  svg.setAttribute('width', String(w));
+  svg.setAttribute('height', String(h));
+
+  // Convert grid (col, row) to screen (x, y). Rotation around origin.
+  function g2s(col, row) {
+    const cx = col * ts, cy = row * ts;
+    const c = Math.cos(angle), s = Math.sin(angle);
+    return { x: ox + cx * c - cy * s, y: oy + cx * s + cy * c };
+  }
+
+  // Range wide enough that the rotated grid covers the full canvas
+  // even at extreme angles (45 deg: hypotenuse/side ~ 1.41).
+  const range = Math.ceil(Math.hypot(w, h) / ts) + 4;
+
+  // Vertical family (each col is a line running in the row direction).
+  for (let col = -range; col <= range; col++) {
+    const p1 = g2s(col, -range);
+    const p2 = g2s(col,  range);
+    const line = document.createElementNS(SVG, 'line');
+    line.setAttribute('x1', String(p1.x));
+    line.setAttribute('y1', String(p1.y));
+    line.setAttribute('x2', String(p2.x));
+    line.setAttribute('y2', String(p2.y));
+    line.setAttribute('class', col % 5 === 0 ? 'grid-line-major' : '');
+    svg.appendChild(line);
+  }
+  // Horizontal family (each row is a line running in the col direction).
+  for (let row = -range; row <= range; row++) {
+    const p1 = g2s(-range, row);
+    const p2 = g2s( range, row);
+    const line = document.createElementNS(SVG, 'line');
+    line.setAttribute('x1', String(p1.x));
+    line.setAttribute('y1', String(p1.y));
+    line.setAttribute('x2', String(p2.x));
+    line.setAttribute('y2', String(p2.y));
+    line.setAttribute('class', row % 5 === 0 ? 'grid-line-major' : '');
+    svg.appendChild(line);
+  }
+  overlay.appendChild(svg);
+
+  // Green grid-origin handle - drag to translate the rotation pivot.
+  const originDiv = document.createElement('div');
+  originDiv.className = 'grid-origin-handle';
+  originDiv.style.left = (origin.x * w) + 'px';
+  originDiv.style.top  = (origin.y * h) + 'px';
+  attachGridOriginDrag(originDiv, ex);
+  overlay.appendChild(originDiv);
+
+  // Orange \u21bb angle-notch at a fixed canvas-px offset from the origin.
+  const notchOffset = 40;
+  const notchDiv = document.createElement('div');
+  notchDiv.className = 'grid-angle-notch';
+  notchDiv.textContent = '\u21bb';
+  notchDiv.style.left = (origin.x * w + Math.cos(angle) * notchOffset) + 'px';
+  notchDiv.style.top  = (origin.y * h + Math.sin(angle) * notchOffset) + 'px';
+  attachGridAngleDrag(notchDiv, ex, notchOffset);
+  overlay.appendChild(notchDiv);
+}
+
+function attachGridOriginDrag(div, ex) {
+  div.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    div.setPointerCapture(e.pointerId);
+    div.classList.add('dragging');
+    const r = frame.getBoundingClientRect();
+    const scale = r.width / vpW();
+    let lastClientX = e.clientX, lastClientY = e.clientY;
+    const move = (ev) => {
+      const dx = (ev.clientX - lastClientX) / scale / vpW();
+      const dy = (ev.clientY - lastClientY) / scale / vpH();
+      lastClientX = ev.clientX;
+      lastClientY = ev.clientY;
+      if (!ex.gridOrigin || !Number.isFinite(ex.gridOrigin.x)) {
+        // First drag on a scene that doesn't have a stored origin
+        // yet - seed it with the default-derived value before
+        // mutating.
+        const def = defaultExplorationOrigin(ex);
+        ex.gridOrigin = { x: def.x, y: def.y };
+      }
+      ex.gridOrigin.x = Math.max(-0.2, Math.min(1.2, ex.gridOrigin.x + dx));
+      ex.gridOrigin.y = Math.max(-0.2, Math.min(1.2, ex.gridOrigin.y + dy));
+      // Mutate in place; grid line geometry depends on origin so a
+      // full overlay re-render is the cleanest path.
+      renderOverlay();
+      div.style.left = (ex.gridOrigin.x * vpW()) + 'px';
+      div.style.top  = (ex.gridOrigin.y * vpH()) + 'px';
+    };
+    const up = () => {
+      div.removeEventListener('pointermove', move);
+      div.removeEventListener('pointerup', up);
+      div.removeEventListener('pointercancel', up);
+      div.classList.remove('dragging');
+      markDirty();
+    };
+    div.addEventListener('pointermove', move);
+    div.addEventListener('pointerup', up);
+    div.addEventListener('pointercancel', up);
+  });
+}
+
+function attachGridAngleDrag(div, ex, notchOffset) {
+  div.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    div.setPointerCapture(e.pointerId);
+    div.classList.add('dragging');
+    const r = frame.getBoundingClientRect();
+    const scale = r.width / vpW();
+    const initialAngle = Number.isFinite(ex.gridAngle) ? ex.gridAngle : 0;
+    // Compute the angle from cursor-to-origin at pointerdown so the
+    // first move is purely incremental (no jump).
+    const startCx = (e.clientX - r.left) / scale;
+    const startCy = (e.clientY - r.top) / scale;
+    const startOx = (ex.gridOrigin && Number.isFinite(ex.gridOrigin.x) ? ex.gridOrigin.x : 0.5) * vpW();
+    const startOy = (ex.gridOrigin && Number.isFinite(ex.gridOrigin.y) ? ex.gridOrigin.y : 0.5) * vpH();
+    const startCursorAngle = Math.atan2(startCy - startOy, startCx - startOx);
+    const angleDelta0 = startCursorAngle - initialAngle;
+    const move = (ev) => {
+      const cx = (ev.clientX - r.left) / scale;
+      const cy = (ev.clientY - r.top) / scale;
+      // Cursor position relative to the origin at this instant.
+      const oxPx = (ex.gridOrigin && Number.isFinite(ex.gridOrigin.x) ? ex.gridOrigin.x : 0.5) * vpW();
+      const oyPx = (ex.gridOrigin && Number.isFinite(ex.gridOrigin.y) ? ex.gridOrigin.y : 0.5) * vpH();
+      const cursorAngle = Math.atan2(cy - oyPx, cx - oxPx);
+      const newAngle = cursorAngle - angleDelta0;
+      ex.gridAngle = newAngle;
+      // Update notch position in place so the user sees the
+      // handle track without a full re-render; keep the green
+      // origin handle pinned.
+      div.style.left = (oxPx + Math.cos(newAngle) * notchOffset) + 'px';
+      div.style.top  = (oyPx + Math.sin(newAngle) * notchOffset) + 'px';
+      renderOverlay();
+    };
+    const up = () => {
+      div.removeEventListener('pointermove', move);
+      div.removeEventListener('pointerup', up);
+      div.removeEventListener('pointercancel', up);
+      div.classList.remove('dragging');
       markDirty();
     };
     div.addEventListener('pointermove', move);
@@ -1224,13 +1423,13 @@ function setupDrawTool() {
   $('#tool-select').onclick = () => setTool('select');
   $('#tool-draw-hitbox').onclick = () => setTool('draw-hitbox');
   $('#tool-add-sprite').onclick = () => addNewSprite();
-  // Walkable-area button only exists in the editor's real DOM (added
-  // to editor.html). The editor-rerender-lifecycle test stubs the
-  // original 3 tool buttons but not the new exploration-only ones,
-  // so this is null-safe rather than crashing main() in tests.
+  // Exploration-only buttons; null-safe in tests whose DOM fixture
+  // doesn't add them.
   const walkableBtn = $('#tool-walkable-area');
   if (walkableBtn) walkableBtn.onclick = () => setTool('walkable-area');
-  // Grid / Blocked / Spawn buttons are wired in their own follow-up commits.
+  const gridBtn = $('#tool-grid');
+  if (gridBtn) gridBtn.onclick = () => setTool('grid');
+  // Blocked / Spawn buttons are wired in their own follow-up commits.
 
   frame.addEventListener('pointerdown', onFrameDown);
 }
@@ -1240,17 +1439,25 @@ function setTool(t) {
   $$('.bottombar .tool-group button').forEach(b => b.classList.remove('active'));
   if (t === 'select') $('#tool-select').classList.add('active');
   if (t === 'draw-hitbox') $('#tool-draw-hitbox').classList.add('active');
-  if (t === 'walkable-area') $('#tool-walkable-area').classList.add('active');
+  if (t === 'walkable-area') {
+    const btn = $('#tool-walkable-area');
+    if (btn) btn.classList.add('active');
+  }
+  if (t === 'grid') {
+    const btn = $('#tool-grid');
+    if (btn) btn.classList.add('active');
+  }
   const banner = $('#tool-banner');
   banner.style.display = (t === 'draw-hitbox') ? 'inline' : 'none';
   const exBanner = $('#tool-exploration-banner');
   const isWalkable = (t === 'walkable-area');
-  exBanner.style.display = isWalkable ? 'inline' : 'none';
-  if (isWalkable) {
-    exBanner.textContent = 'Walkable area: drag any cyan corner to reshape the polygon (4-corner quadrilateral).';
-  } else {
-    exBanner.textContent = '';
-  }
+  const isGrid = (t === 'grid');
+  exBanner.style.display = (isWalkable || isGrid) ? 'inline' : 'none';
+  exBanner.textContent = isWalkable
+    ? 'Walkable area: drag any cyan corner to reshape the polygon (4-corner quadrilateral).'
+    : isGrid
+    ? 'Grid: drag the green dot to move the rotation pivot; drag the orange \u21bb handle to rotate the angle.'
+    : '';
 }
 
 function onFrameDown(e) {

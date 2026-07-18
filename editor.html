@@ -318,6 +318,25 @@
     padding: 0 3px; pointer-events: none; white-space: nowrap;
   }
   #tool-exploration-banner { color: #70dcff; font-size: 12px; margin-left: 12px; }
+
+  /* ---------- grid tool (kind === 'exploration', tool === 'grid') ---------- */
+  .grid-svg { position: absolute; inset: 0; pointer-events: none; z-index: 9; }
+  .grid-svg line { stroke: rgba(112, 220, 255, 0.45); stroke-width: 1; }
+  .grid-svg line.grid-line-major { stroke: rgba(112, 220, 255, 0.7); stroke-width: 1.5; }
+  .grid-origin-handle {
+    position: absolute; width: 12px; height: 12px; margin: -6px 0 0 -6px;
+    background: #0d1117; border: 2px solid #6cba6c; border-radius: 50%;
+    cursor: grab; touch-action: none; z-index: 11; box-sizing: border-box;
+  }
+  .grid-origin-handle.dragging { background: #6cba6c; cursor: grabbing; }
+  .grid-angle-notch {
+    position: absolute; width: 22px; height: 22px; margin: -11px 0 0 -11px;
+    background: #0d1117; border: 2px solid #ffc97a; border-radius: 50%;
+    cursor: grab; touch-action: none; z-index: 11; box-sizing: border-box;
+    display: flex; align-items: center; justify-content: center;
+    color: #ffc97a; font-size: 14px; line-height: 1;
+  }
+  .grid-angle-notch.dragging { background: #ffc97a; color: #0d1117; cursor: grabbing; }
 </style>
 </head>
 <body>
