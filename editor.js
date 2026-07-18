@@ -575,7 +575,12 @@ async function togglePlay(charConfig) {
 function applyPlayButtonState(playBtn, c) {
   const animKey = c.id + '/' + state.sceneId;
   const anim = state.spriteAnim[animKey];
-  playBtn.textContent = (anim && anim.playing) ? '❚❚' : '▶';
+  // ⏹ (U+23F9 BLACK SQUARE FOR STOP) rather than ❚❚ (U+275A
+  // VERTICAL BAR) because togglePlay resets anim.idx = 0 on every
+  // play - so this button is effectively a stop/restart control,
+  // not a pause/resume. Icon matches behavior. Hit play always
+  // restarts the animation from the rest pose.
+  playBtn.textContent = (anim && anim.playing) ? '⏹' : '▶';
   playBtn.classList.toggle('playing', !!(anim && anim.playing));
 }
 
