@@ -398,9 +398,13 @@ async function drawPreviewBase(sc, revision) {
   // so the preview is honest about where sprites sit. The frame
   // lists are already cached in state.spriteFrameLists by the play
   // button + earlier render pipelining; loadSpriteFrameList below
-  // no-ops if the cache is warm. Fire-and-forget so the preview
-  // continues to redraw even when the first frame is still loading.
-  drawSpriteFrames(sc, revision);
+  // no-ops if the cache is warm. Awaits so the function returns
+  // only after the sprite draw completes - callers used to chain
+  // a redundant sprite loop on top, which doubled each frame's
+  // drawImage call and made the pause button load the cache frame
+  // over drawSpriteFrames' idle-frame draw (the duplicate
+  // first-frame artifact Joseph hit at #25122).
+  await drawSpriteFrames(sc, revision);
   return true;
 }
 
@@ -781,19 +785,15 @@ function getScene() { return state.story?.scenes?.[state.sceneId] || null; }
 async function renderPreview() {
   const revision = ++previewRenderRevision;
   const sc = getScene();
+  // drawPreviewBase now awaits drawSpriteFrames internally, so the
+  // bg canvas already has the correct per-character frame when
+  // this function continues. The previous redundant sprite loop
+  // here (drawing state.spriteFrames[key]) was overdraw at the
+  // same rect as drawSpriteFrames - visible whenever the cache
+  // value and the animated/idle-frame index disagreed (e.g. after
+  // pause, where the cache gets frames[anim.idx] and the idle-frame
+  // draw picks frames[0]).
   if (!await drawPreviewBase(sc, revision)) return;
-  if (!sc) return;
-  for (const c of (sc.characters || [])) {
-    const img = state.spriteFrames[c.id + '/' + state.sceneId];
-    if (!img) continue;
-    // Use the same raw rect as the drag overlay — the canvas and
-    // the orange box move together 1:1 with the cursor, including
-    // past the canvas edge. Canvas clipping at the frame border
-    // decides what's visible; the saved value in story.json can
-    // land outside [0,1] and is what the runtime will render.
-    const r = computeSpriteRect(c);
-    if (r) bgCtx.drawImage(img, r.x, r.y, r.w, r.h);
-  }
   renderOverlay();
 }
 
@@ -1802,15 +1802,12 @@ function onHitboxDragEnd() {
 async function redrawCanvasOnly() {
   const revision = ++previewRenderRevision;
   const sc = getScene();
+  // Same fix as renderPreview above - drop the redundant sprite
+  // loop. drawPreviewBase already drew the right frame on the bg
+  // canvas via drawSpriteFrames; overdrawing state.spriteFrames
+  // here produced the same duplicate-frame artifact (visible on
+  // pause).
   if (!await drawPreviewBase(sc, revision)) return;
-  if (!sc) return;
-  for (const c of (sc.characters || [])) {
-    const img = state.spriteFrames[c.id + '/' + state.sceneId];
-    if (!img) continue;
-    // Same raw rect as the overlay's drag handle — see renderPreview.
-    const r = computeSpriteRect(c);
-    if (r) bgCtx.drawImage(img, r.x, r.y, r.w, r.h);
-  }
 }
 
 // ---------- live right-panel sync ----------
