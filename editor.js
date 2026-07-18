@@ -784,6 +784,12 @@ function renderOverlay() {
   // Grid overlay lines + origin + angle-notch handle, only when
   // the grid tool is active (otherwise the overlay is busy).
   if (state.tool === 'grid') renderGridOverlay();
+
+  // Blocked-tile paint surface: faded grid background + red
+  // rotated markers, plus the click-to-paint cursor in the
+  // canvas pointermove path (drawn separately by the paint
+  // handler so it tracks without re-rendering).
+  if (state.tool === 'blocked') renderBlockedOverlay();
 }
 
 function dragKey(d) {
@@ -1115,6 +1121,206 @@ function attachGridAngleDrag(div, ex, notchOffset) {
   });
 }
 
+// ---------- exploration: blocked tile paint ----------
+//
+// Visible only when state.tool === 'blocked'. Renders a faded
+// grid background + red rotated rects on top of every entry in
+// exploration.blockedTiles. The canvas pointerdown, dispatched via
+// onFrameDown, kicks off a Bresenham-ish toggle stroke that walks
+// the cursor's grid cell path and flips each tile between blocked
+// and unblocked. Single-cell clicks just toggle that cell; drag
+// strokes flip every cell along the path.
+
+function ensureBlockedTiles(sc) {
+  if (!sc.exploration) sc.exploration = {};
+  const ex = sc.exploration;
+  if (!Array.isArray(ex.blockedTiles)) ex.blockedTiles = [];
+  // Normalize shape: array of [col, row] integer pairs, deduped.
+  const seen = new Set();
+  const normalized = [];
+  for (const t of ex.blockedTiles) {
+    let pair = null;
+    if (Array.isArray(t) && t.length >= 2 &&
+        Number.isFinite(t[0]) && Number.isFinite(t[1])) {
+      pair = [Math.round(t[0]), Math.round(t[1])];
+    } else if (t && Number.isFinite(t.col) && Number.isFinite(t.row)) {
+      pair = [Math.round(t.col), Math.round(t.row)];
+    }
+    if (!pair) continue;
+    const k = pair[0] + ',' + pair[1];
+    if (seen.has(k)) continue;
+    seen.add(k);
+    normalized.push(pair);
+  }
+  ex.blockedTiles = normalized;
+}
+
+function toggleBlockedTile(col, row) {
+  const sc = getScene();
+  if (!sc || !Number.isFinite(col) || !Number.isFinite(row)) return;
+  ensureBlockedTiles(sc);
+  const tiles = sc.exploration.blockedTiles;
+  const idx = tiles.findIndex(t => t[0] === col && t[1] === row);
+  if (idx >= 0) tiles.splice(idx, 1);
+  else tiles.push([col, row]);
+}
+
+function pointToGridCell(x, y) {
+  const sc = getScene();
+  if (!sc || sc.kind !== 'exploration') return null;
+  const ex = sc.exploration || {};
+  const tileSize = Number.isFinite(ex.tileSize) ? ex.tileSize : 0.04;
+  const angle = Number.isFinite(ex.gridAngle) ? ex.gridAngle : 0;
+  const origin = (ex.gridOrigin && Number.isFinite(ex.gridOrigin.x) && Number.isFinite(ex.gridOrigin.y))
+    ? ex.gridOrigin
+    : defaultExplorationOrigin(ex);
+  const w = vpW(), h = vpH();
+  const ox = origin.x * w, oy = origin.y * h;
+  const ts = Math.max(8, tileSize * w);
+  const dx = x * w - ox, dy = y * h - oy;
+  // Inverse rotation: rotate by -angle.
+  const c = Math.cos(angle), s = Math.sin(angle);
+  const rx = dx * c + dy * s;
+  const ry = -dx * s + dy * c;
+  return { col: Math.round(rx / ts), row: Math.round(ry / ts) };
+}
+
+// Bresenham-ish: walk the grid line from startCell to endCell and
+// toggle every cell in the path. The first cell is skipped because
+// onBlockedPaintDown toggles it on pointerdown already.
+function paintBlockedLine(startCell, endCell) {
+  if (!startCell || !endCell) return;
+  let c0 = startCell.col, r0 = startCell.row;
+  const c1 = endCell.col, r1 = endCell.row;
+  const dc = Math.abs(c1 - c0), dr = Math.abs(r1 - r0);
+  const sx = c0 < c1 ? 1 : -1;
+  const sy = r0 < r1 ? 1 : -1;
+  let err = dc - dr;
+  const iterLimit = Math.max(dc, dr) + 2;
+  let first = true;
+  for (let i = 0; i < iterLimit; i++) {
+    if (!first) toggleBlockedTile(c0, r0);
+    first = false;
+    if (c0 === c1 && r0 === r1) break;
+    const e2 = 2 * err;
+    if (e2 > -dr) { err -= dr; c0 += sx; }
+    if (e2 < dc) { err += dc; r0 += sy; }
+  }
+}
+
+function onBlockedPaintDown(e) {
+  if (e.target.closest('.sprite-handle, .hitbox-handle, .walkable-corner, .grid-origin-handle, .grid-angle-notch')) return;
+  e.preventDefault();
+  frame.setPointerCapture(e.pointerId);
+  const r = frame.getBoundingClientRect();
+  const scale = r.width / vpW();
+  const toCell = (ev) => {
+    const fx = (ev.clientX - r.left) / scale / vpW();
+    const fy = (ev.clientY - r.top) / scale / vpH();
+    return pointToGridCell(fx, fy);
+  };
+  let lastCell = toCell(e);
+  if (lastCell) toggleBlockedTile(lastCell.col, lastCell.row);
+  const move = (ev) => {
+    const cell = toCell(ev);
+    if (!cell) return;
+    paintBlockedLine(lastCell, cell);
+    lastCell = cell;
+    renderOverlay();
+  };
+  const up = () => {
+    frame.removeEventListener('pointermove', move);
+    frame.removeEventListener('pointerup', up);
+    frame.removeEventListener('pointercancel', up);
+    markDirty();
+  };
+  frame.addEventListener('pointermove', move);
+  frame.addEventListener('pointerup', up);
+  frame.addEventListener('pointercancel', up);
+}
+
+function renderBlockedOverlay() {
+  const sc = getScene();
+  if (!sc || sc.kind !== 'exploration') return;
+  ensureExplorationDefaults(sc);
+  ensureBlockedTiles(sc);
+  const ex = sc.exploration;
+  const tileSize = Number.isFinite(ex.tileSize) ? ex.tileSize : 0.04;
+  const angle = Number.isFinite(ex.gridAngle) ? ex.gridAngle : 0;
+  const origin = (ex.gridOrigin && Number.isFinite(ex.gridOrigin.x) && Number.isFinite(ex.gridOrigin.y))
+    ? ex.gridOrigin
+    : defaultExplorationOrigin(ex);
+  const w = vpW(), h = vpH();
+  const ts = Math.max(8, tileSize * w);
+  const ox = origin.x * w, oy = origin.y * h;
+
+  // Local grid -> screen closure (mirror of renderGridOverlay's).
+  function g2s(col, row) {
+    const cx = col * ts, cy = row * ts;
+    const c = Math.cos(angle), s = Math.sin(angle);
+    return { x: ox + cx * c - cy * s, y: oy + cx * s + cy * c };
+  }
+
+  const SVG = 'http://www.w3.org/2000/svg';
+
+  // Faded grid background so the user can see what they're painting.
+  // (Re-uses the .grid-svg selectors from the grid tool, dimmed via
+  // the .dimming class on the wrapper.)
+  const gridSvg = document.createElementNS(SVG, 'svg');
+  gridSvg.setAttribute('class', 'grid-svg dimming');
+  gridSvg.setAttribute('width', String(w));
+  gridSvg.setAttribute('height', String(h));
+  const range = Math.ceil(Math.hypot(w, h) / ts) + 4;
+  for (let col = -range; col <= range; col++) {
+    const p1 = g2s(col, -range);
+    const p2 = g2s(col,  range);
+    const line = document.createElementNS(SVG, 'line');
+    line.setAttribute('x1', String(p1.x));
+    line.setAttribute('y1', String(p1.y));
+    line.setAttribute('x2', String(p2.x));
+    line.setAttribute('y2', String(p2.y));
+    line.setAttribute('class', col % 5 === 0 ? 'grid-line-major' : '');
+    gridSvg.appendChild(line);
+  }
+  for (let row = -range; row <= range; row++) {
+    const p1 = g2s(-range, row);
+    const p2 = g2s( range, row);
+    const line = document.createElementNS(SVG, 'line');
+    line.setAttribute('x1', String(p1.x));
+    line.setAttribute('y1', String(p1.y));
+    line.setAttribute('x2', String(p2.x));
+    line.setAttribute('y2', String(p2.y));
+    line.setAttribute('class', row % 5 === 0 ? 'grid-line-major' : '');
+    gridSvg.appendChild(line);
+  }
+  overlay.appendChild(gridSvg);
+
+  // Blocked-tile markers: a translucent red rect per blocked tile,
+  // rotated by the grid angle so it tracks the tile.
+  const blockedSvg = document.createElementNS(SVG, 'svg');
+  blockedSvg.setAttribute('class', 'blocked-svg');
+  blockedSvg.setAttribute('width', String(w));
+  blockedSvg.setAttribute('height', String(h));
+  for (const tile of ex.blockedTiles) {
+    if (!Array.isArray(tile) || tile.length < 2) continue;
+    const [col, row] = tile;
+    const center = g2s(col + 0.5, row + 0.5);
+    const size = ts * 0.9;
+    const rect = document.createElementNS(SVG, 'rect');
+    rect.setAttribute('x', String(center.x - size / 2));
+    rect.setAttribute('y', String(center.y - size / 2));
+    rect.setAttribute('width', String(size));
+    rect.setAttribute('height', String(size));
+    rect.setAttribute('transform',
+      `rotate(${angle * 180 / Math.PI} ${center.x} ${center.y})`);
+    rect.setAttribute('fill', 'rgba(255,80,80,0.45)');
+    rect.setAttribute('stroke', '#ff5050');
+    rect.setAttribute('stroke-width', '2');
+    blockedSvg.appendChild(rect);
+  }
+  overlay.appendChild(blockedSvg);
+}
+
 // ---------- sprite drag (incremental deltas) ----------
 function attachSpriteDrag(div, charConfig) {
   div.addEventListener('pointerdown', (e) => {
@@ -1429,7 +1635,9 @@ function setupDrawTool() {
   if (walkableBtn) walkableBtn.onclick = () => setTool('walkable-area');
   const gridBtn = $('#tool-grid');
   if (gridBtn) gridBtn.onclick = () => setTool('grid');
-  // Blocked / Spawn buttons are wired in their own follow-up commits.
+  const blockedBtn = $('#tool-blocked');
+  if (blockedBtn) blockedBtn.onclick = () => setTool('blocked');
+  // Spawn button is wired in its own follow-up commit.
 
   frame.addEventListener('pointerdown', onFrameDown);
 }
@@ -1447,22 +1655,34 @@ function setTool(t) {
     const btn = $('#tool-grid');
     if (btn) btn.classList.add('active');
   }
+  if (t === 'blocked') {
+    const btn = $('#tool-blocked');
+    if (btn) btn.classList.add('active');
+  }
   const banner = $('#tool-banner');
   banner.style.display = (t === 'draw-hitbox') ? 'inline' : 'none';
   const exBanner = $('#tool-exploration-banner');
   const isWalkable = (t === 'walkable-area');
   const isGrid = (t === 'grid');
-  exBanner.style.display = (isWalkable || isGrid) ? 'inline' : 'none';
+  const isBlocked = (t === 'blocked');
+  exBanner.style.display = (isWalkable || isGrid || isBlocked) ? 'inline' : 'none';
   exBanner.textContent = isWalkable
     ? 'Walkable area: drag any cyan corner to reshape the polygon (4-corner quadrilateral).'
     : isGrid
     ? 'Grid: drag the green dot to move the rotation pivot; drag the orange \u21bb handle to rotate the angle.'
+    : isBlocked
+    ? 'Blocked tiles: click or drag across tiles to toggle them as blocked (the red squares).'
     : '';
 }
 
 function onFrameDown(e) {
-  if (state.tool !== 'draw-hitbox') return;
-  if (e.target.closest('.sprite-handle, .hitbox-handle')) return;
+  if (state.tool !== 'draw-hitbox' && state.tool !== 'blocked') return;
+  // Blocked-tool: click/drag on the canvas toggles blocked tiles.
+  if (state.tool === 'blocked') {
+    onBlockedPaintDown(e);
+    return;
+  }
+  if (e.target.closest('.sprite-handle, .hitbox-handle, .walkable-corner, .grid-origin-handle, .grid-angle-notch')) return;
   e.preventDefault();
   frame.setPointerCapture(e.pointerId);
   const r = frame.getBoundingClientRect();

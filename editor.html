@@ -337,6 +337,26 @@
     color: #ffc97a; font-size: 14px; line-height: 1;
   }
   .grid-angle-notch.dragging { background: #ffc97a; color: #0d1117; cursor: grabbing; }
+
+  /* ---------- blocked tool (kind === 'exploration', tool === 'blocked') ---------- */
+  .grid-svg.dimming line { stroke: rgba(112, 220, 255, 0.18); }
+  .grid-svg.dimming line.grid-line-major { stroke: rgba(112, 220, 255, 0.30); stroke-width: 1; }
+  .blocked-marker {
+    position: absolute;
+    pointer-events: none;
+    background: rgba(255, 80, 80, 0.55);
+    border: 2px solid #ff5050;
+    border-radius: 4px;
+  }
+  .blocked-cursor {
+    position: absolute;
+    pointer-events: none;
+    width: 14px; height: 14px;
+    margin: -7px 0 0 -7px;
+    border: 1.5px dashed #ff5050;
+    border-radius: 50%;
+    background: rgba(255, 80, 80, 0.10);
+  }
 </style>
 </head>
 <body>
