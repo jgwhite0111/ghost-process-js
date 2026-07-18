@@ -413,6 +413,12 @@ async function drawPreviewBase(sc, revision) {
 // from the scene's idleFrame (or loopStartFrame fallback, or 0).
 async function drawSpriteFrames(sc, revision) {
   if (!sc) return;
+  // Hide the protagonist sprite (and any other character frames)
+  // while the user is drag-drawing a new hitbox - they need a
+  // clean canvas for that gesture; the sprite frame underneath
+  // would compete with the hitbox preview for visual attention
+  // and make the new hitbox's placement ambiguous.
+  if (state.tool === 'draw-hitbox') return;
   for (const c of (sc.characters || [])) {
     if (revision !== previewRenderRevision) return;
     try {
@@ -478,7 +484,12 @@ function isSpriteOverBlockedTile(c, sc) {
 
 function updateSpriteBlockedTileClass(div, c, sc) {
   if (!div || !c) return;
-  if (sc && sc.kind === 'exploration') {
+  // No red highlight while the user is drag-drawing a new
+  // hitbox - the outline + glow would compete with the hitbox
+  // drag-preview for the user's attention. Suppress the class
+  // entirely; the dashed handle itself stays visible (it's an
+  // aid to the user, who can still see the sprite's bounding box).
+  if (sc && sc.kind === 'exploration' && state.tool !== 'draw-hitbox') {
     div.classList.toggle('over-blocked-tile', isSpriteOverBlockedTile(c, sc));
   } else {
     div.classList.remove('over-blocked-tile');
@@ -1547,6 +1558,12 @@ function attachSpawnDrag(div, spawn) {
 // ---------- sprite drag (incremental deltas) ----------
 function attachSpriteDrag(div, charConfig) {
   div.addEventListener('pointerdown', (e) => {
+    // Don't start a sprite drag while the user is drag-drawing
+    // a new hitbox - that tool owns the canvas gesture. The
+    // outer's onFrameDown already filters handle-target clicks
+    // for the draw-hitbox flow; this guard prevents the same
+    // event from also starting a sprite drag in flight.
+    if (state.tool === 'draw-hitbox') return;
     e.preventDefault(); e.stopPropagation();
     div.setPointerCapture(e.pointerId);
     // Selection update + drag start must NOT trigger a re-render of
@@ -1912,6 +1929,11 @@ function setTool(t) {
     : isSpawn
     ? 'Spawn: drag the orange marker to set where the character stands at scene start.'
     : '';
+  // Trigger a full re-render so tool-specific gating (e.g. the
+  // protagonist sprite + red highlight hiding during draw-hitbox)
+  // takes effect the moment the user clicks the tool, not on
+  // their next pointer event.
+  renderAll();
 }
 
 function onFrameDown(e) {
