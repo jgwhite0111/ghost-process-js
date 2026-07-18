@@ -145,6 +145,16 @@
   .sprite-handle.no-frames .resize { background: #6c7280; }
   .sprite-handle.selected { outline: 1px solid #f0b760; box-shadow: 0 0 0 1px rgba(240,183,96,0.3); }
   .sprite-handle.dragging { cursor: grabbing; }
+  /* Red highlight when an exploration-mode sprite is over a
+     blocked tile. The frame list itself is drawn on top of the
+     background; this styles the dashed drag outline + label so
+     the conflict is visually unmissable. */
+  .sprite-handle.over-blocked-tile {
+    outline: 1px solid #ff5050;
+    box-shadow: 0 0 0 2px rgba(255, 80, 80, 0.6);
+  }
+  .sprite-handle.over-blocked-tile .label { color: #ff5050; }
+  .sprite-handle.over-blocked-tile .resize { background: #ff5050; }
   .sprite-handle .label {
     position: absolute; top: -16px; left: 0; font-size: 10px; color: #f0b760;
     background: #0d1117; padding: 0 4px;

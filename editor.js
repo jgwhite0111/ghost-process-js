@@ -394,7 +394,95 @@ async function drawPreviewBase(sc, revision) {
   }
   // Runtime draws this after the background even if the plate failed to load.
   drawTitleOverlayPreview(sc);
+  // Draw each character's current frame on top of the background
+  // so the preview is honest about where sprites sit. The frame
+  // lists are already cached in state.spriteFrameLists by the play
+  // button + earlier render pipelining; loadSpriteFrameList below
+  // no-ops if the cache is warm. Fire-and-forget so the preview
+  // continues to redraw even when the first frame is still loading.
+  drawSpriteFrames(sc, revision);
   return true;
+}
+
+// Draw every character's current sprite frame on top of the bg
+// canvas during the preview render. Previously the editor only
+// showed the dashed-outline handle (no actual sprite image), so
+// you couldn't see whether the protagonist fit inside the walkable
+// area or was standing on top of a blocked tile. Frames are picked
+// from state.spriteAnim[id/scene].idx when playing, otherwise
+// from the scene's idleFrame (or loopStartFrame fallback, or 0).
+async function drawSpriteFrames(sc, revision) {
+  if (!sc) return;
+  for (const c of (sc.characters || [])) {
+    if (revision !== previewRenderRevision) return;
+    try {
+      await loadSpriteFrameList(c, state.sceneId);
+    } catch (e) { continue; }
+    if (revision !== previewRenderRevision) return;
+    const key = c.id + '/' + state.sceneId;
+    const frames = state.spriteFrameLists[key];
+    if (!frames || frames.length === 0) continue;
+    const r = computeSpriteRect(c);
+    if (!r || r.noFrames) continue;
+    const anim = state.spriteAnim[key];
+    let idx = 0;
+    if (anim && anim.playing && Number.isFinite(anim.idx)) {
+      idx = Math.max(0, Math.min(frames.length - 1, anim.idx));
+    } else {
+      const scfg = (c.scenes || {})[state.sceneId];
+      if (scfg) {
+        if (Number.isFinite(scfg.idleFrame)) {
+          idx = Math.max(0, Math.min(frames.length - 1, scfg.idleFrame));
+        } else if (Number.isFinite(scfg.loopStartFrame)) {
+          idx = Math.max(0, Math.min(frames.length - 1, scfg.loopStartFrame));
+        }
+      }
+    }
+    const img = frames[idx] || frames[0];
+    if (img) bgCtx.drawImage(img, r.x, r.y, r.w, r.h);
+  }
+}
+
+// True iff this character is sitting on a cell that's listed in
+// exploration.blockedTiles. Mirrors the runtime's grid math
+// (ExplorationController._clampThroughBlocked does the same
+// inverse rotation to test blockedTiles[i]). Used both by
+// renderOverlay's sprite loop and by onSpriteDragMove for live
+// feedback during drag.
+function isSpriteOverBlockedTile(c, sc) {
+  if (!c || !sc || sc.kind !== 'exploration') return false;
+  const ex = sc.exploration;
+  if (!ex || !Array.isArray(ex.blockedTiles) || ex.blockedTiles.length === 0) return false;
+  const tileSize = Number.isFinite(ex.tileSize) ? ex.tileSize : 0.04;
+  const angle = Number.isFinite(ex.gridAngle) ? ex.gridAngle : 0;
+  const origin = (ex.gridOrigin && Number.isFinite(ex.gridOrigin.x) && Number.isFinite(ex.gridOrigin.y))
+    ? ex.gridOrigin
+    : defaultExplorationOrigin(ex);
+  const px = Number.isFinite(c.placementX) ? c.placementX : 0.5;
+  const py = Number.isFinite(c.placementY) ? c.placementY : 0.78;
+  const dx = px - origin.x;
+  const dy = py - origin.y;
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  // Inverse rotation: world -> grid fraction -> grid cell.
+  const rx = (dx * cos + dy * sin) / tileSize;
+  const ry = (-dx * sin + dy * cos) / tileSize;
+  const col = Math.round(rx);
+  const row = Math.round(ry);
+  for (const t of ex.blockedTiles) {
+    if (!Array.isArray(t) || t.length < 2) continue;
+    if (t[0] === col && t[1] === row) return true;
+  }
+  return false;
+}
+
+function updateSpriteBlockedTileClass(div, c, sc) {
+  if (!div || !c) return;
+  if (sc && sc.kind === 'exploration') {
+    div.classList.toggle('over-blocked-tile', isSpriteOverBlockedTile(c, sc));
+  } else {
+    div.classList.remove('over-blocked-tile');
+  }
 }
 
 async function loadSpriteFrame(charConfig, sceneId) {
@@ -741,6 +829,7 @@ function renderOverlay() {
     div.style.height = r.h + 'px';
     if (state.selected?.kind === 'sprite' && state.selected.ref === c) div.classList.add('selected');
     if (state.drag?.ref === c) div.classList.add('dragging');
+    updateSpriteBlockedTileClass(div, c, sc);
     overlay.appendChild(div);
   }
 
@@ -1562,6 +1651,11 @@ function onSpriteDragMove(e) {
     }
     charConfig.placementY = newPY;
     charConfig.placementX = newPX;
+    // Live update: red highlight when the sprite's new position
+    // is over a blocked tile (exploration scenes only). Without
+    // this the user only sees the conflict after pointerup +
+    // re-render, which defeats the "test the grid" workflow.
+    updateSpriteBlockedTileClass(state.drag.handle, charConfig, getScene());
     // The legacy named position slot conflicts with continuous
     // placementX — clear it once numeric dragging starts so the
     // inspector doesn't show a stale slot.
