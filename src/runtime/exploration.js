@@ -103,11 +103,167 @@ class ExplorationController {
         this.sprite.character.targetH = baseTargetH * (farScale + (nearScale - farScale) * t);
     }
 
+    // ---------- blocked-tile grid (opt-in) ----------
+    //
+    // Optional new fields under sceneConfig.exploration:
+    //   tileSize      - grid cell size as a fraction of the canvas
+    //                   (e.g. 0.04 = 4%; default 0.04 if config absent)
+    //   gridOrigin    - { x, y } in canvas fractions; defaults to the
+    //                   top-center of the walkable polygon
+    //   gridAngle     - radians of rotation around the grid origin
+    //                   (~+/-15 deg absorbs AI-FOV drift between
+    //                   generated scenes; default 0)
+    //   blockedTiles  - array of either {col, row} or [col, row] in
+    //                   grid coordinates; tiles where the character
+    //                   may not stand
+    //
+    // All four are optional. With none configured, the grid layer is
+    // a no-op and behaviour is identical to the pre-grid exploration
+    // controller (polygon walkableArea + _clampPoint remain the
+    // boundary source of truth; the grid is purely an inner
+    // blocked-tile layer on top of that).
+
+    _getGridConfig() {
+        if (this._gridCache) return this._gridCache;
+        const origin = this._computeGridOrigin();
+        const tileSize = Number.isFinite(this.config.tileSize)
+            ? this.config.tileSize
+            : 0.04;
+        const angle = Number.isFinite(this.config.gridAngle)
+            ? this.config.gridAngle
+            : 0;
+        const blockedSet = new Set();
+        const raw = Array.isArray(this.config.blockedTiles)
+            ? this.config.blockedTiles
+            : [];
+        for (const t of raw) {
+            if (Array.isArray(t) && t.length >= 2 &&
+                Number.isFinite(t[0]) && Number.isFinite(t[1])) {
+                blockedSet.add(`${t[0]},${t[1]}`);
+            } else if (t && Number.isFinite(t.col) && Number.isFinite(t.row)) {
+                blockedSet.add(`${t.col},${t.row}`);
+            }
+        }
+        this._gridCache = { origin, tileSize, angle, blockedSet };
+        return this._gridCache;
+    }
+
+    _computeGridOrigin() {
+        if (this.config.gridOrigin &&
+            Number.isFinite(this.config.gridOrigin.x) &&
+            Number.isFinite(this.config.gridOrigin.y)) {
+            return {
+                x: this.config.gridOrigin.x,
+                y: this.config.gridOrigin.y,
+            };
+        }
+        // Default: top-center of the walkable polygon (its
+        // far edge in screen-Y is the smallest y in the points).
+        // Track the top edge's x range as its own pair - the
+        // polygon's top edge may not span the full polygon width
+        // (typical isometric scenes lean the side walls inward
+        // at the top, so the bottom edge is wider than the top).
+        const area = this.config.walkableArea;
+        if (Array.isArray(area) && area.length > 0) {
+            let minY = area[0].y;
+            let topMinX = area[0].x;
+            let topMaxX = area[0].x;
+            for (const p of area) {
+                if (p.y < minY) {
+                    minY = p.y;
+                    topMinX = p.x;
+                    topMaxX = p.x;
+                } else if (p.y === minY) {
+                    if (p.x < topMinX) topMinX = p.x;
+                    if (p.x > topMaxX) topMaxX = p.x;
+                }
+            }
+            return { x: (topMinX + topMaxX) / 2, y: minY };
+        }
+        // Rect fallback (matches _clampPoint's default).
+        const rect = this.config.walkable || { x: 0.05, y: 0.35, w: 0.9, h: 0.55 };
+        return { x: rect.x + rect.w / 2, y: rect.y };
+    }
+
+    worldToGrid(x, y) {
+        const g = this._getGridConfig();
+        const dx = x - g.origin.x;
+        const dy = y - g.origin.y;
+        // Inverse rotation by gridAngle: rotate by -angle.
+        const cos = Math.cos(-g.angle);
+        const sin = Math.sin(-g.angle);
+        const rx = dx * cos - dy * sin;
+        const ry = dx * sin + dy * cos;
+        return { col: rx / g.tileSize, row: ry / g.tileSize };
+    }
+
+    gridToWorld(col, row) {
+        const g = this._getGridConfig();
+        const cx = col * g.tileSize;
+        const cy = row * g.tileSize;
+        const cos = Math.cos(g.angle);
+        const sin = Math.sin(g.angle);
+        const rx = cx * cos - cy * sin;
+        const ry = cx * sin + cy * cos;
+        return { x: g.origin.x + rx, y: g.origin.y + ry };
+    }
+
+    _isTileBlocked(col, row) {
+        const c = Math.round(col);
+        const r = Math.round(row);
+        return this._getGridConfig().blockedSet.has(`${c},${r}`);
+    }
+
+    _clampThroughBlocked(fromX, fromY, toX, toY) {
+        const g = this._getGridConfig();
+        // Backward-compat fast path: no blocked tiles configured
+        // means the grid layer is invisible to movement.
+        if (g.blockedSet.size === 0) return { x: toX, y: toY };
+        const dx = toX - fromX;
+        const dy = toY - fromY;
+        const dist = Math.hypot(dx, dy);
+        if (dist < 1e-6) return { x: toX, y: toY };
+        // Sample at ~40% of a tile so we always enter the blocked
+        // cell before declaring it blocked (otherwise we'd land
+        // exactly on the entry edge and the next-frame moveTo
+        // would re-enter it).
+        const stepSize = Math.max(g.tileSize * 0.4, 0.002);
+        const numSteps = Math.max(2, Math.ceil(dist / stepSize));
+        let lastX = fromX;
+        let lastY = fromY;
+        for (let i = 1; i <= numSteps; i++) {
+            const t = i / numSteps;
+            const wx = fromX + dx * t;
+            const wy = fromY + dy * t;
+            // Re-check inside-walkable at the sample point: if
+            // the straight line crosses out of the polygon AND
+            // into a blocked tile in the same step, the polygon
+            // wins (we shouldn't pretend the grid extends past
+            // the floor edge).
+            if (!this._insideWalkable(wx, wy)) {
+                return { x: lastX, y: lastY };
+            }
+            const cell = this.worldToGrid(wx, wy);
+            if (this._isTileBlocked(cell.col, cell.row)) {
+                return { x: lastX, y: lastY };
+            }
+            lastX = wx;
+            lastY = wy;
+        }
+        return { x: toX, y: toY };
+    }
+
+    // moveTo now does two clamps: first the polygon (boundary),
+    // then the grid's straight-line blocked-tile sweep. The grid
+    // clamp is a no-op when no blockedTiles are configured, so
+    // existing exploration_demo scenes (which do not yet set
+    // blockedTiles) keep their current behaviour exactly.
     moveTo(x, y, onArrival = null, pagePoint = null) {
         const area = this.config.walkableArea || this.config.walkable;
-        const point = this._clampPoint(x, y);
-        if (!Array.isArray(area) && !this._insideWalkable(point.x, point.y)) return false;
-        if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) return false;
+        const polygonPoint = this._clampPoint(x, y);
+        if (!Array.isArray(area) && !this._insideWalkable(polygonPoint.x, polygonPoint.y)) return false;
+        if (!Number.isFinite(polygonPoint.x) || !Number.isFinite(polygonPoint.y)) return false;
+        const point = this._clampThroughBlocked(this.x, this.y, polygonPoint.x, polygonPoint.y);
         this.target = point;
         this._arrival = onArrival;
         if (pagePoint) this._lastPagePoint = pagePoint;
