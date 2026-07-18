@@ -200,9 +200,7 @@
   }
   .hitbox-handle.button-control .resize { background: #70dcff; }
 
-  #draw-preview { position: absolute; border: 1px dashed #6cba6c;
-    background: rgba(108,186,108,0.1); box-sizing: border-box;
-    pointer-events: none; z-index: 999; }
+  #draw-preview { /* removed: draw-hitbox tool no longer exists */ }
 
   /* ---------- bottom toolbar ---------- */
   #bottombar { grid-area: bottom; display: flex; gap: 8px; padding: 6px 12px;
@@ -497,17 +495,15 @@
 
   <footer id="bottombar">
     <div class="tool-group">
-      <button id="tool-select" class="active">Select</button>
-      <button id="tool-draw-hitbox">Draw hitbox</button>
+      <button id="add-hitbox-btn">+ Hitbox</button>
       <button id="tool-add-sprite">+ Sprite</button>
     </div>
     <div class="tool-group" id="exploration-tools" style="display:none">
-      <button id="tool-walkable-area" data-exploration-only>Walkable area</button>
-      <button id="tool-grid" data-exploration-only>Grid</button>
-      <button id="tool-blocked" data-exploration-only>Blocked</button>
-      <button id="tool-spawn" data-exploration-only>Spawn</button>
+      <button id="tool-walkable-area">Walkable area</button>
+      <button id="tool-grid">Grid</button>
+      <button id="tool-blocked">Blocked</button>
+      <button id="tool-spawn">Spawn</button>
     </div>
-    <span id="tool-banner" style="display:none">Draw hitbox: click + drag inside the canvas</span>
     <span id="tool-exploration-banner" style="display:none"></span>
   </footer>
 

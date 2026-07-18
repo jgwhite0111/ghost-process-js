@@ -413,12 +413,6 @@ async function drawPreviewBase(sc, revision) {
 // from the scene's idleFrame (or loopStartFrame fallback, or 0).
 async function drawSpriteFrames(sc, revision) {
   if (!sc) return;
-  // Hide the protagonist sprite (and any other character frames)
-  // while the user is drag-drawing a new hitbox - they need a
-  // clean canvas for that gesture; the sprite frame underneath
-  // would compete with the hitbox preview for visual attention
-  // and make the new hitbox's placement ambiguous.
-  if (state.tool === 'draw-hitbox') return;
   for (const c of (sc.characters || [])) {
     if (revision !== previewRenderRevision) return;
     try {
@@ -484,12 +478,7 @@ function isSpriteOverBlockedTile(c, sc) {
 
 function updateSpriteBlockedTileClass(div, c, sc) {
   if (!div || !c) return;
-  // No red highlight while the user is drag-drawing a new
-  // hitbox - the outline + glow would compete with the hitbox
-  // drag-preview for the user's attention. Suppress the class
-  // entirely; the dashed handle itself stays visible (it's an
-  // aid to the user, who can still see the sprite's bounding box).
-  if (sc && sc.kind === 'exploration' && state.tool !== 'draw-hitbox') {
+  if (sc && sc.kind === 'exploration') {
     div.classList.toggle('over-blocked-tile', isSpriteOverBlockedTile(c, sc));
   } else {
     div.classList.remove('over-blocked-tile');
@@ -1558,12 +1547,6 @@ function attachSpawnDrag(div, spawn) {
 // ---------- sprite drag (incremental deltas) ----------
 function attachSpriteDrag(div, charConfig) {
   div.addEventListener('pointerdown', (e) => {
-    // Don't start a sprite drag while the user is drag-drawing
-    // a new hitbox - that tool owns the canvas gesture. The
-    // outer's onFrameDown already filters handle-target clicks
-    // for the draw-hitbox flow; this guard prevents the same
-    // event from also starting a sprite drag in flight.
-    if (state.tool === 'draw-hitbox') return;
     e.preventDefault(); e.stopPropagation();
     div.setPointerCapture(e.pointerId);
     // Selection update + drag start must NOT trigger a re-render of
@@ -1871,8 +1854,13 @@ function renderItemList() {
 
 // ---------- draw hitbox tool ----------
 function setupDrawTool() {
-  $('#tool-select').onclick = () => setTool('select');
-  $('#tool-draw-hitbox').onclick = () => setTool('draw-hitbox');
+  // Action pair: clicking once adds one hitbox/sprite, no modes
+  // engaged. The implicit default is "select" (the cursor is the
+  // arrow); the only buttons that ever get the active highlight
+  // are the 4 exploration tools. Null-safe for tests whose DOM
+  // fixture doesn't add the + Hitbox button.
+  const addHitboxBtn = $('#add-hitbox-btn');
+  if (addHitboxBtn) addHitboxBtn.onclick = () => addNewHitboxAtCenter();
   $('#tool-add-sprite').onclick = () => addNewSprite();
   // Exploration-only buttons; null-safe in tests whose DOM fixture
   // doesn't add them.
@@ -1902,8 +1890,10 @@ function setupDrawTool() {
 function setTool(t) {
   state.tool = t;
   $$('.bottombar .tool-group button').forEach(b => b.classList.remove('active'));
-  if (t === 'select') $('#tool-select').classList.add('active');
-  if (t === 'draw-hitbox') $('#tool-draw-hitbox').classList.add('active');
+  // Only the exploration tools get an "active" highlight - they're
+  // the only modes. The action buttons (+ Hitbox, + Sprite) and the
+  // implicit "select" (no tool engaged) state have no button
+  // highlight; clicking them never lights anything up.
   if (t === 'walkable-area') {
     const btn = $('#tool-walkable-area');
     if (btn) btn.classList.add('active');
@@ -1920,8 +1910,6 @@ function setTool(t) {
     const btn = $('#tool-spawn');
     if (btn) btn.classList.add('active');
   }
-  const banner = $('#tool-banner');
-  banner.style.display = (t === 'draw-hitbox') ? 'inline' : 'none';
   const exBanner = $('#tool-exploration-banner');
   const isWalkable = (t === 'walkable-area');
   const isGrid = (t === 'grid');
@@ -1944,47 +1932,15 @@ function setTool(t) {
   renderAll();
 }
 
+// Only the blocked tool uses canvas pointerdown to paint tiles; the
+// implicit 'select' (no tool engaged) state and the other exploration
+// tools (walkable-area, grid, spawn) all interact via their own
+// handle elements (corner / origin / notch / marker) rather than via
+// the bare canvas. onBlockedPaintDown itself filters out clicks on
+// those handles.
 function onFrameDown(e) {
-  if (state.tool !== 'draw-hitbox' && state.tool !== 'blocked') return;
-  // Blocked-tool: click/drag on the canvas toggles blocked tiles.
-  if (state.tool === 'blocked') {
-    onBlockedPaintDown(e);
-    return;
-  }
-  if (e.target.closest('.sprite-handle, .hitbox-handle, .walkable-corner, .grid-origin-handle, .grid-angle-notch')) return;
-  e.preventDefault();
-  frame.setPointerCapture(e.pointerId);
-  const r = frame.getBoundingClientRect();
-  // Account for CSS scale of the frame
-  const scale = frame.getBoundingClientRect().width / vpW();
-  const sx = (e.clientX - r.left) / scale;
-  const sy = (e.clientY - r.top) / scale;
-  const start = { x: sx / vpW(), y: sy / vpH() };
-  showDrawPreview(start.x, start.y, 0, 0);
-  const move = (ev) => {
-    const cx = (ev.clientX - r.left) / scale / vpW();
-    const cy = (ev.clientY - r.top) / scale / vpH();
-    const x = Math.min(start.x, cx), y = Math.min(start.y, cy);
-    const w = Math.abs(cx - start.x), h = Math.abs(cy - start.y);
-    showDrawPreview(x, y, w, h);
-  };
-  const up = (ev) => {
-    frame.removeEventListener('pointermove', move);
-    frame.removeEventListener('pointerup', up);
-    frame.removeEventListener('pointercancel', up);
-    const cx = (ev.clientX - r.left) / scale / vpW();
-    const cy = (ev.clientY - r.top) / scale / vpH();
-    const x = Math.max(0, Math.min(1 - 0.02, Math.min(start.x, cx)));
-    const y = Math.max(0, Math.min(1 - 0.02, Math.min(start.y, cy)));
-    const w = Math.abs(cx - start.x);
-    const h = Math.abs(cy - start.y);
-    hideDrawPreview();
-    if (w > 0.02 && h > 0.02) addNewHitbox(x, y, Math.min(w, 1 - x), Math.min(h, 1 - y));
-    setTool('select');
-  };
-  frame.addEventListener('pointermove', move);
-  frame.addEventListener('pointerup', up);
-  frame.addEventListener('pointercancel', up);
+  if (state.tool !== 'blocked') return;
+  onBlockedPaintDown(e);
 }
 
 function showDrawPreview(x, y, w, h) {
@@ -2011,6 +1967,16 @@ function addNewHitbox(x, y, w, h) {
   state.selected = { kind: 'hitbox', ref: hb, idx: sc.hitboxes.length - 1 };
   markDirty();
   renderAll();
+}
+
+// "+ Hitbox" action button handler: drops a default hitbox at the
+// canvas-center with a reasonable inspection size and selects it
+// for drag/resize, mirroring addNewSprite's add-and-select pattern.
+function addNewHitboxAtCenter() {
+  // 20% wide x 15% tall, centered on the canvas. Coordinates are
+  // hitbox-relative top-left (x, y, w, h), so x:0.4, y:0.4 with
+  // w:0.2, h:0.15 puts the hitbox center at (0.5, 0.475).
+  addNewHitbox(0.4, 0.4, 0.2, 0.15);
 }
 
 function addNewSprite() {
