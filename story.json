@@ -12,7 +12,9 @@
     "corridor": "jailbreak",
     "jailbreak": "terminal_lab",
     "terminal_lab": "ship_engine",
-    "ship_engine": "alley"
+    "terminal_obelab": "exploration_demo",
+    "ship_engine": "alley",
+    "terminal_ui": "terminal_obelab"
   },
   "scenes": {
     "intro": {
@@ -436,6 +438,47 @@
       "hitboxes": [],
       "tasks": []
     },
+    "terminal_obelab": {
+      "id": "terminal_obelab",
+      "kind": "ink",
+      "bg": "scene_terminal_obelab_crt",
+      "bgPalette": "terminal_lab",
+      "music": "terminal_lab.mp3",
+      "ink": "ink/terminal_obelab.ink",
+      "start_node": "Start",
+      "characters": [],
+      "hitboxes": [
+        {
+          "x": 0.3,
+          "y": 0.3,
+          "w": 0.25,
+          "h": 0.32,
+          "label": "Access terminal",
+          "target": "terminal_ui"
+        },
+        {
+          "x": 0.02,
+          "y": 0.45,
+          "w": 0.1,
+          "h": 0.3,
+          "label": "Walk away",
+          "target": "exploration_demo"
+        }
+      ],
+      "tasks": []
+    },
+    "terminal_ui": {
+      "id": "terminal_ui",
+      "kind": "ink",
+      "bg": "scene_terminal_ui_grok",
+      "bgPalette": "terminal_lab",
+      "music": "terminal_lab.mp3",
+      "ink": "ink/terminal_ui.ink",
+      "start_node": "Start",
+      "characters": [],
+      "hitboxes": [],
+      "tasks": []
+    },
     "ship_engine": {
       "id": "ship_engine",
       "kind": "ink",
@@ -569,7 +612,7 @@
             0.5,
             0.67
           ],
-          "ink": "Terminal"
+          "target": "terminal_obelab"
         },
         {
           "x": 0.22,
@@ -610,7 +653,7 @@
     "rusty_key": {
       "id": "rusty_key",
       "name": "Rusty Key",
-      "description": "An old iron key, stained with verdigris. The teeth are filed in an unusual pattern — military, maybe, or police. It weighs more than it should.",
+      "description": "An old iron key, stained with verdigris. The teeth are filed in an unusual pattern \u2014 military, maybe, or police. It weighs more than it should.",
       "icon": "assets/items/rusty_key.png",
       "key": true,
       "pickup_message": "You found a rusty key."
@@ -626,7 +669,7 @@
     "battery": {
       "id": "battery",
       "name": "Battery",
-      "description": "A lithium cell still holding a partial charge. The label is in a script you can't read — Cyrillic, maybe, or something older. Smells faintly of ozone.",
+      "description": "A lithium cell still holding a partial charge. The label is in a script you can't read \u2014 Cyrillic, maybe, or something older. Smells faintly of ozone.",
       "icon": "assets/items/battery.png",
       "key": false,
       "pickup_message": "You pocketed a battery."

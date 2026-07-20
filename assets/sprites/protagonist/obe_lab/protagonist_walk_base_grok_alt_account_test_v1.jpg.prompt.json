@@ -1,0 +1,28 @@
+{
+  "asset": "assets/sprites/protagonist/obe_lab/protagonist_walk_base_grok_alt_account_test_v1.jpg",
+  "timestamp_utc": "2026-07-20T20:17:31.594165Z",
+  "provider": "xai",
+  "model": "grok-imagine-image",
+  "aspect_ratio": "square",
+  "resolution": "1k",
+  "prompt": "Isolated full-body side-profile character source for a mature cyberpunk horror point-and-click adventure. An adult investigator in their late thirties with realistic mature proportions, angular face, tired eyes, short practical black hair, dark graphite field jacket with a restrained oxblood-red inner collar, narrow black utility trousers, flat worn boots, fingerless clinical gloves, and a small neural-interface jack behind one ear. Human and visibly distinct from any android or thug; no armour, no weapon, no trench-coat tails, no oversized accessories. Neutral standing rest pose facing screen-right, arms relaxed, feet planted on one exact horizontal baseline. Entire figure visible and uncropped with generous transparent-looking margin on the top and both sides, but the boot soles touch the bottom baseline. Consistent readable silhouette for a small gameplay sprite. Detailed smooth cel-painted source illustration inspired by serious late-1980s and early-1990s Japanese computer adventure character art, intended for later palette quantization and Bayer dithering; do not render chunky pixel art. Place the figure against one perfectly flat saturated chroma-magenta background, RGB 255 0 255, with no gradient, no texture, no cast shadow and no floor. One character only, one pose only, no sprite sheet, no duplicate limbs, no front view, no three-quarter camera, no text, no border, no UI, no big anime eyes, no oversized head, no moe, no kawaii expression, no bright cheerful palette.",
+  "prompt_sha256": "25eb40ccef53e343a02e77fc116823f03f2a9a197270b809ef65ad527edd72e3",
+  "prompt_source": "tools/prompts/protagonist_walk_base_v1.prompt.json",
+  "prompt_document": {
+    "asset_id": "protagonist_walk_base_v1",
+    "intended_path": "assets/sprites/protagonist/obe_lab/base.png",
+    "provider": "image_generate configured backend",
+    "aspect_request": "square",
+    "prompt": "Isolated full-body side-profile character source for a mature cyberpunk horror point-and-click adventure. An adult investigator in their late thirties with realistic mature proportions, angular face, tired eyes, short practical black hair, dark graphite field jacket with a restrained oxblood-red inner collar, narrow black utility trousers, flat worn boots, fingerless clinical gloves, and a small neural-interface jack behind one ear. Human and visibly distinct from any android or thug; no armour, no weapon, no trench-coat tails, no oversized accessories. Neutral standing rest pose facing screen-right, arms relaxed, feet planted on one exact horizontal baseline. Entire figure visible and uncropped with generous transparent-looking margin on the top and both sides, but the boot soles touch the bottom baseline. Consistent readable silhouette for a small gameplay sprite. Detailed smooth cel-painted source illustration inspired by serious late-1980s and early-1990s Japanese computer adventure character art, intended for later palette quantization and Bayer dithering; do not render chunky pixel art. Place the figure against one perfectly flat saturated chroma-magenta background, RGB 255 0 255, with no gradient, no texture, no cast shadow and no floor. One character only, one pose only, no sprite sheet, no duplicate limbs, no front view, no three-quarter camera, no text, no border, no UI, no big anime eyes, no oversized head, no moe, no kawaii expression, no bright cheerful palette.",
+    "notes": "Use as visual identity and image-to-image reference for a dedicated walk strip. Verify full-body crop and baseline before deriving animation."
+  },
+  "response_sha256": "d505f72592e70ef971a6da14f5a5f3e56010a25ff87c473f17b80239cb18dfa8",
+  "response_bytes": 95176,
+  "response_format": "JPEG",
+  "dimensions": [
+    1024,
+    1024
+  ],
+  "source": "tools/gen_asset.py",
+  "public_url": "https://files-cdn.x.ai/GCSI1QdOS6CQZin8-FWWLQ/file_f2bb9111-18ce-452e-af0c-15a55895db0f.png"
+}

@@ -1,0 +1,27 @@
+{
+  "asset": "assets/backgrounds/_candidates/terminal_ui_grok/terminal_ui_grok_v3_control.jpg",
+  "timestamp_utc": "2026-07-20T20:32:42.570323Z",
+  "provider": "xai",
+  "model": "grok-imagine-image",
+  "aspect_ratio": "landscape",
+  "resolution": "1k",
+  "prompt": "Full-screen front-facing interface of a fictional late-1980s Japanese PC-98 neurology laboratory control terminal, rendered as detailed smooth concept art for later palette reduction. No physical keyboard and no monitor casing: only the software screen fills the frame. A disciplined severe layout with a blank horizontal header, a dark left navigation rail containing four distinct unlabeled geometric object icons, a large empty center window framed by cyan metal-like bevels, a narrow right diagnostics rail made only of empty gauges and indicator lamps, and a blank footer command bar. Cold cyan and deep blue-black dominate, with only two or three small dark-red danger accents. Oppressive cyberpunk horror, clinical isolation, hard directional screen glow, subtle CRT curvature, scanline texture and phosphor bleed, dense but orderly technical borders. Keep the center panel and all title bars completely empty so game text can be composited later. ABSOLUTELY NO TEXT OF ANY KIND: no writing, no alphabet, no letters, no numbers, no labels, no logos, no pseudo-language, no gibberish, no data readouts, no signatures, no watermark. No people, no bodies, no faces, no figures, no silhouettes, no hands, no skulls. No modern flat-design dashboard, no rounded mobile cards, no cheerful colors. Serious mature Snatcher-era visual language. Strong 4:3-safe composition centered within the landscape frame.",
+  "prompt_sha256": "0b07203a30ab222b4860514e0839f4b2ac01858a1fba423f4c69e16ca937cf68",
+  "prompt_source": "tools/prompts/terminal_ui_grok_v3_control.prompt.json",
+  "prompt_document": {
+    "name": "terminal_ui_grok_v3_control",
+    "purpose": "Alternative text-free full terminal dashboard with stronger horror atmosphere",
+    "model": "grok-imagine-image",
+    "aspect_ratio": "landscape",
+    "prompt": "Full-screen front-facing interface of a fictional late-1980s Japanese PC-98 neurology laboratory control terminal, rendered as detailed smooth concept art for later palette reduction. No physical keyboard and no monitor casing: only the software screen fills the frame. A disciplined severe layout with a blank horizontal header, a dark left navigation rail containing four distinct unlabeled geometric object icons, a large empty center window framed by cyan metal-like bevels, a narrow right diagnostics rail made only of empty gauges and indicator lamps, and a blank footer command bar. Cold cyan and deep blue-black dominate, with only two or three small dark-red danger accents. Oppressive cyberpunk horror, clinical isolation, hard directional screen glow, subtle CRT curvature, scanline texture and phosphor bleed, dense but orderly technical borders. Keep the center panel and all title bars completely empty so game text can be composited later. ABSOLUTELY NO TEXT OF ANY KIND: no writing, no alphabet, no letters, no numbers, no labels, no logos, no pseudo-language, no gibberish, no data readouts, no signatures, no watermark. No people, no bodies, no faces, no figures, no silhouettes, no hands, no skulls. No modern flat-design dashboard, no rounded mobile cards, no cheerful colors. Serious mature Snatcher-era visual language. Strong 4:3-safe composition centered within the landscape frame."
+  },
+  "response_sha256": "7cc421ca3f12dab7ae3643fd81d5fec025510fb9c2aa359353c2c0efc9bfe815",
+  "response_bytes": 142151,
+  "response_format": "JPEG",
+  "dimensions": [
+    1280,
+    720
+  ],
+  "source": "tools/gen_asset.py",
+  "public_url": "https://files-cdn.x.ai/hcfsTIf9STepZPIACU1C4A/file_91e4857a-7c6f-4a38-8541-5cfee8dedf10.png"
+}

@@ -1,0 +1,27 @@
+{
+  "asset": "assets/backgrounds/_candidates/terminal_ui_grok/terminal_ui_grok_v4_components.jpg",
+  "timestamp_utc": "2026-07-20T20:32:52.310094Z",
+  "provider": "xai",
+  "model": "grok-imagine-image",
+  "aspect_ratio": "landscape",
+  "resolution": "1k",
+  "prompt": "A clean orthographic asset board showing reusable interface components for a fictional 1988 Japanese PC-98 cyberpunk horror operating system, arranged in a tidy grid on one flat solid near-black teal background. Include: three separate blank rectangular window frames with empty navy interiors and blank title bars; six blank bevelled rectangular buttons in raised and pressed states; four isolated unlabeled application icons shaped as a dossier, sealed message, floor schematic, and machine diagnostic module; small cyan and dark-red indicator lamps; two empty status strips; one empty inset text well. Every object fully visible, separated by generous clear background gaps, straight-on with no perspective, hard square corners, crisp edges, consistent cold cyan/deep navy/dark crimson palette, serious industrial medical-lab horror styling. ABSOLUTELY NO WRITING OR TYPOGRAPHY: no words, no letters, no numbers, no labels, no logos, no captions, no pseudo-text, no gibberish symbols, no signatures, no watermark. No people, no faces, no figures, no silhouettes, no hands. No modern rounded cards, no cute icons, no bright cheerful colors. Detailed smooth source illustration, not blocky pixel art; intended for cropping, splicing, and later PC-98 palette quantization.",
+  "prompt_sha256": "d29a4b84d887ad42dd9bc2d47c7a1b1ffa4ca766d60186e1627631d4ad22eade",
+  "prompt_source": "tools/prompts/terminal_ui_grok_v4_components.prompt.json",
+  "prompt_document": {
+    "name": "terminal_ui_grok_v4_components",
+    "purpose": "Text-free PC-98 UI component sheet for selective splicing",
+    "model": "grok-imagine-image",
+    "aspect_ratio": "landscape",
+    "prompt": "A clean orthographic asset board showing reusable interface components for a fictional 1988 Japanese PC-98 cyberpunk horror operating system, arranged in a tidy grid on one flat solid near-black teal background. Include: three separate blank rectangular window frames with empty navy interiors and blank title bars; six blank bevelled rectangular buttons in raised and pressed states; four isolated unlabeled application icons shaped as a dossier, sealed message, floor schematic, and machine diagnostic module; small cyan and dark-red indicator lamps; two empty status strips; one empty inset text well. Every object fully visible, separated by generous clear background gaps, straight-on with no perspective, hard square corners, crisp edges, consistent cold cyan/deep navy/dark crimson palette, serious industrial medical-lab horror styling. ABSOLUTELY NO WRITING OR TYPOGRAPHY: no words, no letters, no numbers, no labels, no logos, no captions, no pseudo-text, no gibberish symbols, no signatures, no watermark. No people, no faces, no figures, no silhouettes, no hands. No modern rounded cards, no cute icons, no bright cheerful colors. Detailed smooth source illustration, not blocky pixel art; intended for cropping, splicing, and later PC-98 palette quantization."
+  },
+  "response_sha256": "c716f2db47a81179b4b30a61fcab3e2fb36a0e6708b0420fd187c233e71d05c9",
+  "response_bytes": 94647,
+  "response_format": "JPEG",
+  "dimensions": [
+    1280,
+    720
+  ],
+  "source": "tools/gen_asset.py",
+  "public_url": "https://files-cdn.x.ai/IV6NlTWpQB6-iwIUpGOH-g/file_b7dbf00a-3303-4437-8fc7-8b38a8b86c04.png"
+}

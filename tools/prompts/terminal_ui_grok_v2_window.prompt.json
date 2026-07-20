@@ -1,0 +1,7 @@
+{
+  "name": "terminal_ui_grok_v2_window",
+  "purpose": "Text-free application-window chrome plate for splicing",
+  "model": "grok-imagine-image",
+  "aspect_ratio": "landscape",
+  "prompt": "A detailed smooth source illustration of a single large blank application window from a fictional 1988 Japanese PC-98 cyberpunk operating system, perfectly front-on and orthographic, centered on a uniform very dark teal desktop. The window occupies about seventy percent of the frame and has a thin cold-blue bevelled outer frame, a completely BLANK navy title bar, one small blank crimson square close button with no symbol, a huge EMPTY near-black content panel, a narrow EMPTY command strip at the bottom, several blank rectangular raised buttons with no markings, tiny cyan and red indicator lights, hard square corners, subtle analog CRT glow, restrained scratches and industrial wear. Oppressive medical-lab horror mood, Snatcher and Policenauts-era technical design, cold cyan, deep navy, black and restrained blood red. Make the large interior content area flat, clean and uninterrupted for custom game text. ABSOLUTELY NO WRITING OR TYPOGRAPHY: no words, no letters, no numbers, no labels, no logos, no pseudo-text, no random symbols, no fake data rows, no signatures, no watermark. No people, no faces, no figures, no silhouettes, no hands. No modern Windows appearance, no Mac appearance, no smartphone UI, no rounded cards, no cute motifs. Smooth detailed source art, not blocky pixel art; runtime will add PC-98 dithering."
+}

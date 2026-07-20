@@ -663,3 +663,1019 @@ html, body {
         font-size: 22px;
     }
 }
+
+/* ============================================================================
+   Terminal UI overlay (terminal_ui scene)
+   80s/90s OS-style chrome: bevelled borders, insets, drop shadows.
+   Sits on top of the canvas BG (which renders the CRT closeup), below
+   the scanline overlay (z-index 1000) so the CRT effect passes through.
+   ============================================================================ */
+
+.tui-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1500;   /* above scanlines (1000) + inventory button so EXIT is clickable */
+    pointer-events: auto;
+    font-family: 'NouveauIBM', 'PC98Serif', monospace;
+    font-size: 14px;
+    color: #000;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    user-select: none;
+}
+
+/* Header bar (OS chrome across the top) */
+.tui-header {
+    height: 32px;
+    padding: 6px 12px;
+    background: linear-gradient(
+        to bottom,
+        #1c3868 0%,
+        #2a4a88 50%,
+        #102450 100%
+    );
+    color: #fff;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-top: 1px solid #5a82c0;
+    border-bottom: 2px solid #000;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
+    text-shadow: 1px 1px 0 #000;
+    letter-spacing: 0.05em;
+}
+.tui-header-title { font-weight: bold; }
+.tui-header-clock { font-variant-numeric: tabular-nums; }
+
+/* Bevelled button (raised when idle) */
+.tui-btn {
+    background: linear-gradient(
+        to bottom,
+        #d8d8d8 0%,
+        #b8b8b8 50%,
+        #a8a8a8 100%
+    );
+    color: #000;
+    font-family: inherit;
+    font-size: 13px;
+    padding: 4px 14px;
+    border: 0;
+    border-top: 2px solid #fff;
+    border-left: 2px solid #fff;
+    border-right: 2px solid #444;
+    border-bottom: 2px solid #444;
+    box-shadow:
+        inset 1px 1px 0 #ececec,
+        inset -1px -1px 0 #888;
+    cursor: pointer;
+    text-shadow: none;
+    letter-spacing: 0.04em;
+}
+.tui-btn:hover {
+    background: linear-gradient(
+        to bottom,
+        #e8e8e8 0%,
+        #c8c8c8 50%,
+        #b0b0b0 100%
+    );
+}
+.tui-btn:active,
+.tui-btn.pressed {
+    /* Inset / pressed look */
+    border-top: 2px solid #444;
+    border-left: 2px solid #444;
+    border-right: 2px solid #fff;
+    border-bottom: 2px solid #fff;
+    box-shadow:
+        inset 1px 1px 0 #888,
+        inset -1px -1px 0 #ececec;
+    padding: 5px 13px 3px 15px;  /* slight optical shift */
+}
+.tui-btn-exit {
+    background: linear-gradient(
+        to bottom,
+        #d04040 0%,
+        #b02020 50%,
+        #900808 100%
+    );
+    color: #fff;
+    text-shadow: 1px 1px 0 #000;
+    border-top-color: #e08080;
+    border-left-color: #e08080;
+    border-right-color: #440404;
+    border-bottom-color: #440404;
+    box-shadow:
+        inset 1px 1px 0 #ff6060,
+        inset -1px -1px 0 #600404;
+}
+.tui-btn-exit:hover {
+    background: linear-gradient(
+        to bottom,
+        #e85050 0%,
+        #c03030 50%,
+        #a01818 100%
+    );
+}
+.tui-btn-exit:active {
+    border-top-color: #440404;
+    border-left-color: #440404;
+    border-right-color: #e08080;
+    border-bottom-color: #e08080;
+    box-shadow:
+        inset 1px 1px 0 #600404,
+        inset -1px -1px 0 #ff6060;
+}
+
+/* Desktop area (icons visible when no window is open) */
+.tui-desktop {
+    position: absolute;
+    top: 32px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 16px;
+}
+.tui-icon-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, 96px);
+    grid-auto-rows: 96px;
+    gap: 8px;
+}
+.tui-icon {
+    width: 96px;
+    height: 96px;
+    padding: 4px;
+    background: transparent;
+    border: 2px dotted transparent;
+    cursor: pointer;
+    font-family: inherit;
+    color: #ece8d8;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    text-shadow: 1px 1px 0 #000;
+}
+.tui-icon:focus { outline: none; }
+.tui-icon:hover,
+.tui-icon:focus-visible {
+    border: 2px dotted #ece8d8;
+    background: rgba(60, 100, 200, 0.25);
+}
+.tui-icon:active {
+    border: 2px dotted #80c8c8;
+    background: rgba(40, 80, 160, 0.4);
+}
+.tui-icon-img {
+    width: 40px;
+    height: 40px;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    margin: 2px 0 4px;
+}
+.tui-icon-label {
+    font-size: 11px;
+    line-height: 1.2;
+    word-break: break-word;
+    max-width: 90px;
+}
+
+/* Window (when an app is open) */
+.tui-window {
+    position: absolute;
+    top: 60px;
+    left: 140px;
+    width: min(820px, calc(100vw - 180px));
+    height: min(560px, calc(100vh - 100px));
+    background: #c3c7cb;
+    border-top: 2px solid #fff;
+    border-left: 2px solid #fff;
+    border-right: 2px solid #222;
+    border-bottom: 2px solid #222;
+    box-shadow:
+        4px 4px 0 rgba(0, 0, 0, 0.55),
+        inset 1px 1px 0 #ececec;
+    display: none;
+    flex-direction: column;
+}
+.tui-window.open { display: flex; }
+
+.tui-titlebar {
+    height: 28px;
+    padding: 4px 8px;
+    background: linear-gradient(
+        to right,
+        #1c3868 0%,
+        #2a4a88 60%,
+        #102450 100%
+    );
+    color: #fff;
+    font-weight: bold;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    text-shadow: 1px 1px 0 #000;
+    letter-spacing: 0.05em;
+    flex-shrink: 0;
+}
+.tui-titlebar-left {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    flex: 1;
+}
+.tui-titlebar-icon {
+    width: 18px;
+    height: 18px;
+    image-rendering: pixelated;
+    flex-shrink: 0;
+}
+.tui-titlebar-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.tui-titlebar-btn {
+    width: 22px;
+    height: 22px;
+    background: linear-gradient(
+        to bottom,
+        #d8d8d8 0%,
+        #b8b8b8 100%
+    );
+    color: #000;
+    border: 0;
+    border-top: 2px solid #fff;
+    border-left: 2px solid #fff;
+    border-right: 2px solid #444;
+    border-bottom: 2px solid #444;
+    box-shadow:
+        inset 1px 1px 0 #ececec,
+        inset -1px -1px 0 #888;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: bold;
+    text-shadow: none;
+    padding: 0;
+    line-height: 16px;
+}
+.tui-titlebar-btn:active {
+    border-top-color: #444;
+    border-left-color: #444;
+    border-right-color: #fff;
+    border-bottom-color: #fff;
+    box-shadow:
+        inset 1px 1px 0 #888,
+        inset -1px -1px 0 #ececec;
+}
+
+/* Content area — terminal-style inset */
+.tui-content {
+    flex: 1;
+    padding: 14px 18px;
+    background: #0a0a10;
+    color: #80c8c8;
+    font-size: 14px;
+    line-height: 1.55;
+    overflow-y: auto;
+    border-top: 2px solid #222;
+    border-bottom: 2px solid #fff;
+    box-shadow:
+        inset 0 2px 6px rgba(0, 0, 0, 0.8),
+        inset 0 -1px 0 rgba(255, 255, 255, 0.08);
+    text-shadow: 0 0 4px rgba(80, 200, 200, 0.25);
+    /* Tabular feel */
+    font-variant-numeric: tabular-nums;
+}
+.tui-content::-webkit-scrollbar { width: 14px; }
+.tui-content::-webkit-scrollbar-track {
+    background: #1a1a20;
+    border-left: 1px solid #2a2a30;
+}
+.tui-content::-webkit-scrollbar-thumb {
+    background: linear-gradient(
+        to right,
+        #4a5468,
+        #2a3040
+    );
+    border-top: 1px solid #6a7488;
+    border-left: 1px solid #6a7488;
+}
+.tui-line {
+    margin: 0;
+    padding: 0;
+    min-height: 1.55em;
+}
+.tui-line.tui-line-blank { min-height: 0.6em; }
+.tui-line.tui-line-accent {
+    color: #50e850;
+}
+.tui-line.tui-line-warn {
+    color: #ff5050;
+    text-shadow: 0 0 6px rgba(255, 80, 80, 0.5);
+}
+.tui-line.tui-line-dim {
+    color: #446668;
+}
+
+/* Bottom bar — choices + nav */
+.tui-bottombar {
+    height: 38px;
+    padding: 6px 12px;
+    background: #c3c7cb;
+    border-top: 1px solid #fff;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+}
+
+/* Status footer (when no window open) */
+.tui-footer {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 22px;
+    padding: 4px 12px;
+    background: linear-gradient(
+        to bottom,
+        #102450 0%,
+        #1c3868 100%
+    );
+    color: #80c8c8;
+    font-size: 11px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-top: 1px solid #000;
+    text-shadow: 1px 1px 0 #000;
+    letter-spacing: 0.04em;
+}
+
+
+/* ============================================================================
+   Terminal UI v2 polish — smoother borders, icon tilt, app window depth
+   ============================================================================ */
+
+/* App window: multi-layer bevelled borders + soft drop shadow.
+   The 4-direction inset shadows give the chrome a softly-rounded feel
+   without going full skeuomorphic; the offset drop shadow keeps the
+   window feeling like a physical object floating above the desktop. */
+.tui-window {
+    border-radius: 4px;
+    background: #c3c7cb;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.75),
+        inset 1px 0 0 rgba(255, 255, 255, 0.5),
+        inset -1px 0 0 rgba(0, 0, 0, 0.18),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.32),
+        2px 2px 0 rgba(0, 0, 0, 0.45),
+        6px 6px 14px rgba(0, 0, 0, 0.55);
+}
+/* Highlight along the very top — light reflection line. */
+.tui-window::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 4px; right: 4px;
+    height: 1px;
+    background: linear-gradient(
+        to right,
+        rgba(255, 255, 255, 0) 0%,
+        rgba(255, 255, 255, 0.85) 30%,
+        rgba(255, 255, 255, 0.85) 70%,
+        rgba(255, 255, 255, 0) 100%
+    );
+    pointer-events: none;
+}
+
+/* Title bar: gradient + soft inner highlight, no hard borders. */
+.tui-titlebar {
+    border-radius: 4px 4px 0 0;
+    background: linear-gradient(
+        to bottom,
+        #2a4a88 0%,
+        #1c3868 50%,
+        #142452 100%
+    );
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.4),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.35);
+}
+
+/* Title-bar close button — slight gradient, more depth. */
+.tui-titlebar-btn {
+    border-radius: 2px;
+    background: linear-gradient(
+        to bottom,
+        #e8e8e8 0%,
+        #c8c8c8 50%,
+        #a8a8a8 100%
+    );
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.85),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.35),
+        0 1px 1px rgba(0, 0, 0, 0.25);
+}
+.tui-titlebar-btn:active {
+    box-shadow:
+        inset 0 1px 2px rgba(0, 0, 0, 0.5),
+        0 0 0 rgba(0, 0, 0, 0);
+}
+
+/* Generic tui-btn: gradient + multi-layer bevel. */
+.tui-btn {
+    border-radius: 3px;
+    background: linear-gradient(
+        to bottom,
+        #ececec 0%,
+        #c8c8c8 50%,
+        #b0b0b0 100%
+    );
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.85),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.28),
+        0 1px 2px rgba(0, 0, 0, 0.2);
+}
+.tui-btn:active,
+.tui-btn.pressed {
+    background: linear-gradient(
+        to bottom,
+        #a8a8a8 0%,
+        #c0c0c0 50%,
+        #d8d8d8 100%
+    );
+    box-shadow:
+        inset 0 2px 3px rgba(0, 0, 0, 0.4),
+        0 0 0 rgba(0, 0, 0, 0);
+}
+
+/* EXIT button: red gradient with soft glow. */
+.tui-btn-exit {
+    background: linear-gradient(
+        to bottom,
+        #e85050 0%,
+        #c03030 50%,
+        #980808 100%
+    );
+    box-shadow:
+        inset 0 1px 0 rgba(255, 200, 200, 0.7),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.4),
+        0 1px 2px rgba(80, 0, 0, 0.5),
+        0 0 6px rgba(220, 50, 50, 0.25);
+}
+.tui-btn-exit:active {
+    background: linear-gradient(
+        to bottom,
+        #980808 0%,
+        #b02020 50%,
+        #d04040 100%
+    );
+    box-shadow:
+        inset 0 2px 3px rgba(0, 0, 0, 0.55),
+        0 0 0 rgba(0, 0, 0, 0);
+}
+
+/* Desktop icons: isometric tilt via CSS perspective + transform.
+   Combined with PIL-drawn depth shading this gives proper 'lifted
+   off the desktop' feel. */
+.tui-icon-img {
+    width: 44px;
+    height: 44px;
+    transform: perspective(160px) rotateX(8deg) rotateY(-12deg);
+    transform-origin: 50% 70%;
+    filter: drop-shadow(2px 3px 2px rgba(0, 0, 0, 0.55));
+    transition: transform 80ms ease-out, filter 80ms ease-out;
+}
+.tui-icon:hover .tui-icon-img,
+.tui-icon:focus-visible .tui-icon-img {
+    transform: perspective(160px) rotateX(8deg) rotateY(-12deg) scale(1.08);
+    filter: drop-shadow(2px 4px 3px rgba(0, 0, 0, 0.7));
+}
+.tui-icon:active .tui-icon-img {
+    transform: perspective(160px) rotateX(8deg) rotateY(-12deg) scale(0.96);
+}
+
+/* Icon labels get a subtle 3D pop on hover too. */
+.tui-icon-label {
+    text-shadow:
+        1px 1px 0 #000,
+        0 0 4px rgba(0, 0, 0, 0.6);
+    margin-top: 6px;
+}
+.tui-icon:hover .tui-icon-label,
+.tui-icon:focus-visible .tui-icon-label {
+    color: #fff;
+}
+
+/* Inset content area: gradient recess, more depth. */
+.tui-content {
+    border-radius: 0;
+    background:
+        linear-gradient(
+            to bottom,
+            rgba(0, 0, 0, 0.5) 0%,
+            rgba(0, 0, 0, 0) 8px,
+            rgba(0, 0, 0, 0) calc(100% - 8px),
+            rgba(0, 0, 0, 0.5) 100%
+        ),
+        #06060c;
+    box-shadow:
+        inset 0 3px 6px rgba(0, 0, 0, 0.7),
+        inset 0 -2px 4px rgba(0, 0, 0, 0.5),
+        inset 2px 0 4px rgba(0, 0, 0, 0.45),
+        inset -2px 0 4px rgba(0, 0, 0, 0.45);
+}
+
+/* Bottom bar — slight gradient highlight. */
+.tui-bottombar {
+    border-radius: 0 0 4px 4px;
+    background: linear-gradient(
+        to bottom,
+        #d4d8dc 0%,
+        #c3c7cb 100%
+    );
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.7),
+        inset 0 -1px 0 rgba(0, 0, 0, 0.18);
+}
+
+/* ============================================================================
+   terminal_ui v2 — window chrome comes from the BG image. The DOM .tui-window
+   is purely an interactive overlay (text + close button + choice bar).
+   Override the prior CSS-borders-and-gradients rules so they don't double-paint.
+   ============================================================================ */
+
+.tui-window {
+    /* Position over the BG's window (192,130 — 768x530 = where PIL placed it).
+       Force-override the earlier grey-on-grey chrome. */
+    top: 130px !important;
+    left: 192px !important;
+    width: 768px !important;
+    height: 530px !important;
+    background: transparent !important;
+    border-top: 0 !important;
+    border-left: 0 !important;
+    border-right: 0 !important;
+    border-bottom: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    pointer-events: none;       /* container lets pointer pass through */
+    display: none;
+    flex-direction: column;
+}
+.tui-window.open { display: flex; pointer-events: none; }
+
+/* Re-enable pointer events on actual interactive children */
+.tui-window > * { pointer-events: auto; }
+
+/* Title bar: transparent; BG draws the gradient + border */
+.tui-titlebar {
+    background: transparent !important;
+    border-radius: 0 !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    height: 38px;
+    padding: 0 60px 0 56px;       /* leave room for the X button on the right; start near BG's icon */
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+}
+.tui-titlebar-icon { display: none; }  /* BG already drew the icon */
+.tui-titlebar-text {
+    color: #ece8d8;
+    font-family: 'MadouFutoMaru', monospace;
+    font-size: 16px;
+    font-weight: bold;
+    text-shadow: 1px 1px 0 #000, 0 0 4px rgba(0, 0, 0, 0.55);
+    letter-spacing: 0.04em;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.tui-titlebar-btn {
+    position: absolute;
+    /* Sit on top of BG's red X square (right edge of titlebar) */
+    right: 8px;
+    top: 6px;
+    width: 28px;
+    height: 26px;
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    color: #fff;
+    font-family: 'MadouFutoMaru', monospace;
+    font-size: 18px;
+    font-weight: bold;
+    cursor: pointer;
+    text-shadow: 1px 1px 0 #000;
+    padding: 0;
+    line-height: 1;
+}
+.tui-titlebar-btn:hover {
+    background: rgba(255, 255, 255, 0.18) !important;
+}
+.tui-titlebar-btn:active {
+    background: rgba(255, 255, 255, 0.32) !important;
+}
+
+/* Content area: semi-transparent black over BG's content, readable text */
+.tui-content {
+    background: rgba(6, 8, 12, 0.45) !important;
+    border: 0 !important;
+    border-top: 0 !important;
+    border-bottom: 0 !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    flex: 1;
+    padding: 16px 20px;
+    color: #80c8c8;
+    font-family: 'NouveauIBM', 'PC98Serif', monospace;
+    font-size: 14px;
+    line-height: 1.55;
+    overflow-y: auto;
+    text-shadow: 0 0 4px rgba(80, 200, 200, 0.18);
+    font-variant-numeric: tabular-nums;
+}
+.tui-content::-webkit-scrollbar { width: 12px; }
+.tui-content::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.4); }
+.tui-content::-webkit-scrollbar-thumb {
+    background: rgba(140, 160, 180, 0.6);
+    border-top: 1px solid rgba(220, 230, 240, 0.7);
+    border-left: 1px solid rgba(220, 230, 240, 0.7);
+}
+
+/* Bottom bar: transparent + small inline choice buttons */
+.tui-bottombar {
+    background: transparent !important;
+    border: 0 !important;
+    border-top: 0 !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    height: 40px;
+    padding: 6px 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+/* Footer (status text at bottom of viewport) */
+.tui-footer {
+    background: transparent !important;
+    border-top: 0 !important;
+}
+
+/* ============================================================================
+   terminal_ui Grok plate integration
+
+   The 1152x864 plate owns all visual chrome. This final override locks the DOM
+   to the same 4:3 coordinate system and adds only runtime Ink text, existing
+   icon assets, focus states, and commands.
+   ============================================================================ */
+
+.tui-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 20;
+    overflow: hidden;
+    pointer-events: none;
+    font-family: 'NouveauIBM', 'PC98Serif', monospace;
+    color: #a9e5df;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+.tui-stage {
+    position: absolute;
+    width: 1152px;
+    height: 864px;
+    transform-origin: 0 0;
+    pointer-events: none;
+}
+
+.tui-header,
+.tui-footer {
+    position: absolute;
+    left: 40px;
+    width: 1072px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 26px;
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    color: #b9eeea;
+    font-size: 15px;
+    letter-spacing: 0.09em;
+    text-shadow: 1px 1px 0 #000, 0 0 6px rgba(70, 220, 220, 0.32);
+    pointer-events: none;
+}
+
+.tui-header {
+    top: 30px;
+    height: 48px;
+}
+
+.tui-header-title {
+    color: #e5ffff;
+    font-family: 'MadouFutoMaru', 'NouveauIBM', monospace;
+    font-size: 17px;
+    font-weight: bold;
+}
+
+.tui-header-state {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-right: 30px;
+    color: #d9b5a8;
+    font-size: 13px;
+}
+
+.tui-header-state i {
+    width: 8px;
+    height: 8px;
+    background: #c53737;
+    border: 1px solid #ff8272;
+    box-shadow: 0 0 7px rgba(255, 48, 36, 0.82);
+}
+
+.tui-footer {
+    top: 798px !important;
+    bottom: auto !important;
+    height: 44px !important;
+    color: #71bab9;
+    font-size: 13px;
+}
+
+.tui-footer-module { color: #d6ece8; }
+
+.tui-launcher {
+    position: absolute;
+    left: 56px;
+    top: 148px;
+    width: 132px;
+    display: grid;
+    grid-template-rows: repeat(5, 96px);
+    row-gap: 22px;
+    pointer-events: none;
+}
+
+.tui-launcher-button {
+    width: 132px;
+    height: 96px;
+    padding: 6px 8px 5px;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: #89c9c6;
+    font: inherit;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    pointer-events: auto;
+    image-rendering: pixelated;
+}
+
+.tui-icon-img {
+    width: 54px;
+    height: 54px;
+    object-fit: contain;
+    image-rendering: pixelated;
+    filter: drop-shadow(3px 4px 0 rgba(0, 0, 0, 0.72));
+    transform: translateY(1px);
+    transition: transform 70ms steps(2, end), filter 70ms steps(2, end);
+}
+
+.tui-icon-label {
+    min-width: 84px;
+    margin-top: 2px;
+    padding: 2px 5px 1px;
+    color: #9fd8d2;
+    font-family: 'MadouFutoMaru', 'NouveauIBM', monospace;
+    font-size: 13px;
+    line-height: 1;
+    letter-spacing: 0.08em;
+    text-align: center;
+    text-shadow: 1px 1px 0 #000;
+}
+
+.tui-launcher-button:hover .tui-icon-img,
+.tui-launcher-button:focus-visible .tui-icon-img,
+.tui-launcher-button.active .tui-icon-img {
+    transform: translateY(-2px) scale(1.08);
+    filter: drop-shadow(3px 5px 0 rgba(0, 0, 0, 0.8)) brightness(1.18);
+}
+
+.tui-launcher-button:hover .tui-icon-label,
+.tui-launcher-button:focus-visible .tui-icon-label,
+.tui-launcher-button.active .tui-icon-label {
+    color: #f0ffff;
+    background: rgba(15, 92, 102, 0.78);
+}
+
+.tui-launcher-button:focus-visible,
+.tui-launcher-button.active {
+    box-shadow: inset 0 0 0 2px #55d8d5, inset 0 0 0 4px rgba(1, 15, 21, 0.9);
+}
+
+.tui-launcher-button:active .tui-icon-img { transform: translateY(2px) scale(0.96); }
+
+.tui-launcher-exit:hover,
+.tui-launcher-exit:focus-visible {
+    box-shadow: inset 0 0 0 2px #e45b50, inset 0 0 0 4px rgba(25, 2, 5, 0.9);
+}
+
+.tui-launcher-exit:hover .tui-icon-label,
+.tui-launcher-exit:focus-visible .tui-icon-label { background: rgba(120, 20, 24, 0.82); }
+
+.tui-window,
+.tui-window.open {
+    position: absolute;
+    display: block;
+    left: 228px !important;
+    top: 104px !important;
+    width: 884px !important;
+    height: 636px !important;
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    pointer-events: none;
+}
+
+.tui-titlebar {
+    position: absolute;
+    left: 20px;
+    top: 5px;
+    width: 844px;
+    height: 43px;
+    padding: 0 50px 0 22px;
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    pointer-events: none;
+}
+
+.tui-titlebar-text {
+    color: #e8ffff;
+    font-family: 'MadouFutoMaru', 'NouveauIBM', monospace;
+    font-size: 18px;
+    font-weight: bold;
+    letter-spacing: 0.06em;
+    text-shadow: 1px 1px 0 #000, 0 0 5px rgba(100, 230, 230, 0.28);
+    white-space: nowrap;
+}
+
+.tui-module-code {
+    margin-left: auto;
+    color: #5ca6aa;
+    font-size: 12px;
+    letter-spacing: 0.07em;
+    white-space: nowrap;
+}
+
+.tui-titlebar-close {
+    position: absolute;
+    right: 0;
+    top: 4px;
+    width: 31px;
+    height: 30px;
+    padding: 0;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: #fff;
+    font-family: 'MadouFutoMaru', monospace;
+    font-size: 18px;
+    line-height: 27px;
+    text-align: center;
+    text-indent: 14px;
+    text-shadow: 1px 1px 0 #3b0000;
+    cursor: pointer;
+    pointer-events: auto;
+}
+
+.tui-titlebar-close:hover,
+.tui-titlebar-close:focus-visible {
+    background: rgba(255, 235, 220, 0.18);
+    box-shadow: inset 0 0 0 2px rgba(255, 220, 205, 0.82);
+}
+
+.tui-content {
+    position: absolute;
+    left: 20px;
+    top: 56px;
+    width: 844px;
+    height: 510px;
+    flex: none;
+    padding: 16px 22px 18px;
+    overflow: auto;
+    border: 0 !important;
+    background: rgba(0, 7, 10, 0.14) !important;
+    box-shadow: none !important;
+    color: #8fd0ca;
+    font-family: 'NouveauIBM', 'PC98Serif', monospace;
+    font-size: 17px;
+    line-height: 1.34;
+    letter-spacing: 0.025em;
+    font-variant-numeric: tabular-nums;
+    text-shadow: 1px 1px 0 #000, 0 0 4px rgba(50, 190, 190, 0.16);
+    pointer-events: auto;
+    scrollbar-color: #386f78 #041218;
+    scrollbar-width: thin;
+    -webkit-user-select: text;
+    user-select: text;
+}
+
+.tui-content::-webkit-scrollbar { width: 10px; }
+.tui-content::-webkit-scrollbar-track { background: #041218; }
+.tui-content::-webkit-scrollbar-thumb { background: #386f78; border: 1px solid #68aeb2; }
+
+.tui-line {
+    min-height: 1.34em;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.tui-line + .tui-line { margin-top: 3px; }
+.tui-line.tui-dim { color: #497c7c; }
+.tui-line.tui-ok { color: #9bd0a4; }
+.tui-line.tui-warn { color: #ef8070; }
+.tui-line.tui-heading { color: #e0ffff; letter-spacing: 0.07em; }
+.tui-line.tui-divider { color: #386e74; white-space: nowrap; overflow: hidden; }
+.tui-line.tui-map-line {
+    color: #82d5ce;
+    font-size: 15px;
+    line-height: 1.22;
+    white-space: pre;
+    overflow-wrap: normal;
+}
+
+.tui-commandbar {
+    position: absolute;
+    left: 488px;
+    top: 580px;
+    width: 376px;
+    height: 48px;
+    padding: 7px 4px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 10px;
+    pointer-events: none;
+}
+
+.tui-command {
+    min-width: 112px;
+    height: 32px;
+    padding: 0 16px;
+    border: 1px solid #58a2ae;
+    border-right-color: #12343c;
+    border-bottom-color: #12343c;
+    background: linear-gradient(#244d58, #102d36);
+    color: #d9f5f2;
+    font-family: 'MadouFutoMaru', 'NouveauIBM', monospace;
+    font-size: 13px;
+    letter-spacing: 0.06em;
+    text-shadow: 1px 1px 0 #000;
+    cursor: pointer;
+    pointer-events: auto;
+}
+
+.tui-command:hover,
+.tui-command:focus-visible {
+    border-color: #8de5df;
+    background: linear-gradient(#34717d, #17444e);
+    outline: 1px solid #b4ffff;
+    outline-offset: 1px;
+}
+
+.tui-command:active {
+    transform: translate(1px, 1px);
+    border-color: #12343c #58a2ae #58a2ae #12343c;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .tui-icon-img { transition: none; }
+}
+
+body.terminal-ui-active #inventory-button,
+body.terminal-ui-active .inventory-backdrop {
+    display: none !important;
+}

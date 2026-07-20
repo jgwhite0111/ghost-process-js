@@ -1,0 +1,56 @@
+{
+  "kind": "composite",
+  "asset": "assets/backgrounds/scene_terminal_ui_grok.png",
+  "timestamp_utc": "2026-07-20T20:49:42.410109Z",
+  "model": "grok-imagine-image",
+  "quality": "normal",
+  "dimensions": [
+    1152,
+    864
+  ],
+  "purpose": "Text-free 4:3 PC-98 terminal UI plate for runtime-composited labels and content",
+  "sources": [
+    {
+      "asset": "assets/backgrounds/_candidates/terminal_ui_grok/terminal_ui_grok_v2_window.jpg",
+      "sha256": "b0892d2ea30d9b784190393464faecf94831c2fc3c6929b1ea64e3ae7d412878",
+      "prompt_sidecar": "assets/backgrounds/_candidates/terminal_ui_grok/terminal_ui_grok_v2_window.jpg.prompt.json"
+    },
+    {
+      "asset": "assets/backgrounds/_candidates/terminal_ui_grok/terminal_ui_grok_v4_components.jpg",
+      "sha256": "c716f2db47a81179b4b30a61fcab3e2fb36a0e6708b0420fd187c233e71d05c9",
+      "prompt_sidecar": "assets/backgrounds/_candidates/terminal_ui_grok/terminal_ui_grok_v4_components.jpg.prompt.json"
+    }
+  ],
+  "runtime_overlay_assets": [
+    {
+      "asset": "assets/icons/isometric/log.png",
+      "sha256": "872de91b459b1e18cda4eb1adfb628f0fba4e8689ffc5cc8740b0a1c00613632"
+    },
+    {
+      "asset": "assets/icons/isometric/email.png",
+      "sha256": "3b7d3e4efdf1ec55677738ac7b61bf41d288f7e9becd7e2834b08d89569b06bd"
+    },
+    {
+      "asset": "assets/icons/isometric/map.png",
+      "sha256": "e840d38a61b43b98c6a96f49ec948afa087c41192fa3582d42da53a66528719f"
+    },
+    {
+      "asset": "assets/icons/isometric/sysinfo.png",
+      "sha256": "21fcf20c74bb1dfbaf818d9188c1a9dbe268211a8440b9f017e96808e746e04d"
+    },
+    {
+      "asset": "assets/icons/isometric/exit.png",
+      "sha256": "3d4f99a43ca3e8732609e7f9eee4342ccb08fe1bc0c30bcda42c6b1f82da5286"
+    }
+  ],
+  "composition": {
+    "desktop_texture": "v4 component-board background, blurred and darkened",
+    "application_window": "v2 blank window chrome",
+    "launcher_cards": "five empty bevelled cards reserved for runtime controls",
+    "launcher_icons": "existing repository isometric icons composited at runtime",
+    "system_strips_and_lamps": "v4 blank component-board elements",
+    "effects": "subtle scanlines, vignette, bevel backing and shadow"
+  },
+  "text_policy": "No generated writing, letters, numbers, labels, pseudo-text, logos, or watermarks retained; game text is added at runtime.",
+  "response_sha256": "ac96a6cb9575e6565f5ec05397ff461b6c8e0092d3c4987576eadf7ea578e7e8"
+}

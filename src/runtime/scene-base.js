@@ -370,6 +370,24 @@ class Scene {
         }
         if (hb.target) {
             this._transition(hb.target);
+            return;
+        }
+        // Hitbox-local Ink knot jump. Kind='exploration' scenes get this
+        // via _activateExplorationHotspot above; for kind='ink' scenes
+        // (terminal-style multi-view UIs) hitboxes need to advance Ink
+        // without a full scene swap. Used by terminal_obelab desktop
+        // icons to open their app view, then the app's back choice
+        // returns to the desktop knot — same scene, different knot, BG
+        // swapped via the # image: tag in _handleCommand.
+        if (hb.ink && this.dialogueRunner) {
+            try {
+                this.dialogueRunner.story.ChoosePathString(hb.ink);
+                this.dialogueRunner.step();
+                if (window.DialoguePanel) window.DialoguePanel.show();
+            } catch (e) {
+                console.warn(`[${this.sceneId}] hitbox ink ${hb.ink} failed`, e);
+            }
+            return;
         }
     }
 
@@ -557,6 +575,32 @@ class Scene {
             // r.ResetPath(...) but requires the source compiler, so we
             // spin up a fresh runner next time this scene opens.
             window.Engine.goTo(cmd.target);
+            return;
+        }
+        // # image:KEY — swap the scene background to assets/backgrounds/KEY.png,
+        // re-applying the scene's palette dither so the new BG matches
+        // the existing visual treatment. Used by terminal-style scenes
+        // where a single scene renders multiple "windows" via BG swap
+        // (desktop / log / email / map / sys each as their own PNG, the
+        // current knot picks which one to show). Returning to the
+        // desktop just sets `# image:scene_..._desktop` again — same
+        // image, the runtime dither canvas is cached so the swap is
+        // effectively instant.
+        if (cmd.name === 'image' && cmd.args && cmd.args[0]) {
+            this._swapBackgroundImage(cmd.args[0]);
+        }
+    }
+
+    async _swapBackgroundImage(bgKey) {
+        try {
+            const newBg = await window.Runtime.loadImage(
+                `assets/backgrounds/${bgKey}.png`);
+            this.bgImage = newBg;
+            if (this.sceneConfig.bgDither !== false) {
+                this._ditherBg();
+            }
+        } catch (e) {
+            console.warn(`Scene ${this.sceneId}: bg swap to ${bgKey} failed:`, e);
         }
     }
 
