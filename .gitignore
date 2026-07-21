@@ -6,6 +6,7 @@ package-lock.json
 .DS_Store
 *.log
 .tmp.*
+.tmp/
 # Local dev artifacts — never committed.
 *.local
 __pycache__/
