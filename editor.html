@@ -215,6 +215,15 @@
   .field .ctrl { color: #d9dde3; }
   .field .row { display: flex; gap: 6px; }
   .field .row > div { flex: 1; }
+  .reference-control { display: flex; gap: 6px; align-items: stretch; }
+  .reference-control select { flex: 1; min-width: 0; }
+  .reference-control button { flex: 0 0 auto; padding: 5px 8px; font-size: 11px; }
+  select.invalid-reference { border-color: #ff7070; color: #ff9999; }
+  .inspector-warning {
+    margin: 0 0 8px; padding: 7px 8px; border: 1px solid #8a6426;
+    border-radius: 3px; background: #2b2112; color: #ffc97a; font-size: 11px;
+    line-height: 1.4;
+  }
   h2 { font-size: 12px; color: #f0b760; text-transform: uppercase; letter-spacing: 0.5px;
     margin: 12px 0 6px; padding-bottom: 4px; border-bottom: 1px solid #30363d; }
   .actions { display: flex; gap: 6px; margin-top: 8px; }

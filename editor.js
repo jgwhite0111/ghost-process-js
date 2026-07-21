@@ -877,11 +877,7 @@ function renderOverlay() {
     }
     div.classList.toggle('button-control', isButton);
     const lbl = div.querySelector('.label');
-    if (lbl) {
-      lbl.textContent = isButton
-        ? `button: ${hb.label || hb.target || 'control'}${hb.target ? ` → ${hb.target}` : ''}`
-        : (hb.item || hb.label || hb.target || ('hb[' + i + ']'));
-    }
+    if (lbl) lbl.textContent = summarizeLegacyHitbox(hb, i);
     div.style.left = r.x + 'px';
     div.style.top = r.y + 'px';
     div.style.width = r.w + 'px';
@@ -2120,31 +2116,22 @@ function renderRight() {
     right.appendChild(makeField('header', isButton
       ? `Button control — ${hb.label || hb.target || '(unnamed)'}`
       : `Hitbox — ${hb.item || hb.label || '(interactive)'}`));
-    right.appendChild(makeField('type', 'Presentation / type',
+
+    right.appendChild(makeField('header', 'Presentation'));
+    right.appendChild(makeField('type', 'Affordance',
       makeSelect(isButton ? 'button' : 'interactive', [
-        ['interactive', 'Item / interactive (eye affordance)'],
-        ['button', 'Button / control (hand cursor)'],
+        ['interactive', 'Inspect / interactive (eye cursor)'],
+        ['button', 'Control / button (hand cursor)'],
       ], v => {
-        if (v === 'button') {
-          hb.type = 'button';
-          delete hb.item;
-        } else {
-          delete hb.type;
-        }
+        // `type` is presentation only. Never discard a legacy behavior
+        // field when the author changes the affordance.
+        if (v === 'button') hb.type = 'button';
+        else delete hb.type;
         markDirty();
         renderAll();
       })));
-    if (!isButton) {
-      right.appendChild(makeField('item', 'Linked item',
-        makeSelect(hb.item || '', Object.keys(state.story.items || {}).map(k => [k, k]),
-          v => { hb.item = v || null; markDirty(); renderAll(); })));
-    }
     right.appendChild(makeField('label', 'Label',
       makeTextInput(hb.label || '', v => { hb.label = v; markDirty(); renderAll(); })));
-    if (isButton) {
-      right.appendChild(makeField('target', 'Target scene',
-        makeTextInput(hb.target || '', v => { hb.target = v; markDirty(); renderAll(); })));
-    }
     const row = document.createElement('div'); row.className = 'row';
     row.appendChild(makeField('x', 'x', makeNumberInput(hb.x, v => { hb.x = v; markDirty(); renderAll(); }, 0, 1, 0.01, 'hb.x')));
     row.appendChild(makeField('y', 'y', makeNumberInput(hb.y, v => { hb.y = v; markDirty(); renderAll(); }, 0, 1, 0.01, 'hb.y')));
@@ -2153,6 +2140,26 @@ function renderRight() {
     row2.appendChild(makeField('w', 'w', makeNumberInput(hb.w, v => { hb.w = v; markDirty(); renderAll(); }, 0, 1, 0.01, 'hb.w')));
     row2.appendChild(makeField('h', 'h', makeNumberInput(hb.h, v => { hb.h = v; markDirty(); renderAll(); }, 0, 1, 0.01, 'hb.h')));
     right.appendChild(row2);
+
+    right.appendChild(makeField('header', 'Behavior'));
+    const populatedBehavior = populatedLegacyHitboxFields(hb);
+    if (populatedBehavior.length > 1) {
+      right.appendChild(makeInspectorWarning(
+        `Multiple legacy behaviors are populated (${populatedBehavior.join(', ')}). ` +
+        'The runtime uses item, then target, then Ink.'
+      ));
+    }
+    right.appendChild(makeField('item', 'Give item',
+      makeReferenceSelect(hb.item || '', Object.keys(state.story.items || {}), v => {
+        setOptionalHitboxField(hb, 'item', v);
+        markDirty();
+        renderAll();
+      }, { missingKind: 'item' })));
+    right.appendChild(makeField('target', 'Go to scene', makeTargetSceneControl(hb)));
+    const inkField = makeField('hitbox-ink', 'Open Ink knot', makePlaceholder());
+    right.appendChild(inkField);
+    fillAsync(inkField.querySelector('.ctrl'), makeInkKnotPicker(hb, sc), lifecycle);
+
     const del = document.createElement('div');
     del.className = 'actions';
     del.innerHTML = `<button class="danger" id="del-hb">Delete hitbox</button>`;
@@ -2390,6 +2397,104 @@ function makeSelect(value, options, onChange) {
   s.value = value;
   s.onchange = () => onChange(s.value);
   return s;
+}
+
+function populatedLegacyHitboxFields(hb) {
+  return ['item', 'target', 'ink'].filter((key) =>
+    typeof hb?.[key] === 'string' && hb[key].trim() !== ''
+  );
+}
+
+function setOptionalHitboxField(hb, key, value) {
+  if (value) hb[key] = value;
+  else delete hb[key];
+}
+
+function summarizeLegacyHitbox(hb, index = 0) {
+  const label = hb.label || `hb[${index}]`;
+  const actions = [];
+  if (hb.item) actions.push(hb.item);
+  if (hb.target) actions.push(hb.target);
+  if (hb.ink) actions.push(`Ink ${hb.ink}`);
+  return actions.length ? `${label} → ${actions.join(' + ')}` : label;
+}
+
+function makeInspectorWarning(text) {
+  const warning = document.createElement('div');
+  warning.className = 'inspector-warning';
+  warning.textContent = '⚠ ' + text;
+  return warning;
+}
+
+function makeReferenceSelect(value, values, onChange, { missingKind = 'reference' } = {}) {
+  const select = document.createElement('select');
+  const options = [...values];
+  const missing = value && !options.includes(value);
+  if (missing) options.unshift(value);
+  const empty = document.createElement('option');
+  empty.value = '';
+  empty.textContent = '— none —';
+  select.appendChild(empty);
+  for (const optionValue of options) {
+    const option = document.createElement('option');
+    option.value = optionValue;
+    option.textContent = missing && optionValue === value
+      ? `[missing ${missingKind}] ${optionValue}`
+      : optionValue;
+    select.appendChild(option);
+  }
+  select.value = value || '';
+  if (missing) {
+    select.classList.add('invalid-reference');
+    select.title = `Missing ${missingKind}: ${value}`;
+  }
+  select.onchange = () => onChange(select.value);
+  return select;
+}
+
+function makeTargetSceneControl(hb) {
+  const wrap = document.createElement('div');
+  wrap.className = 'reference-control';
+  const sceneIds = Object.keys(state.story.scenes || {});
+  const select = makeReferenceSelect(hb.target || '', sceneIds, v => {
+    setOptionalHitboxField(hb, 'target', v);
+    markDirty();
+    renderAll();
+  }, { missingKind: 'scene' });
+  wrap.appendChild(select);
+  const open = document.createElement('button');
+  open.type = 'button';
+  open.textContent = 'Open target scene';
+  open.disabled = !hb.target || !sceneIds.includes(hb.target);
+  open.onclick = () => {
+    if (hb.target && sceneIds.includes(hb.target)) switchScene(hb.target);
+  };
+  wrap.appendChild(open);
+  return wrap;
+}
+
+async function makeInkKnotPicker(hb, sc) {
+  const knots = [];
+  if (sc?.ink) {
+    const path = sc.ink.split('/').map(encodeURIComponent).join('/');
+    const res = await fetch('/api/ink/' + path);
+    if (!res.ok) throw new Error(`Ink file unavailable (${res.status})`);
+    const source = await res.text();
+    const seen = new Set();
+    const knotPattern = /^\s*===\s*([^=\s][^=]*?)\s*===\s*$/gm;
+    for (const match of source.matchAll(knotPattern)) {
+      const knot = match[1].trim();
+      if (knot && !seen.has(knot)) {
+        seen.add(knot);
+        knots.push(knot);
+      }
+    }
+  }
+  return makeReferenceSelect(hb.ink || '', knots, v => {
+    setOptionalHitboxField(hb, 'ink', v);
+    markDirty();
+    renderAll();
+  }, { missingKind: 'Ink knot' });
 }
 function makeCheckbox(value, onChange) {
   const i = document.createElement('input'); i.type = 'checkbox'; i.checked = value;

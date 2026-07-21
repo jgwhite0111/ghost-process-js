@@ -572,15 +572,15 @@ Each phase should be a separately reviewable commit with its own focused tests. 
 
 ### Phase 1 — Repair the existing hitbox inspector
 
-- [ ] Separate Presentation and Behavior sections.
-- [ ] Expose `target`, `ink`, and `item` independent of presentation.
-- [ ] Stop presentation changes from deleting behavior.
-- [ ] Replace raw scene target input with a scene dropdown.
-- [ ] Add Ink-knot and item dropdowns.
-- [ ] Add action summaries to canvas labels.
-- [ ] Warn on multiple populated legacy behavior fields.
-- [ ] Add a shortcut to open a target scene.
-- [ ] Update focused editor tests, especially `test/editor-button-hitbox.test.js`.
+- [x] Separate Presentation and Behavior sections.
+- [x] Expose `target`, `ink`, and `item` independent of presentation.
+- [x] Stop presentation changes from deleting behavior.
+- [x] Replace raw scene target input with a scene dropdown.
+- [x] Add Ink-knot and item dropdowns.
+- [x] Add action summaries to canvas labels.
+- [x] Warn on multiple populated legacy behavior fields.
+- [x] Add a shortcut to open a target scene.
+- [x] Update focused editor tests, especially `test/editor-button-hitbox.test.js`.
 
 **Acceptance:** `Access terminal` and `Walk away` both visibly show their actual destinations while retaining the desired affordance.
 
