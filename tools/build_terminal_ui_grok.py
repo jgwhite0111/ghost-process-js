@@ -6,6 +6,7 @@ from __future__ import annotations
 import hashlib
 import json
 from datetime import datetime, timezone
+from math import hypot
 from pathlib import Path
 
 from PIL import Image, ImageChops, ImageDraw, ImageEnhance, ImageFilter
@@ -51,6 +52,53 @@ def bevel_panel(size: tuple[int, int], outer=(19, 78, 92), inner=(3, 18, 26)) ->
     d.line((w - 3, 2, w - 3, h - 3), fill=(2, 25, 33, 255), width=3)
     d.rectangle((7, 7, w - 8, h - 8), fill=(*inner, 245), outline=(6, 40, 50, 255), width=2)
     return p
+
+
+def isolate_indicator_lamps(lamps: Image.Image) -> Image.Image:
+    """Remove the rectangular source backing while retaining each lamp's soft rim."""
+    if lamps.size != (42, 42):
+        raise ValueError(f"indicator lamp crop must be 42x42, got {lamps.size}")
+
+    centers = ((11.5, 11.5), (30.5, 11.5), (11.5, 30.5), (30.5, 30.5))
+    inner_radius = 7.5
+    outer_radius = 10.0
+    brightness_floor = 18
+    brightness_ceiling = 60
+    mask = Image.new("L", lamps.size, 0)
+    pixels = mask.load()
+    if pixels is None:
+        raise RuntimeError("failed to allocate indicator lamp mask")
+    for y in range(lamps.height):
+        for x in range(lamps.width):
+            distance = min(hypot(x - cx, y - cy) for cx, cy in centers)
+            if distance <= inner_radius:
+                radial_alpha = 255
+            elif distance >= outer_radius:
+                radial_alpha = 0
+            else:
+                radial_alpha = round(
+                    255 * (outer_radius - distance) / (outer_radius - inner_radius)
+                )
+
+            source_pixel = lamps.getpixel((x, y))
+            if not isinstance(source_pixel, tuple):
+                raise TypeError("indicator lamp crop must use an RGB or RGBA mode")
+            brightness = max(source_pixel[:3])
+            if brightness <= brightness_floor:
+                brightness_alpha = 0
+            elif brightness >= brightness_ceiling:
+                brightness_alpha = 255
+            else:
+                brightness_alpha = round(
+                    255
+                    * (brightness - brightness_floor)
+                    / (brightness_ceiling - brightness_floor)
+                )
+            pixels[x, y] = min(radial_alpha, brightness_alpha)
+
+    isolated = lamps.copy()
+    isolated.putalpha(mask)
+    return isolated
 
 
 def main() -> None:
@@ -99,10 +147,14 @@ def main() -> None:
     base.alpha_composite(shadow, (218, 112))
     base.alpha_composite(app, (228, 104))
 
-    # Small generated red indicator lamps from the component board; no symbols or labels.
+    # Small generated indicator lamps from the component board; no symbols or labels.
+    # A feathered four-circle mask removes the source crop's rectangular backing so
+    # the clean system strip remains visible around and between the lamps.
     lamps = components.crop((1140, 213, 1196, 271)).convert("RGBA")
     lamps = fit(lamps, (42, 42))
-    base.alpha_composite(lamps, (1054, 34))
+    lamps = isolate_indicator_lamps(lamps)
+    # Keep equal visual clearance above and below the two lamp rows.
+    base.alpha_composite(lamps, (1054, 32))
 
     # Scanlines and edge vignette are display-style finishing only; source remains detailed.
     fx = Image.new("RGBA", base.size, (0, 0, 0, 0))
@@ -146,7 +198,7 @@ def main() -> None:
             "application_window": "v2 blank window chrome",
             "launcher_cards": "five empty bevelled cards reserved for runtime controls",
             "launcher_icons": "existing repository isometric icons composited at runtime",
-            "system_strips_and_lamps": "v4 blank component-board elements",
+            "system_strips_and_lamps": "v4 blank component-board elements; four lamps isolated with a feathered circular alpha mask so no rectangular source backing remains",
             "effects": "subtle scanlines, vignette, bevel backing and shadow",
         },
         "text_policy": "No generated writing, letters, numbers, labels, pseudo-text, logos, or watermarks retained; game text is added at runtime.",
