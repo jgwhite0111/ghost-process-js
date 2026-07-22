@@ -339,70 +339,17 @@ class Scene {
             this.exploration.handleHotspot(hb, pageX, pageY);
             return;
         }
-        // Notify the task tracker BEFORE the action runs so it can
-        // mark use_item / goto_hitbox tasks as completed even if the
-        // hitbox itself consumes the click without transitioning
-        // (e.g. wrong item on door → no-op but the player's still
-        // expected to have "tried").
-        if (window.TaskTracker) window.TaskTracker.onHitboxClicked(hb);
-        if (hb.item) {
-            const label = hb.item.replace(/_/g, ' ');
-            window.Inventory.addWithFly(hb.item, pageX, pageY, label, () => {
-                // Once the fly finishes (and add() has been called),
-                // refresh the hitbox layer so the now-consumed item's
-                // label disappears.
-                if (this.hitboxLayer && this.hitboxLayer.refresh) this.hitboxLayer.refresh();
-                // Tasks may now be satisfied (pickup). If the dialogue
-                // box is currently hidden, re-show the next hint so the
-                // player sees updated progress.
-                this._refreshTaskHint();
-            });
-            const item = window.STORY.items[hb.item];
-            if (item && item.pickup_message) {
-                // Slightly delayed so the toast doesn't fight the fly.
-                setTimeout(() => window.Toast.show(item.pickup_message), 350);
-            }
-            // Scenes can hook into pickup-time to advance the story
-            // (e.g. the alley uses this to redirect Ink to the
-            // android fade-in beat after the key is committed).
-            if (this._onItemPicked) this._onItemPicked(hb.item);
-            return;
-        }
-        if (hb.target) {
-            this._transition(hb.target);
-            return;
-        }
-        // Hitbox-local Ink knot jump. Kind='exploration' scenes get this
-        // via _activateExplorationHotspot above; for kind='ink' scenes
-        // (terminal-style multi-view UIs) hitboxes need to advance Ink
-        // without a full scene swap. Used by terminal_obelab desktop
-        // icons to open their app view, then the app's back choice
-        // returns to the desktop knot — same scene, different knot, BG
-        // swapped via the # image: tag in _handleCommand.
-        if (hb.ink && this.dialogueRunner) {
-            try {
-                this.dialogueRunner.story.ChoosePathString(hb.ink);
-                this.dialogueRunner.step();
-                if (window.DialoguePanel) window.DialoguePanel.show();
-            } catch (e) {
-                console.warn(`[${this.sceneId}] hitbox ink ${hb.ink} failed`, e);
-            }
-            return;
-        }
+        const actions = window.ActionExecutor.normalizeLegacyHitbox(hb);
+        window.ActionExecutor.execute(actions, {
+            scene: this,
+            hitbox: hb,
+            pageX,
+            pageY,
+            fromExploration,
+        });
     }
 
     _activateExplorationHotspot(hb, pageX, pageY) {
-        if (hb.ink && this.dialogueRunner) {
-            if (window.TaskTracker) window.TaskTracker.onHitboxClicked(hb);
-            try {
-                this.dialogueRunner.story.ChoosePathString(hb.ink);
-                this.dialogueRunner.step();
-                if (window.DialoguePanel) window.DialoguePanel.show();
-            } catch (e) {
-                console.warn(`[${this.sceneId}] hotspot Ink path ${hb.ink} failed`, e);
-            }
-            return;
-        }
         this._triggerHitbox(hb, pageX, pageY, true);
     }
 
