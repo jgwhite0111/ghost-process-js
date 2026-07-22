@@ -1,158 +1,94 @@
 # AI-HANDOFF — Ghost Process
 
-## Update — 2026-07-21
+> **Stack assertion:** This is `/Users/jwhite/ghost-process-js`, the live browser-first project. Use vanilla JavaScript + InkJS + Express only. Do not work in `~/ghost-process/` or `~/ghost-process-98/`; they are unrelated dead projects. Do not introduce TypeScript, a bundler, Phaser, Godot, Mono, or Yarn Spinner.
 
-This handoff was rewritten after the terminal integration checkpoint. The detailed editor overhaul is now specified in [`EDITOR-AUTHORING-SPEC.md`](EDITOR-AUTHORING-SPEC.md). Read that file before changing the editor/runtime authoring model.
+## Update (2026-07-22) — generic overlay/editor batch committed
 
-## Current repository state
+The completed Phase 3/4/5 implementation and the canonical newcomer editor manual are committed in `4bcb02c` (`Complete generic overlay editor and terminal migration`). This handoff is the separate documentation boundary immediately on top of that implementation commit. Verify the live branch and remote state with the commands below rather than trusting stale ahead/behind numbers.
+
+## Current state
 
 - Project: `/Users/jwhite/ghost-process-js`
 - Branch: `feature/exploration-hybrid`
-- No push is authorized.
-- The latest implementation checkpoint is `7235943` — `polish terminal plate indicators and spacing`.
-- The preceding rollback checkpoint is `efbacaf` — `checkpoint terminal interface and Obelab integration`.
-- The current documentation checkpoint includes this handoff, `EDITOR-AUTHORING-SPEC.md`, and the `.tmp/` ignore rule.
-- Verify the exact current HEAD, branch, divergence, and status with Git rather than trusting this note.
-- `.tmp/` contains local diagnostic scratch files and must remain excluded from Git.
+- Implementation checkpoint: `4bcb02c`
+- Intended remote branch: `origin/feature/exploration-hybrid`
+- `origin/main` remains the historical comparison base; do not rebase or reset without an explicit request.
+- The generic overlay/editor batch is complete. No known Phase 3/4/5 carry-over item is open.
+- The canonical newcomer guide is [`EDITOR-MANUAL.md`](EDITOR-MANUAL.md); the lower-level contract is [`EDITOR-AUTHORING-SPEC.md`](EDITOR-AUTHORING-SPEC.md).
 
-## What is currently shipped
+## What is complete
 
-### Terminal integration
+- Phase 3: generic static overlays and editor authoring.
+- Phase 4: scene-local overlay views and generic Ink bindings.
+- Phase 5: `terminal_ui` migrated from the deleted scene-specific module to a generic authored overlay.
+- Follow-up repairs: titlebar close-glyph alignment, repeatable `terminal_obelab` “Walk away” navigation, and editor-only yellow selection highlighting.
+- `src/scenes/terminal_ui.js` and its obsolete terminal-specific CSS/registration path are deleted. Do not recreate them.
+- `src/runtime/actions.js` remains the shared typed action executor. Do not bypass it or add terminal-specific action types.
+- `story.json` remains the authoring source of truth.
 
-`terminal_obelab` and `terminal_ui` are playable end to end:
+## Generic overlay contract
 
-```text
-exploration_demo → terminal_obelab
-terminal_obelab / Access terminal → terminal_ui
-terminal_obelab / Walk away → exploration_demo
-terminal_ui / EXIT → terminal_obelab
-```
+- Element types are exactly `container`, `image`, `text`, and `hotspot`.
+- `terminal_ui` has 56 authored elements and five local views: `desktop`, `log`, `email`, `map`, and `sysinfo`.
+- Terminal prose and choices remain in `ink/terminal_ui.ink`; overlay data contains bindings, not duplicated dialogue.
+- Local views are scene-local presentation state. `setView(view)` is not scene navigation; `goToScene(scene)` is the navigation action.
+- Hitboxes/hotspots are one-shot by default. Use `repeatable: true` only for interactions that must work after revisits.
+- Yellow selected handles are transient editor UI from `state.selected`; they are not serialized story data and are not player rendering.
 
-`story.json` owns the scene routes, Ink paths, backgrounds, audio, and current hitboxes. The terminal prose remains in `ink/terminal_ui.ink`.
+## Verification recorded for the committed batch
 
-`src/scenes/terminal_ui.js` is an interim custom scene. It currently builds the terminal DOM, launcher icons, module window, Ink lines/choices, RETURN behavior, EXIT behavior, contained 4:3 stage, responsive layout, and terminal HUD suppression. Do not delete it until the generic authoring system reaches full visual and behavioral parity.
+| Check | Result |
+|---|---:|
+| `npm test` | **103 passed, 0 failed** |
+| Phase 3/4 raw-CDP acceptance | **40/40** |
+| Phase 5 raw-CDP acceptance | **24/24** |
+| Browser console/page errors | **0 / 0** |
+| `story.json` parse and production validation | **passed; 56 terminal elements** |
+| JavaScript syntax checks | **passed** |
+| `git diff --check` | **passed** |
+| HTTP smoke: `/editor.html`, `/index.html?scene=terminal_ui`, `/api/story` | **200 / 200 / 200** |
+| Manual link check | **17 valid relative links** |
 
-The terminal plate is `assets/backgrounds/scene_terminal_ui_grok.png`, produced by `tools/build_terminal_ui_grok.py`. The generated PNG, prompt sidecar, and final generation-log record currently agree on SHA-256:
+`npm test` emits one non-failing `MODULE_TYPELESS_PACKAGE_JSON` warning for `test/terminal-overlay-phase5.test.js`; it does not affect the passing result.
 
-```text
-ebf702fe011b56ec5ef439d6f939763d73ff6ebe01a87fecfe2e7ccf46a04ba8
-```
+## Required reading order for a new session
 
-The PNG must remain reproducible through the build script. Do not hand-edit it.
+1. `AGENTS.md`
+2. `SPEC.md`
+3. `EDITOR-MANUAL.md`
+4. `EDITOR-AUTHORING-SPEC.md`
+5. This handoff
+6. `story.json`, `src/runtime/overlay.js`, `src/runtime/scene-base.js`, and `src/runtime/actions.js` when changing authoring/runtime behavior
+7. `test/terminal-overlay-phase5.test.js` and `tools/browser-phase5-terminal-acceptance.mjs` when changing terminal behavior
 
-### Final terminal polish
+## Safe continuation
 
-Commit `7235943` contains the reviewed finishing changes:
+- Verify the live boundary before editing:
 
-- brightness-aware, feathered alpha isolation for all four indicator lamps;
-- complete lamp layer moved to plate `y=32` for equal visual clearance;
-- terminal header-state right margin adjusted to `34px`;
-- updated provenance sidecar and generation log.
+  ```bash
+  cd /Users/jwhite/ghost-process-js
+  git status -sb
+  git rev-parse --short HEAD
+  git rev-list --left-right --count origin/feature/exploration-hybrid...HEAD
+  npm test
+  git diff --check
+  ```
 
-## Approved architecture direction
+- Treat Phases 3, 4, and 5 as complete unless a new regression is demonstrated. Do not redo or redesign the generic terminal migration.
+- Preserve exploration, Ink, inventory, hitbox, transition, resize, teardown, and re-entry behavior.
+- Keep the authoring server loopback-only and do not expose it publicly.
+- Do not generate or purchase media for this work.
+- Do not reset, force-push, or discard existing work without explicit authorization.
+- For a new regression, use the repository-owned browser acceptance scripts with finite timeouts and fixture restoration, then update this handoff with concrete evidence.
 
-The editor overhaul is **not** a general-purpose visual scripting system.
+## Git boundary
 
-Use:
+- Implementation commit: `4bcb02c`.
+- The handoff refresh is intentionally a separate documentation commit on top; do not cite that future commit’s SHA inside this file.
+- A valid `/new` boundary has an empty `git status --short` and matching local/remote branch SHAs after the requested push. Verify with:
 
-```text
-Element → Event → ordered typed Actions
-```
-
-Presentation is independent from behavior. Do not make `button`, `exit`, `pickup`, `terminal`, or `walkAway` behavior classes.
-
-Initial generic scene-local overlay elements:
-
-- `container`;
-- `image`;
-- `text`;
-- `hotspot`.
-
-This is a starting vocabulary, not an arbitrary permanent four-type cap. Higher-level buttons and terminal controls should be editor presets/compositions, not new runtime behavior types.
-
-Initial actions:
-
-- `goToScene(scene)`;
-- `openInk(knot)`;
-- `giveItem(item)`;
-- `setView(view)`.
-
-Initial events:
-
-- `activate` for click/tap/keyboard activation;
-- `choiceSelected` for authored Ink choices.
-
-Initially expose existing canonical hitbox fields (`target`, `ink`, `item`) clearly before requiring a story-wide migration. Runtime behavior currently resolves those fields in `item → target → ink` precedence; preserve that during compatibility work.
-
-## Next implementation entry point
-
-Start with **Phase 1 — Repair the existing hitbox inspector** in `EDITOR-AUTHORING-SPEC.md`:
-
-1. separate Presentation from Behavior in `editor.js`;
-2. expose target, Ink knot, and item independently of presentation;
-3. use typed scene/Ink/item controls;
-4. prevent presentation changes from deleting behavior;
-5. add action summaries and target-scene shortcuts;
-6. update focused editor tests.
-
-Then proceed through the spec’s phases in separate reviewable commits:
-
-1. inspector truthfulness;
-2. shared typed action executor;
-3. generic overlay elements and editor layer authoring;
-4. views and Ink content bindings;
-5. `terminal_ui` migration and parity verification;
-6. validation, cleanup, and final `SPEC.md` update.
-
-## Hard constraints to preserve
-
-- Vanilla JavaScript + InkJS + Express; no bundler, TypeScript, engine, or new dependency without discussion.
-- `story.json` remains the single source of truth.
-- Scene-local terminal controls are not inventory items.
-- Terminal prose stays in `ink/terminal_ui.ink`.
-- No per-scene CSS in the final no-code architecture; generic built-in styling is acceptable.
-- Preserve terminal launch, RETURN, EXIT, contained 4:3 responsive behavior, and inventory-HUD behavior during migration.
-- Do not remove `src/scenes/terminal_ui.js` until generic parity is proven.
-- Do not generate or purchase new media for this editor migration.
-- Do not use MiniMax without separate explicit permission.
-- Keep `.tmp/` scratch assets excluded.
-- Do not push without explicit authorization.
-
-## Verification baseline
-
-The latest reviewed implementation passed:
-
-- `git diff --check`;
-- Python build-script syntax compilation;
-- `node --check src/scenes/terminal_ui.js`;
-- `story.json` and terminal provenance JSON parsing;
-- generated asset/sidecar/log hash agreement;
-- `npm test`: **81/81 passing**.
-
-After any further implementation, rerun the focused tests and the full suite. Before claiming a phase complete, also run direct-route/browser checks appropriate to the changed runtime surface.
-
-## Useful current files
-
-- `EDITOR-AUTHORING-SPEC.md` — authoritative overhaul plan and target schema.
-- `SPEC.md` — existing project architecture.
-- `story.json` — current scene/hitbox/item data.
-- `editor.js` / `editor.html` — current authoring surface.
-- `server.js` — story validation and atomic save API.
-- `src/runtime/scene-base.js` — current hitbox behavior and scene lifecycle.
-- `src/runtime/hitbox.js` — hitbox rendering/interaction.
-- `src/scenes/terminal_ui.js` — interim custom terminal implementation.
-- `ink/terminal_ui.ink` — terminal prose and RETURN choices.
-- `tools/build_terminal_ui_grok.py` — reproducible terminal plate compositor.
-
-## Session hygiene
-
-Before ending a future implementation session:
-
-```bash
-pkill -f "node server.js" 2>/dev/null
-cd "$(git rev-parse --show-toplevel)"
-npm start &
-git status --short --branch
-```
-
-Do not claim a server is live unless its process and HTTP route have been checked. Do not claim the tree is clean while intentionally retained scratch files are not ignored.
+  ```bash
+  git status --short
+  git rev-parse --short HEAD origin/feature/exploration-hybrid
+  git rev-list --left-right --count origin/feature/exploration-hybrid...HEAD
+  ```
