@@ -234,6 +234,122 @@ function validateFiniteNumber(object, key, propertyPath) {
     return null;
 }
 
+const OVERLAY_TYPES = new Set(['container', 'image', 'text', 'hotspot']);
+const OVERLAY_ACTIONS = new Set(['giveItem', 'goToScene', 'openInk', 'setView']);
+const OVERLAY_CONTENT_SOURCES = new Set(['literal', 'inkLines', 'inkChoices']);
+const OVERLAY_TAG_PRESETS = new Set(['default', 'heading', 'warning', 'success', 'dim', 'divider']);
+const OVERLAY_CONTROL_PRESETS = new Set(['default', 'terminal-command']);
+const OVERLAY_EVENTS = new Set(['activate', 'choiceSelected']);
+
+function getSceneInkKnots(scene) {
+    if (typeof scene?.ink !== 'string' || !scene.ink.trim()) return null;
+    const filePath = safeJoin(ROOT, scene.ink);
+    if (!filePath || !filePath.startsWith(path.normalize(INK_DIR + path.sep)) || !fs.existsSync(filePath)) return null;
+    const knots = new Set();
+    const source = fs.readFileSync(filePath, 'utf8');
+    for (const match of source.matchAll(/^\s*===\s*([A-Za-z_][A-Za-z0-9_]*)\s*===\s*$/gm)) knots.add(match[1]);
+    return knots;
+}
+
+function validateOverlay(scene, sceneId, story) {
+    if (!Object.prototype.hasOwnProperty.call(scene, 'overlay')) return null;
+    const scenePath = `story.scenes[${JSON.stringify(sceneId)}]`;
+    const overlay = scene.overlay;
+    if (!overlay || typeof overlay !== 'object' || Array.isArray(overlay)) return `${scenePath}.overlay must be an object`;
+    for (const key of ['designWidth', 'designHeight']) {
+        if (!Object.prototype.hasOwnProperty.call(overlay, key)) return `${scenePath}.overlay.${key} is required`;
+        const error = validateFiniteNumber(overlay, key, `${scenePath}.overlay.${key}`);
+        if (error) return error;
+        if (overlay[key] <= 0) return `${scenePath}.overlay.${key} must be greater than zero`;
+    }
+    if (scene.bgFit !== undefined && !['cover', 'contain'].includes(scene.bgFit)) return `${scenePath}.bgFit must be cover or contain`;
+    if (scene.hud !== undefined && (!scene.hud || typeof scene.hud !== 'object' || typeof scene.hud.inventory !== 'boolean')) return `${scenePath}.hud must be an object with boolean inventory`;
+    if (overlay.views !== undefined) {
+        if (!Array.isArray(overlay.views) || overlay.views.some(v => typeof v !== 'string' || !v.trim())) return `${scenePath}.overlay.views must be an array of non-empty strings`;
+        if (new Set(overlay.views).size !== overlay.views.length) return `${scenePath}.overlay.views contains duplicate view names`;
+        if (overlay.initialView !== undefined && !overlay.views.includes(overlay.initialView)) return `${scenePath}.overlay.initialView references missing view "${overlay.initialView}"`;
+    } else if (overlay.initialView !== undefined) return `${scenePath}.overlay.initialView requires overlay.views`;
+    if (!Array.isArray(overlay.elements)) return `${scenePath}.overlay.elements must be an array`;
+
+    const inkKnots = getSceneInkKnots(scene);
+    const byId = new Map();
+    for (let index = 0; index < overlay.elements.length; index++) {
+        const el = overlay.elements[index];
+        const p = `${scenePath}.overlay.elements[${index}]`;
+        if (!el || typeof el !== 'object' || Array.isArray(el)) return `${p} must be an object`;
+        if (typeof el.id !== 'string' || !el.id.trim()) return `${p}.id must be a non-empty string`;
+        if (byId.has(el.id)) return `${p}.id duplicates overlay element "${el.id}"`;
+        byId.set(el.id, el);
+        if (!OVERLAY_TYPES.has(el.type)) return `${p}.type "${el.type}" is unsupported`;
+        for (const key of ['x', 'y', 'w', 'h']) {
+            if (!Object.prototype.hasOwnProperty.call(el, key)) return `${p}.${key} is required`;
+            const error = validateFiniteNumber(el, key, `${p}.${key}`);
+            if (error) return error;
+            if (el[key] < 0 || el[key] > 1) return `${p}.${key} must be between 0 and 1`;
+        }
+        if (el.w <= 0 || el.h <= 0) return `${p}.w and ${p}.h must be greater than zero`;
+        if (el.parent !== undefined && (typeof el.parent !== 'string' || !el.parent.trim())) return `${p}.parent must be a non-empty element id`;
+        for (const key of ['visibleIn', 'activeIn']) {
+            if (el[key] !== undefined && (!Array.isArray(overlay.views) || !Array.isArray(el[key]) || el[key].some(v => typeof v !== 'string' || !overlay.views.includes(v)))) return `${p}.${key} contains an unknown view`;
+            if (Array.isArray(el[key]) && new Set(el[key]).size !== el[key].length) return `${p}.${key} contains duplicate views`;
+        }
+        if (el.style !== undefined && (!el.style || typeof el.style !== 'object' || Array.isArray(el.style))) return `${p}.style must be an object`;
+        if (el.content !== undefined) {
+            if (!['container', 'text'].includes(el.type)) return `${p}.content is only supported on container or text elements`;
+            if (!el.content || typeof el.content !== 'object' || Array.isArray(el.content)) return `${p}.content must be an object`;
+            if (!OVERLAY_CONTENT_SOURCES.has(el.content.source)) return `${p}.content.source is unsupported`;
+            if (['inkLines', 'inkChoices'].includes(el.content.source) && typeof scene.ink !== 'string') return `${p}.content.source ${el.content.source} requires a scene Ink file`;
+            if (el.content.tagStyles !== undefined) {
+                if (el.content.source !== 'inkLines' || !el.content.tagStyles || typeof el.content.tagStyles !== 'object' || Array.isArray(el.content.tagStyles)) return `${p}.content.tagStyles requires inkLines and must be an object`;
+                for (const [tag, preset] of Object.entries(el.content.tagStyles)) {
+                    if (!tag.trim() || typeof preset !== 'string' || !preset.trim()) return `${p}.content.tagStyles must map non-empty tags to non-empty presets`;
+                    if (!OVERLAY_TAG_PRESETS.has(preset)) return `${p}.content.tagStyles.${tag} uses unsupported preset "${preset}"`;
+                }
+            }
+            if (el.content.controlPreset !== undefined && (el.content.source !== 'inkChoices' || !OVERLAY_CONTROL_PRESETS.has(el.content.controlPreset))) return `${p}.content.controlPreset requires inkChoices and a supported preset`;
+        }
+        if (el.type === 'container' && el.clip !== undefined && typeof el.clip !== 'boolean') return `${p}.clip must be boolean`;
+        if (el.type === 'image' && (typeof el.asset !== 'string' || !el.asset.startsWith('assets/'))) return `${p}.asset must be a project asset path`;
+        if (el.type === 'text' && el.content?.source !== 'inkLines' && el.content?.source !== 'inkChoices' && typeof el.text !== 'string') return `${p}.text must be a string`;
+        if (el.type === 'hotspot') {
+            if (el.presentation !== undefined && !['inspect', 'control', 'invisible'].includes(el.presentation)) return `${p}.presentation is invalid`;
+            if (el.label !== undefined && typeof el.label !== 'string') return `${p}.label must be a string`;
+            if (!el.events || typeof el.events !== 'object' || Array.isArray(el.events)) return `${p}.events must be an object`;
+        }
+        if (el.events !== undefined) {
+            for (const [eventName, event] of Object.entries(el.events)) {
+                if (!OVERLAY_EVENTS.has(eventName)) return `${p}.events.${eventName} is unsupported`;
+                if (eventName === 'choiceSelected' && el.content?.source !== 'inkChoices') return `${p}.events.choiceSelected requires inkChoices content`;
+                if (eventName === 'activate' && el.type !== 'hotspot') return `${p}.events.activate requires a hotspot`;
+                if (!event || typeof event !== 'object' || !Array.isArray(event.actions)) return `${p}.events.${eventName}.actions must be an array`;
+                for (let actionIndex = 0; actionIndex < event.actions.length; actionIndex++) {
+                    const action = event.actions[actionIndex];
+                    const ap = `${p}.events.${eventName}.actions[${actionIndex}]`;
+                    if (!action || typeof action !== 'object' || !OVERLAY_ACTIONS.has(action.type)) return `${ap}.type is unsupported`;
+                    const field = action.type === 'giveItem' ? 'item' : action.type === 'goToScene' ? 'scene' : action.type === 'openInk' ? 'knot' : 'view';
+                    if (typeof action[field] !== 'string' || !action[field].trim()) return `${ap}.${field} must be a non-empty string`;
+                    if (action.type === 'giveItem' && !story.items?.[action.item]) return `${ap}.item references missing item "${action.item}"`;
+                    if (action.type === 'goToScene' && !story.scenes?.[action.scene]) return `${ap}.scene references missing scene "${action.scene}"`;
+                    if (action.type === 'setView' && !overlay.views?.includes(action.view)) return `${ap}.view references missing view "${action.view}"`;
+                    if (action.type === 'openInk' && inkKnots && !inkKnots.has(action.knot)) return `${ap}.knot references missing Ink knot "${action.knot}"`;
+                }
+            }
+        }
+    }
+    for (const [id, el] of byId) {
+        if (el.parent !== undefined && !byId.has(el.parent)) return `${scenePath}.overlay element "${id}" references missing parent "${el.parent}"`;
+        if (el.parent !== undefined && byId.get(el.parent).type !== 'container') return `${scenePath}.overlay element "${id}" parent "${el.parent}" is not a container`;
+        const seen = new Set();
+        let current = id;
+        while (current) {
+            if (seen.has(current)) return `${scenePath}.overlay contains a parent cycle at "${id}"`;
+            seen.add(current);
+            current = byId.get(current)?.parent;
+        }
+    }
+    return null;
+}
+
 function validateStory(s) {
     if (!s || typeof s !== 'object') return 'story must be an object';
     if (Object.prototype.hasOwnProperty.call(s, 'recipes')) {
@@ -322,6 +438,8 @@ function validateStory(s) {
                 if (numericError) return numericError;
             }
         }
+        const overlayError = validateOverlay(sc, id, s);
+        if (overlayError) return overlayError;
     }
     return null;
 }
@@ -348,5 +466,6 @@ module.exports = {
     createMutationGuard,
     getServerConfig,
     isLoopbackHost,
+    validateOverlay,
     validateStory,
 };

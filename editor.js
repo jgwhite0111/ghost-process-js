@@ -21,6 +21,9 @@ const state = {
   spriteAnim: {},            // { 'id/scene': { idx, lastT, playing } } — playback state
   tool: 'select',
   dirty: false,
+  // Editor-only scene view preview. This is never serialized; runtime entry
+  // continues to use overlay.initialView.
+  previewView: null,
   // Viewport (canvas size in pixels — independent of on-screen CSS
   // scale). Defaults to DESKTOP 1280×720 because that's the
   // PlayStation-style window the desktop runtime renders at and
@@ -187,6 +190,9 @@ function selectionBelongsToCurrentStory(selection = state.selected) {
   if (selection.kind === 'hitbox') {
     return (getScene()?.hitboxes || []).includes(selection.ref);
   }
+  if (selection.kind === 'overlay') {
+    return (getScene()?.overlay?.elements || []).includes(selection.ref);
+  }
   if (selection.kind === 'item') {
     return Object.values(state.story?.items || {}).includes(selection.ref);
   }
@@ -204,6 +210,8 @@ function switchScene(sceneId, { render = true } = {}) {
 
   if (sceneId !== state.sceneId) {
     state.sceneId = sceneId;
+    const overlayConfig = scenes[sceneId]?.overlay;
+    state.previewView = overlayConfig?.initialView || overlayConfig?.views?.[0] || null;
     state.selected = null;
     clearActiveDrag();
   }
@@ -221,6 +229,8 @@ async function loadStory() {
   state.selected = null;
   clearActiveDrag();
   state.story = story;
+  const overlayConfig = story.scenes?.[state.sceneId]?.overlay;
+  state.previewView = overlayConfig?.initialView || overlayConfig?.views?.[0] || null;
 }
 
 function readEditorToken() {
@@ -784,6 +794,287 @@ function hitboxRectPx(hb) {
   return { x: hb.x * vpW(), y: hb.y * vpH(), w: hb.w * vpW(), h: hb.h * vpH() };
 }
 
+// ---------- generic scene-local overlay authoring ----------
+function ensureOverlay(sc) {
+  if (!sc.overlay) sc.overlay = { designWidth: 1152, designHeight: 864, elements: [] };
+  if (!Array.isArray(sc.overlay.elements)) sc.overlay.elements = [];
+  return sc.overlay;
+}
+function overlayElements() { return getScene()?.overlay?.elements || []; }
+function overlayViews(sc = getScene()) { return Array.isArray(sc?.overlay?.views) ? sc.overlay.views : []; }
+function overlayPreviewView(sc = getScene()) {
+  const views = overlayViews(sc);
+  if (!views.includes(state.previewView)) state.previewView = sc?.overlay?.initialView || views[0] || null;
+  return state.previewView;
+}
+function updateOverlayViewPreview() {
+  const wrap = $('#overlay-view-preview'); const select = $('#overlay-preview-view');
+  if (!wrap || !select) return;
+  const views = overlayViews();
+  wrap.style.display = views.length ? 'flex' : 'none';
+  select.innerHTML = '';
+  for (const view of views) { const option = document.createElement('option'); option.value = view; option.textContent = view; select.appendChild(option); }
+  select.value = overlayPreviewView() || '';
+  select.onchange = () => { state.previewView = select.value; renderOverlay(); };
+}
+function overlayElementVisibleInPreview(el) {
+  return !Array.isArray(el.visibleIn) || el.visibleIn.includes(overlayPreviewView());
+}
+function overlayElementActiveInPreview(el) {
+  return Array.isArray(el.activeIn) && el.activeIn.includes(overlayPreviewView());
+}
+function overlayStage() {
+  const sc = getScene();
+  return window.OverlayRuntime?.fittedStageRect(sc || {}, { width: vpW(), height: vpH() }) || { x: 0, y: 0, w: vpW(), h: vpH() };
+}
+function overlayRectInStage(el, cache = new Map()) {
+  if (cache.has(el)) return cache.get(el);
+  const parent = el.parent ? overlayElements().find(x => x.id === el.parent) : null;
+  const p = parent ? overlayRectInStage(parent, cache) : { x: 0, y: 0, w: 1, h: 1 };
+  const r = { x: p.x + el.x * p.w, y: p.y + el.y * p.h, w: el.w * p.w, h: el.h * p.h };
+  cache.set(el, r); return r;
+}
+function overlayElementAt(id) { return overlayElements().find(el => el.id === id); }
+function overlayElementLabel(el) { return `${el.type}: ${el.id}`; }
+function renderOverlayTree() {
+  const tree = $('#overlay-tree');
+  if (!tree) return;
+  tree.innerHTML = '';
+  const elements = overlayElements();
+  const children = (parent) => elements.filter(el => (el.parent || null) === parent);
+  const add = (el, depth) => {
+    const li = document.createElement('li');
+    li.className = state.selected?.kind === 'overlay' && state.selected.ref === el ? 'active' : '';
+    li.style.paddingLeft = `${4 + depth * 12}px`;
+    li.onclick = () => { state.selected = { kind: 'overlay', ref: el }; renderAll(); };
+    const kind = document.createElement('span'); kind.className = 'overlay-kind'; kind.textContent = ({container:'□', image:'▧', text:'T', hotspot:'⌖'})[el.type] || '?'; li.appendChild(kind);
+    const name = document.createElement('span'); name.textContent = overlayElementLabel(el); li.appendChild(name);
+    if (el.locked) { const lock = document.createElement('span'); lock.className = 'overlay-locked'; lock.textContent = '🔒'; li.appendChild(lock); }
+    tree.appendChild(li);
+    for (const child of children(el.id)) add(child, depth + 1);
+  };
+  for (const el of children(null)) add(el, 0);
+  if (!elements.length) { const empty = document.createElement('li'); empty.textContent = 'No overlay elements'; empty.style.color = '#6c7280'; tree.appendChild(empty); }
+}
+function refreshOverlayHandleSelection() {
+  for (const handle of overlay.querySelectorAll('.overlay-element-handle')) {
+    handle.classList.toggle('selected', state.selected?.kind === 'overlay' && handle.dataset.key === `overlay:${state.selected.ref?.id}`);
+  }
+}
+function overlayPointerHandlers(handle, el, rectStage) {
+  handle.addEventListener('pointerdown', (event) => {
+    event.preventDefault(); event.stopPropagation();
+    state.selected = { kind: 'overlay', ref: el }; renderRight(); renderOverlayTree();
+    refreshOverlayHandleSelection();
+    if (el.locked) return;
+    handle.setPointerCapture(event.pointerId);
+    const frameRect = frame.getBoundingClientRect();
+    const scale = frameRect.width / vpW();
+    const parent = el.parent ? overlayElementAt(el.parent) : null;
+    const parentRect = parent ? overlayRectInStage(parent) : { x: 0, y: 0, w: 1, h: 1 };
+    const resize = event.target.classList.contains('resize');
+    let lastX = event.clientX, lastY = event.clientY;
+    const move = (ev) => {
+      const dx = (ev.clientX - lastX) / scale / (overlayStage().w * parentRect.w);
+      const dy = (ev.clientY - lastY) / scale / (overlayStage().h * parentRect.h);
+      lastX = ev.clientX; lastY = ev.clientY;
+      if (resize) {
+        el.w = Math.max(0.01, Math.min(1 - el.x, el.w + dx));
+        el.h = Math.max(0.01, Math.min(1 - el.y, el.h + dy));
+      } else {
+        el.x = Math.max(0, Math.min(1 - el.w, el.x + dx));
+        el.y = Math.max(0, Math.min(1 - el.h, el.y + dy));
+      }
+      const r = overlayRectInStage(el, new Map()); const s = overlayStage();
+      handle.style.left = `${s.x + r.x * s.w}px`; handle.style.top = `${s.y + r.y * s.h}px`;
+      handle.style.width = `${r.w * s.w}px`; handle.style.height = `${r.h * s.h}px`;
+    };
+    const end = () => {
+      handle.removeEventListener('pointermove', move); handle.removeEventListener('pointerup', end); handle.removeEventListener('pointercancel', end);
+      markDirty(); renderOverlayTree(); renderRight();
+    };
+    handle.addEventListener('pointermove', move); handle.addEventListener('pointerup', end); handle.addEventListener('pointercancel', end);
+  });
+}
+function renderOverlayHandles() {
+  const sc = getScene();
+  if (!sc) return;
+  const elements = sc.overlay?.elements || [];
+  const s = overlayStage(); const cache = new Map();
+  for (const el of elements) {
+    if (!overlayElementVisibleInPreview(el)) continue;
+    const r = overlayRectInStage(el, cache);
+    const div = document.createElement('div');
+    div.className = 'overlay-element-handle' + (el.locked ? ' locked' : '') + (el.visible === false ? ' hidden-in-editor' : '') + (overlayElementActiveInPreview(el) ? ' view-active' : '');
+    if (state.selected?.kind === 'overlay' && state.selected.ref === el) div.classList.add('selected');
+    div.dataset.key = `overlay:${el.id}`;
+    div.style.left = `${s.x + r.x * s.w}px`; div.style.top = `${s.y + r.y * s.h}px`; div.style.width = `${r.w * s.w}px`; div.style.height = `${r.h * s.h}px`;
+    const label = document.createElement('span'); label.className = 'label'; label.textContent = overlayElementLabel(el); div.appendChild(label);
+    const grip = document.createElement('span'); grip.className = 'resize'; grip.title = 'drag to resize'; div.appendChild(grip);
+    overlayPointerHandlers(div, el, r);
+    overlay.appendChild(div);
+  }
+}
+function addOverlayElement(type) {
+  const sc = getScene(); if (!sc) return;
+  const list = ensureOverlay(sc).elements;
+  let id = `${type}_${list.length + 1}`;
+  while (list.some(el => el.id === id)) id = `${type}_${Math.floor(Math.random() * 10000)}`;
+  const el = { id, type, x: 0.1, y: 0.1, w: 0.2, h: 0.12 };
+  if (type === 'container') { el.clip = false; el.style = { background: 'rgba(2,12,18,.55)', borderWidth: 1, borderColor: '#6aa4aa' }; }
+  if (type === 'image') { el.asset = 'assets/backgrounds/scene_terminal_ui_grok.png'; el.fit = 'contain'; el.pixelated = true; }
+  if (type === 'text') { el.text = 'TEXT'; el.style = { color: '#a7d8dc', align: 'left' }; }
+  if (type === 'hotspot') { el.label = 'Activate'; el.presentation = 'control'; el.events = { activate: { actions: [] } }; }
+  list.push(el); state.selected = { kind: 'overlay', ref: el }; markDirty(); renderAll();
+}
+function deleteOverlayElement(el) {
+  const sc = getScene(); const list = ensureOverlay(sc).elements;
+  const descendants = list.filter(x => x.parent === el.id);
+  if (descendants.length && !confirm(`Delete ${el.id} and its ${descendants.length} child element(s)?`)) return;
+  const remove = new Set([el.id]);
+  let changed = true; while (changed) { changed = false; for (const x of list) if (remove.has(x.parent) && !remove.has(x.id)) { remove.add(x.id); changed = true; } }
+  sc.overlay.elements = list.filter(x => !remove.has(x.id)); state.selected = null; markDirty(); renderAll();
+}
+function moveOverlayElement(el, delta) {
+  const list = overlayElements(); const from = list.indexOf(el); const to = from + delta;
+  if (from < 0 || to < 0 || to >= list.length) return;
+  [list[from], list[to]] = [list[to], list[from]]; markDirty(); renderAll();
+}
+function makeOverlayActionsEditor(el, eventName = 'activate') {
+  const wrap = document.createElement('div'); wrap.className = 'actions-list';
+  if (!el.events) el.events = {};
+  const event = el.events[eventName] || (el.events[eventName] = { actions: [] });
+  if (!Array.isArray(event.actions)) event.actions = [];
+  const ownerScene = getScene();
+  const render = () => {
+    wrap.innerHTML = '';
+    event.actions.forEach((action, index) => {
+      const row = document.createElement('div'); row.className = 'row';
+      const type = makeSelect(action.type || 'goToScene', [
+        ['goToScene','Go to scene'], ['giveItem','Give item'], ['openInk','Open Ink knot'], ['setView','Set local view'],
+      ], v => {
+        for (const k of ['scene','item','knot','view']) delete action[k];
+        action.type = v;
+        if (v === 'goToScene') action.scene = Object.keys(state.story.scenes || {})[0] || '';
+        if (v === 'giveItem') action.item = Object.keys(state.story.items || {})[0] || '';
+        if (v === 'setView') action.view = overlayViews(ownerScene)[0] || '';
+        markDirty(); render();
+      });
+      row.appendChild(type);
+      if (action.type === 'goToScene' || action.type === 'giveItem') {
+        const field = action.type === 'goToScene' ? 'scene' : 'item';
+        const values = field === 'scene' ? Object.keys(state.story.scenes || {}) : Object.keys(state.story.items || {});
+        row.appendChild(makeReferenceSelect(action[field] || '', values, v => { action[field] = v; markDirty(); }, { missingKind: field }));
+      } else if (action.type === 'setView') {
+        row.appendChild(makeReferenceSelect(action.view || '', overlayViews(ownerScene), v => { action.view = v; markDirty(); }, { missingKind: 'overlay view' }));
+      } else {
+        const placeholder = makePlaceholder(); row.appendChild(placeholder);
+        loadInkKnots(ownerScene).catch(() => []).then(knots => {
+          if (getScene() !== ownerScene || !overlayElements().includes(el) || !event.actions.includes(action)) return;
+          const picker = makeReferenceSelect(action.knot || '', knots, v => { action.knot = v; markDirty(); }, { missingKind: 'Ink knot' });
+          placeholder.replaceWith(picker);
+        });
+      }
+      const del = document.createElement('button'); del.className = 'icon-btn danger'; del.textContent = '×'; del.onclick = () => { event.actions.splice(index, 1); markDirty(); render(); }; row.appendChild(del);
+      wrap.appendChild(row);
+    });
+    const add = document.createElement('button'); add.textContent = '+ action';
+    add.onclick = () => { event.actions.push({ type: 'goToScene', scene: Object.keys(state.story.scenes || {})[0] || '' }); markDirty(); render(); };
+    wrap.appendChild(add);
+  };
+  render(); return wrap;
+}
+function makeViewMembershipEditor(el, key, views) {
+  const wrap = document.createElement('div'); wrap.className = 'view-membership';
+  const current = Array.isArray(el[key]) ? new Set(el[key]) : (key === 'visibleIn' ? new Set(views) : new Set());
+  for (const view of views) {
+    const label = document.createElement('label'); label.className = 'check-row';
+    const input = document.createElement('input'); input.type = 'checkbox'; input.checked = current.has(view);
+    input.onchange = () => {
+      if (input.checked) current.add(view); else current.delete(view);
+      const values = views.filter(v => current.has(v));
+      if (key === 'visibleIn' && values.length === views.length) delete el[key];
+      else el[key] = values;
+      markDirty(); renderAll();
+    };
+    label.appendChild(input); label.appendChild(document.createTextNode(view)); wrap.appendChild(label);
+  }
+  return wrap;
+}
+function makeTagStylesEditor(content) {
+  const wrap = document.createElement('div'); wrap.className = 'tag-styles-editor';
+  const render = () => {
+    wrap.innerHTML = '';
+    const styles = content.tagStyles || (content.tagStyles = {});
+    for (const tag of Object.keys(styles)) {
+      const row = document.createElement('div'); row.className = 'row';
+      row.appendChild(makeTextInput(tag, v => {
+        const next = v.trim();
+        if (!next || next === tag || Object.prototype.hasOwnProperty.call(styles, next)) return;
+        styles[next] = styles[tag]; delete styles[tag]; markDirty(); render();
+      }));
+      const preset = makeSelect(styles[tag] || 'default', [['default','default'],['heading','heading'],['warning','warning'],['success','success'],['dim','dim'],['divider','divider']], v => { styles[tag] = v; markDirty(); });
+      row.appendChild(preset);
+      const del = document.createElement('button'); del.className = 'icon-btn danger'; del.textContent = '×'; del.onclick = () => { delete styles[tag]; markDirty(); render(); }; row.appendChild(del);
+      wrap.appendChild(row);
+    }
+    const add = document.createElement('button'); add.textContent = '+ tag style'; add.onclick = () => { let tag = 'tag'; let n = 1; while (styles[tag]) tag = `tag${n++}`; styles[tag] = 'default'; markDirty(); render(); }; wrap.appendChild(add);
+  };
+  render(); return wrap;
+}
+function makeOverlayContentEditor(el) {
+  const wrap = document.createElement('div'); wrap.className = 'overlay-content-editor';
+  const content = el.content || { source: 'literal' };
+  const source = makeSelect(content.source || 'literal', [['literal','Literal text'],['inkLines','Ink lines'],['inkChoices','Ink choices']], v => {
+    const next = { ...(el.content || {}), source: v };
+    if (v !== 'inkLines') delete next.tagStyles;
+    if (v !== 'inkChoices') delete next.controlPreset;
+    el.content = next;
+    if (v === 'literal' && typeof el.text !== 'string') el.text = '';
+    markDirty(); renderAll();
+  });
+  wrap.appendChild(source);
+  if (content.source === 'literal') {
+    wrap.appendChild(makeTextArea(el.text || '', v => { el.text = v; markDirty(); renderAll(); }));
+  } else if (content.source === 'inkLines') {
+    wrap.appendChild(makeTagStylesEditor(content));
+  } else if (content.source === 'inkChoices') {
+    wrap.appendChild(makeField('controlPreset', 'Choice controls', makeSelect(content.controlPreset || 'default', [['default','default'],['terminal-command','terminal-command']], v => { content.controlPreset = v; markDirty(); })));
+    wrap.appendChild(makeField('choiceSelected', 'After choice', makeOverlayActionsEditor(el, 'choiceSelected')));
+  }
+  return wrap;
+}
+function renderOverlayInspector(right, el) {
+  right.appendChild(makeField('header', `Overlay — ${el.id}`));
+  right.appendChild(makeField('type', 'Type', makeTextInput(el.type, () => {})));
+  const coords = document.createElement('div'); coords.className = 'row';
+  for (const key of ['x','y','w','h']) coords.appendChild(makeField(key, key, makeNumberInput(el[key], v => { el[key] = v; markDirty(); renderAll(); }, 0, 1, 0.01)));
+  right.appendChild(coords);
+  right.appendChild(makeField('locked', 'Locked', makeCheckbox(!!el.locked, v => { el.locked = v; markDirty(); renderAll(); })));
+  right.appendChild(makeField('visible', 'Visible in editor', makeCheckbox(el.visible !== false, v => { el.visible = v; markDirty(); renderAll(); })));
+  const views = overlayViews();
+  if (views.length) {
+    right.appendChild(makeField('visibleIn', 'Visible in views', makeViewMembershipEditor(el, 'visibleIn', views)));
+    right.appendChild(makeField('activeIn', 'Active style in views', makeViewMembershipEditor(el, 'activeIn', views)));
+  }
+  if (el.type === 'container') right.appendChild(makeField('clip', 'Clip children', makeCheckbox(el.clip === true, v => { el.clip = v; markDirty(); renderAll(); })));
+  if (el.type === 'text' || el.type === 'container') right.appendChild(makeField('content', 'Content binding', makeOverlayContentEditor(el)));
+  if (el.type === 'image') right.appendChild(makeField('asset', 'Asset path', makeTextInput(el.asset || '', v => { el.asset = v; markDirty(); renderAll(); })));
+  if (el.type === 'hotspot') {
+    right.appendChild(makeField('label', 'Accessible label', makeTextInput(el.label || '', v => { el.label = v; markDirty(); })));
+    right.appendChild(makeField('presentation', 'Presentation', makeSelect(el.presentation || 'invisible', [['inspect','Inspect'],['control','Control'],['invisible','Invisible']], v => { el.presentation = v; markDirty(); })));
+    right.appendChild(makeField('actions', 'Activate actions', makeOverlayActionsEditor(el)));
+  }
+  const parentValues = [''].concat(overlayElements().filter(x => x.type === 'container' && x !== el).map(x => x.id));
+  right.appendChild(makeField('parent', 'Parent container', makeSelect(el.parent || '', parentValues.map(v => [v, v || '— root —']), v => { if (v) el.parent = v; else delete el.parent; markDirty(); renderAll(); })));
+  const controls = document.createElement('div'); controls.className = 'actions';
+  const up = document.createElement('button'); up.textContent = '↑ reorder'; up.onclick = () => moveOverlayElement(el, -1); controls.appendChild(up);
+  const down = document.createElement('button'); down.textContent = '↓ reorder'; down.onclick = () => moveOverlayElement(el, 1); controls.appendChild(down);
+  const dup = document.createElement('button'); dup.textContent = 'Duplicate'; dup.onclick = () => { const copy = JSON.parse(JSON.stringify(el)); copy.id = el.id + '_copy'; copy.x = Math.min(.9, el.x + .02); copy.y = Math.min(.9, el.y + .02); ensureOverlay(getScene()).elements.splice(overlayElements().indexOf(el) + 1, 0, copy); state.selected = { kind: 'overlay', ref: copy }; markDirty(); renderAll(); }; controls.appendChild(dup);
+  const del = document.createElement('button'); del.className = 'danger'; del.textContent = 'Delete'; del.onclick = () => deleteOverlayElement(el); controls.appendChild(del);
+  right.appendChild(controls);
+}
+
 // ---------- preview render ----------
 function getScene() { return state.story?.scenes?.[state.sceneId] || null; }
 
@@ -886,6 +1177,9 @@ function renderOverlay() {
     if (state.drag?.ref === hb) div.classList.add('dragging');
     overlay.appendChild(div);
   }
+
+  renderOverlayHandles();
+  updateOverlayViewPreview();
 
   // Exploration-only: walkable-area polygon outline + corner
   // handles. Always re-drawn fresh (no dragKey preservation
@@ -2044,6 +2338,47 @@ function retainInspectorCleanup(lifecycle, cleanup) {
   lifecycle.cleanups.add(cleanup);
 }
 
+function makeSceneViewsEditor(sc) {
+  const wrap = document.createElement('div'); wrap.className = 'scene-views-editor';
+  const overlayConfig = ensureOverlay(sc);
+  if (!Array.isArray(overlayConfig.views)) overlayConfig.views = [];
+  const replaceViewReference = (oldView, nextView) => {
+    if (overlayConfig.initialView === oldView) overlayConfig.initialView = nextView;
+    for (const el of overlayConfig.elements) {
+      for (const key of ['visibleIn','activeIn']) if (Array.isArray(el[key])) el[key] = el[key].map(v => v === oldView ? nextView : v);
+      for (const event of Object.values(el.events || {})) for (const action of event.actions || []) if (action.type === 'setView' && action.view === oldView) action.view = nextView;
+    }
+  };
+  const viewReferenceCount = view => overlayConfig.elements.reduce((count, el) => count
+    + ['visibleIn','activeIn'].reduce((n, key) => n + (Array.isArray(el[key]) && el[key].includes(view) ? 1 : 0), 0)
+    + Object.values(el.events || {}).reduce((n, event) => n + (event.actions || []).filter(a => a.type === 'setView' && a.view === view).length, 0), 0)
+    + (overlayConfig.initialView === view ? 1 : 0);
+  const render = () => {
+    wrap.innerHTML = '';
+    overlayConfig.views.forEach((view, index) => {
+      const row = document.createElement('div'); row.className = 'row';
+      const input = makeTextInput(view, next => {
+        next = next.trim();
+        if (!next || next === view || overlayConfig.views.includes(next)) return;
+        overlayConfig.views[index] = next; replaceViewReference(view, next);
+        if (state.previewView === view) state.previewView = next;
+        markDirty(); renderAll();
+      }); row.appendChild(input);
+      const del = document.createElement('button'); del.className = 'icon-btn danger'; del.textContent = '×'; del.onclick = () => {
+        const refs = viewReferenceCount(view);
+        if (refs) { alert(`View "${view}" still has ${refs} reference(s). Reassign them before deleting it.`); return; }
+        overlayConfig.views.splice(index, 1); markDirty(); renderAll();
+      }; row.appendChild(del); wrap.appendChild(row);
+    });
+    const add = document.createElement('button'); add.textContent = '+ view'; add.onclick = () => {
+      let view = 'view'; let n = 1; while (overlayConfig.views.includes(view)) view = `view${n++}`;
+      overlayConfig.views.push(view); if (!overlayConfig.initialView) overlayConfig.initialView = view; state.previewView = view; markDirty(); renderAll();
+    }; wrap.appendChild(add);
+    if (overlayConfig.views.length) wrap.appendChild(makeField('initialView', 'Runtime initial view', makeReferenceSelect(overlayConfig.initialView || '', overlayConfig.views, v => { overlayConfig.initialView = v; markDirty(); }, { missingKind: 'overlay view' })));
+  };
+  render(); return wrap;
+}
+
 function renderRight() {
   const lifecycle = beginInspectorRender();
   validateSelection();
@@ -2065,8 +2400,21 @@ function renderRight() {
     right.appendChild(makeField('music', 'Music (assets/audio/*)', makePlaceholder()));
     fillAsync($('#right .field[data-key="music"] .ctrl'), makeMusicEditor(sc, lifecycle), lifecycle);
     right.appendChild(makeField('ink', 'Ink file', makeTextInput(sc.ink || '', v => { sc.ink = v; markDirty(); })));
+    right.appendChild(makeField('bgFit', 'Background fit', makeSelect(sc.bgFit || 'cover', [['cover','cover'],['contain','contain']], v => { sc.bgFit = v; markDirty(); renderAll(); })));
+    right.appendChild(makeField('hudInventory', 'Inventory HUD', makeCheckbox(sc.hud?.inventory !== false, v => { sc.hud = { ...(sc.hud || {}), inventory: v }; markDirty(); })));
+    if (sc.overlay) {
+      const design = document.createElement('div'); design.className = 'row';
+      design.appendChild(makeField('designWidth', 'Overlay width', makeNumberInput(sc.overlay.designWidth || 1152, v => { sc.overlay.designWidth = v; markDirty(); })));
+      design.appendChild(makeField('designHeight', 'Overlay height', makeNumberInput(sc.overlay.designHeight || 864, v => { sc.overlay.designHeight = v; markDirty(); })));
+      right.appendChild(design);
+      right.appendChild(makeField('views', 'Scene-local views', makeSceneViewsEditor(sc)));
+    }
     // --- Scene tasks (per-scene, surfaced as toast hints + auto-completion) ---
     right.appendChild(makeTasksPanel(sc));
+  }
+
+  if (state.selected?.kind === 'overlay') {
+    renderOverlayInspector(right, state.selected.ref);
   }
 
   if (state.selected?.kind === 'sprite') {
@@ -2156,6 +2504,13 @@ function renderRight() {
         renderAll();
       }, { missingKind: 'item' })));
     right.appendChild(makeField('target', 'Go to scene', makeTargetSceneControl(hb)));
+    right.appendChild(makeField('repeatable', 'Repeatable hitbox',
+      makeCheckbox(hb.repeatable === true, v => {
+        if (v) hb.repeatable = true;
+        else delete hb.repeatable;
+        markDirty();
+        renderAll();
+      })));
     const inkField = makeField('hitbox-ink', 'Open Ink knot', makePlaceholder());
     right.appendChild(inkField);
     fillAsync(inkField.querySelector('.ctrl'), makeInkKnotPicker(hb, sc), lifecycle);
@@ -2473,7 +2828,7 @@ function makeTargetSceneControl(hb) {
   return wrap;
 }
 
-async function makeInkKnotPicker(hb, sc) {
+async function loadInkKnots(sc) {
   const knots = [];
   if (sc?.ink) {
     const path = sc.ink.split('/').map(encodeURIComponent).join('/');
@@ -2484,12 +2839,14 @@ async function makeInkKnotPicker(hb, sc) {
     const knotPattern = /^\s*===\s*([^=\s][^=]*?)\s*===\s*$/gm;
     for (const match of source.matchAll(knotPattern)) {
       const knot = match[1].trim();
-      if (knot && !seen.has(knot)) {
-        seen.add(knot);
-        knots.push(knot);
-      }
+      if (knot && !seen.has(knot)) { seen.add(knot); knots.push(knot); }
     }
   }
+  return knots;
+}
+
+async function makeInkKnotPicker(hb, sc) {
+  const knots = await loadInkKnots(sc);
   return makeReferenceSelect(hb.ink || '', knots, v => {
     setOptionalHitboxField(hb, 'ink', v);
     markDirty();
@@ -3245,6 +3602,7 @@ function setupMobileTabs() {
 async function renderAll() {
   renderSceneList();
   renderItemList();
+  renderOverlayTree();
   $('#scene-name').textContent = state.sceneId ? `scene: ${state.sceneId}` : '— no scene —';
 
   const sc = getScene();
@@ -3279,6 +3637,9 @@ async function main() {
   setupViewportToolbar();
   setupMobileTabs();
   setupDrawTool();
+  document.querySelectorAll('[data-overlay-add]').forEach(button => {
+    button.addEventListener('click', () => addOverlayElement(button.dataset.overlayAdd));
+  });
   await renderAll();
 }
 main().catch(err => { console.error(err); setStatus('ERROR: ' + err.message, 'error'); });

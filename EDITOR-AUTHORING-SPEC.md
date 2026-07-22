@@ -1,5 +1,7 @@
 # Editor-Managed Scene Authoring — Implementation Spec
 
+> New to the browser editor? Start with [`EDITOR-MANUAL.md`](EDITOR-MANUAL.md). This document is the lower-level data and runtime contract.
+
 **Status:** Approved implementation plan
 **Date:** 2026-07-21
 **Primary acceptance scene:** `terminal_ui`
@@ -38,7 +40,7 @@ For example, `terminal_obelab` already contains:
 - `Access terminal` with `target: "terminal_ui"`;
 - `Walk away` with `target: "exploration_demo"`.
 
-The runtime honors those targets regardless of hitbox presentation.
+The runtime honors those targets regardless of hitbox presentation. Hitboxes are single-use by default; set `repeatable: true` on a navigation hotspot that must remain usable after returning to the scene.
 
 ### 2.2 The editor currently misrepresents that data
 

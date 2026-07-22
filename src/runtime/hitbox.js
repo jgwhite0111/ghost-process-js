@@ -210,8 +210,10 @@ class HitboxLayer {
         const hb = this._hitTest(x, y);
         if (!hb) return false;
         const key = this.sceneId + ':' + (hb.label || hb.target || hb.item);
-        if (window.STATE.spentHitboxes[key]) return false;
-        window.STATE.spentHitboxes[key] = true;
+        if (!hb.repeatable) {
+            if (window.STATE.spentHitboxes[key]) return false;
+            window.STATE.spentHitboxes[key] = true;
+        }
         // Pass page-space coords so callers (e.g. Inventory.addWithFly)
         // can position UI elements in the same coordinate system as
         // pointer events.
@@ -223,8 +225,10 @@ class HitboxLayer {
     _handleDomDown(e, hb, idx) {
         if (!hb) return false;
         const key = this.sceneId + ':' + (hb.label || hb.target || hb.item);
-        if (window.STATE.spentHitboxes[key]) return false;
-        window.STATE.spentHitboxes[key] = true;
+        if (!hb.repeatable) {
+            if (window.STATE.spentHitboxes[key]) return false;
+            window.STATE.spentHitboxes[key] = true;
+        }
         if (this.onTrigger) this.onTrigger(hb, e.clientX, e.clientY);
         e.stopPropagation();
         e.preventDefault();

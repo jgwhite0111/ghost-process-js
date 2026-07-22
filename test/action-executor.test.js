@@ -162,6 +162,8 @@ test('typed actions validate payloads, execute in order, and stop after transiti
         'action goToScene.scene must be a non-empty string');
     assert.equal(executor.validateAction({ type: 'openInk', knot: 12 }),
         'action openInk.knot must be a non-empty string');
+    assert.equal(executor.validateAction({ type: 'setView', view: '' }),
+        'action setView.view must be a non-empty string');
     assert.equal(executor.validateAction({ type: 'unknown' }),
         'unsupported action type "unknown"');
 
@@ -180,6 +182,22 @@ test('typed actions validate payloads, execute in order, and stop after transiti
     assert.equal(result.ok, true);
     assert.equal(result.transitioned, true);
     assert.equal(result.index, 1);
+});
+
+test('setView and overlay-owned openInk reuse the typed executor without the global dialogue panel', () => {
+    const env = loadRuntime();
+    const scene = new env.window.Scene('action_test');
+    scene.overlayLayer = {
+        setView(view) { env.events.push(`view:${view}`); return view === 'details'; },
+        hasInkContent() { return true; },
+        openInk(knot) { env.events.push(`overlay-ink:${knot}`); return true; },
+    };
+    const result = env.window.ActionExecutor.execute([
+        { type: 'setView', view: 'details' },
+        { type: 'openInk', knot: 'sysinfo' },
+    ], { scene });
+    assert.equal(result.ok, true);
+    assert.deepEqual(env.events, ['view:details', 'overlay-ink:sysinfo']);
 });
 
 test('legacy normalization preserves item then target then Ink precedence', () => {

@@ -7,6 +7,9 @@
     "start": "node server.js",
     "dev": "node server.js",
     "test": "node --test test/*.test.js",
+    "test:browser:phase3": "node tools/browser-phase3-acceptance.mjs",
+    "test:browser:phase4": "node tools/browser-phase3-acceptance.mjs",
+    "test:browser:phase5": "node tools/browser-phase5-terminal-acceptance.mjs",
     "vendor": "node tools/vendor-deps.js"
   },
   "dependencies": {

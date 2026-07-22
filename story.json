@@ -462,7 +462,8 @@
           "w": 0.1,
           "h": 0.3,
           "label": "Walk away",
-          "target": "exploration_demo"
+          "target": "exploration_demo",
+          "repeatable": true
         }
       ],
       "tasks": []
@@ -477,7 +478,1050 @@
       "start_node": "Start",
       "characters": [],
       "hitboxes": [],
-      "tasks": []
+      "tasks": [],
+      "bgFit": "contain",
+      "hud": {
+        "inventory": false
+      },
+      "overlay": {
+        "designWidth": 1152,
+        "designHeight": 864,
+        "views": [
+          "desktop",
+          "log",
+          "email",
+          "map",
+          "sysinfo"
+        ],
+        "initialView": "desktop",
+        "elements": [
+          {
+            "id": "header",
+            "type": "container",
+            "x": 0.034722222222222224,
+            "y": 0.034722222222222224,
+            "w": 0.9305555555555556,
+            "h": 0.05555555555555555,
+            "style": {}
+          },
+          {
+            "id": "header_title",
+            "type": "text",
+            "x": 0.024253731343283583,
+            "y": 0.25,
+            "w": 0.43,
+            "h": 0.5,
+            "text": "SABLE//TERM 04",
+            "parent": "header",
+            "style": {
+              "color": "#e5ffff",
+              "align": "left",
+              "fontSize": "calc(var(--overlay-scale) * 17px)",
+              "lineHeight": "calc(var(--overlay-scale) * 20px)",
+              "fontFamily": "MadouFutoMaru, NouveauIBM, monospace",
+              "fontWeight": 700
+            }
+          },
+          {
+            "id": "header_status",
+            "type": "container",
+            "x": 0.7080223880597015,
+            "y": 0.25,
+            "w": 0.27238805970149255,
+            "h": 0.5,
+            "parent": "header",
+            "style": {
+              "color": "#c5d5d6",
+              "align": "right"
+            }
+          },
+          {
+            "id": "header_lamp",
+            "type": "text",
+            "x": 0.0,
+            "y": 0.1,
+            "w": 0.0273972602739726,
+            "h": 0.8,
+            "text": "■",
+            "parent": "header_status",
+            "style": {
+              "color": "#e45148",
+              "align": "center",
+              "fontSize": "calc(var(--overlay-scale) * 13px)",
+              "lineHeight": "calc(var(--overlay-scale) * 16px)",
+              "fontWeight": 700
+            }
+          },
+          {
+            "id": "header_status_text",
+            "type": "text",
+            "x": 0.06164383561643835,
+            "y": 0.1,
+            "w": 0.9383561643835616,
+            "h": 0.8,
+            "text": "QUARANTINE LINK / LOCAL ONLY",
+            "parent": "header_status",
+            "style": {
+              "color": "#b8d0d1",
+              "align": "left",
+              "fontSize": "calc(var(--overlay-scale) * 13px)",
+              "lineHeight": "calc(var(--overlay-scale) * 16px)"
+            }
+          },
+          {
+            "id": "launcher_rail",
+            "type": "container",
+            "x": 0,
+            "y": 0,
+            "w": 1,
+            "h": 1,
+            "style": {}
+          },
+          {
+            "id": "launcher_log",
+            "type": "container",
+            "x": 0.04861111111111111,
+            "y": 0.1712962962962963,
+            "w": 0.11458333333333333,
+            "h": 0.1111111111111111,
+            "parent": "launcher_rail",
+            "style": {},
+            "activeIn": [
+              "log"
+            ]
+          },
+          {
+            "id": "launcher_log_active_plate",
+            "type": "container",
+            "x": 0,
+            "y": 0,
+            "w": 1,
+            "h": 1,
+            "parent": "launcher_log",
+            "visibleIn": [
+              "log"
+            ],
+            "style": {
+              "background": "linear-gradient(180deg, rgba(16, 70, 74, 0.66), rgba(5, 24, 29, 0.78))",
+              "borderColor": "#7df4ec",
+              "borderWidth": 1,
+              "bevel": "inset"
+            }
+          },
+          {
+            "id": "launcher_log_icon",
+            "type": "image",
+            "x": 0.29545454545454547,
+            "y": 0.11979166666666667,
+            "w": 0.4090909090909091,
+            "h": 0.5625,
+            "asset": "assets/icons/isometric/log.png",
+            "fit": "contain",
+            "pixelated": true,
+            "parent": "launcher_log"
+          },
+          {
+            "id": "launcher_log_label",
+            "type": "text",
+            "x": 0.18181818181818182,
+            "y": 0.703125,
+            "w": 0.6363636363636364,
+            "h": 0.1875,
+            "text": "LOG",
+            "parent": "launcher_log",
+            "style": {
+              "color": "#9fd8d2",
+              "align": "center",
+              "fontSize": "calc(var(--overlay-scale) * 13px)",
+              "lineHeight": "calc(var(--overlay-scale) * 13px)",
+              "letterSpacing": "0.08em",
+              "fontFamily": "MadouFutoMaru, NouveauIBM, monospace",
+              "fontWeight": 700
+            }
+          },
+          {
+            "id": "launcher_log_hotspot",
+            "type": "hotspot",
+            "x": 0,
+            "y": 0,
+            "w": 1,
+            "h": 1,
+            "label": "SYSTEM LOG",
+            "presentation": "control",
+            "events": {
+              "activate": {
+                "actions": [
+                  {
+                    "type": "setView",
+                    "view": "log"
+                  },
+                  {
+                    "type": "openInk",
+                    "knot": "log"
+                  }
+                ]
+              }
+            },
+            "parent": "launcher_log",
+            "activeIn": [
+              "log"
+            ]
+          },
+          {
+            "id": "launcher_email",
+            "type": "container",
+            "x": 0.04861111111111111,
+            "y": 0.30787037037037035,
+            "w": 0.11458333333333333,
+            "h": 0.1111111111111111,
+            "parent": "launcher_rail",
+            "style": {},
+            "activeIn": [
+              "email"
+            ]
+          },
+          {
+            "id": "launcher_email_active_plate",
+            "type": "container",
+            "x": 0,
+            "y": 0,
+            "w": 1,
+            "h": 1,
+            "parent": "launcher_email",
+            "visibleIn": [
+              "email"
+            ],
+            "style": {
+              "background": "linear-gradient(180deg, rgba(16, 70, 74, 0.66), rgba(5, 24, 29, 0.78))",
+              "borderColor": "#7df4ec",
+              "borderWidth": 1,
+              "bevel": "inset"
+            }
+          },
+          {
+            "id": "launcher_email_icon",
+            "type": "image",
+            "x": 0.29545454545454547,
+            "y": 0.11979166666666667,
+            "w": 0.4090909090909091,
+            "h": 0.5625,
+            "asset": "assets/icons/isometric/email.png",
+            "fit": "contain",
+            "pixelated": true,
+            "parent": "launcher_email"
+          },
+          {
+            "id": "launcher_email_label",
+            "type": "text",
+            "x": 0.18181818181818182,
+            "y": 0.703125,
+            "w": 0.6363636363636364,
+            "h": 0.1875,
+            "text": "EMAIL",
+            "parent": "launcher_email",
+            "style": {
+              "color": "#9fd8d2",
+              "align": "center",
+              "fontSize": "calc(var(--overlay-scale) * 13px)",
+              "lineHeight": "calc(var(--overlay-scale) * 13px)",
+              "letterSpacing": "0.08em",
+              "fontFamily": "MadouFutoMaru, NouveauIBM, monospace",
+              "fontWeight": 700
+            }
+          },
+          {
+            "id": "launcher_email_hotspot",
+            "type": "hotspot",
+            "x": 0,
+            "y": 0,
+            "w": 1,
+            "h": 1,
+            "label": "INTERNAL MAIL",
+            "presentation": "control",
+            "events": {
+              "activate": {
+                "actions": [
+                  {
+                    "type": "setView",
+                    "view": "email"
+                  },
+                  {
+                    "type": "openInk",
+                    "knot": "email"
+                  }
+                ]
+              }
+            },
+            "parent": "launcher_email",
+            "activeIn": [
+              "email"
+            ]
+          },
+          {
+            "id": "launcher_map",
+            "type": "container",
+            "x": 0.04861111111111111,
+            "y": 0.4444444444444444,
+            "w": 0.11458333333333333,
+            "h": 0.1111111111111111,
+            "parent": "launcher_rail",
+            "style": {},
+            "activeIn": [
+              "map"
+            ]
+          },
+          {
+            "id": "launcher_map_active_plate",
+            "type": "container",
+            "x": 0,
+            "y": 0,
+            "w": 1,
+            "h": 1,
+            "parent": "launcher_map",
+            "visibleIn": [
+              "map"
+            ],
+            "style": {
+              "background": "linear-gradient(180deg, rgba(16, 70, 74, 0.66), rgba(5, 24, 29, 0.78))",
+              "borderColor": "#7df4ec",
+              "borderWidth": 1,
+              "bevel": "inset"
+            }
+          },
+          {
+            "id": "launcher_map_icon",
+            "type": "image",
+            "x": 0.29545454545454547,
+            "y": 0.11979166666666667,
+            "w": 0.4090909090909091,
+            "h": 0.5625,
+            "asset": "assets/icons/isometric/map.png",
+            "fit": "contain",
+            "pixelated": true,
+            "parent": "launcher_map"
+          },
+          {
+            "id": "launcher_map_label",
+            "type": "text",
+            "x": 0.18181818181818182,
+            "y": 0.703125,
+            "w": 0.6363636363636364,
+            "h": 0.1875,
+            "text": "MAP",
+            "parent": "launcher_map",
+            "style": {
+              "color": "#9fd8d2",
+              "align": "center",
+              "fontSize": "calc(var(--overlay-scale) * 13px)",
+              "lineHeight": "calc(var(--overlay-scale) * 13px)",
+              "letterSpacing": "0.08em",
+              "fontFamily": "MadouFutoMaru, NouveauIBM, monospace",
+              "fontWeight": 700
+            }
+          },
+          {
+            "id": "launcher_map_hotspot",
+            "type": "hotspot",
+            "x": 0,
+            "y": 0,
+            "w": 1,
+            "h": 1,
+            "label": "FACILITY MAP",
+            "presentation": "control",
+            "events": {
+              "activate": {
+                "actions": [
+                  {
+                    "type": "setView",
+                    "view": "map"
+                  },
+                  {
+                    "type": "openInk",
+                    "knot": "map"
+                  }
+                ]
+              }
+            },
+            "parent": "launcher_map",
+            "activeIn": [
+              "map"
+            ]
+          },
+          {
+            "id": "launcher_sysinfo",
+            "type": "container",
+            "x": 0.04861111111111111,
+            "y": 0.5810185185185185,
+            "w": 0.11458333333333333,
+            "h": 0.1111111111111111,
+            "parent": "launcher_rail",
+            "style": {},
+            "activeIn": [
+              "sysinfo"
+            ]
+          },
+          {
+            "id": "launcher_sysinfo_active_plate",
+            "type": "container",
+            "x": 0,
+            "y": 0,
+            "w": 1,
+            "h": 1,
+            "parent": "launcher_sysinfo",
+            "visibleIn": [
+              "sysinfo"
+            ],
+            "style": {
+              "background": "linear-gradient(180deg, rgba(16, 70, 74, 0.66), rgba(5, 24, 29, 0.78))",
+              "borderColor": "#7df4ec",
+              "borderWidth": 1,
+              "bevel": "inset"
+            }
+          },
+          {
+            "id": "launcher_sysinfo_icon",
+            "type": "image",
+            "x": 0.29545454545454547,
+            "y": 0.11979166666666667,
+            "w": 0.4090909090909091,
+            "h": 0.5625,
+            "asset": "assets/icons/isometric/sysinfo.png",
+            "fit": "contain",
+            "pixelated": true,
+            "parent": "launcher_sysinfo"
+          },
+          {
+            "id": "launcher_sysinfo_label",
+            "type": "text",
+            "x": 0.18181818181818182,
+            "y": 0.703125,
+            "w": 0.6363636363636364,
+            "h": 0.1875,
+            "text": "SYSINFO",
+            "parent": "launcher_sysinfo",
+            "style": {
+              "color": "#9fd8d2",
+              "align": "center",
+              "fontSize": "calc(var(--overlay-scale) * 13px)",
+              "lineHeight": "calc(var(--overlay-scale) * 13px)",
+              "letterSpacing": "0.08em",
+              "fontFamily": "MadouFutoMaru, NouveauIBM, monospace",
+              "fontWeight": 700
+            }
+          },
+          {
+            "id": "launcher_sysinfo_hotspot",
+            "type": "hotspot",
+            "x": 0,
+            "y": 0,
+            "w": 1,
+            "h": 1,
+            "label": "SYSTEM INFORMATION",
+            "presentation": "control",
+            "events": {
+              "activate": {
+                "actions": [
+                  {
+                    "type": "setView",
+                    "view": "sysinfo"
+                  },
+                  {
+                    "type": "openInk",
+                    "knot": "sysinfo"
+                  }
+                ]
+              }
+            },
+            "parent": "launcher_sysinfo",
+            "activeIn": [
+              "sysinfo"
+            ]
+          },
+          {
+            "id": "launcher_exit",
+            "type": "container",
+            "x": 0.04861111111111111,
+            "y": 0.7175925925925926,
+            "w": 0.11458333333333333,
+            "h": 0.1111111111111111,
+            "parent": "launcher_rail",
+            "style": {}
+          },
+          {
+            "id": "launcher_exit_icon",
+            "type": "image",
+            "x": 0.29545454545454547,
+            "y": 0.11979166666666667,
+            "w": 0.4090909090909091,
+            "h": 0.5625,
+            "asset": "assets/icons/isometric/exit.png",
+            "fit": "contain",
+            "pixelated": true,
+            "parent": "launcher_exit"
+          },
+          {
+            "id": "launcher_exit_label",
+            "type": "text",
+            "x": 0.18181818181818182,
+            "y": 0.703125,
+            "w": 0.6363636363636364,
+            "h": 0.1875,
+            "text": "EXIT",
+            "parent": "launcher_exit",
+            "style": {
+              "color": "#9fd8d2",
+              "align": "center",
+              "fontSize": "calc(var(--overlay-scale) * 13px)",
+              "lineHeight": "calc(var(--overlay-scale) * 13px)",
+              "letterSpacing": "0.08em",
+              "fontFamily": "MadouFutoMaru, NouveauIBM, monospace",
+              "fontWeight": 700
+            }
+          },
+          {
+            "id": "launcher_exit_hotspot",
+            "type": "hotspot",
+            "x": 0,
+            "y": 0,
+            "w": 1,
+            "h": 1,
+            "label": "Disconnect terminal",
+            "presentation": "control",
+            "events": {
+              "activate": {
+                "actions": [
+                  {
+                    "type": "goToScene",
+                    "scene": "terminal_obelab"
+                  }
+                ]
+              }
+            },
+            "parent": "launcher_exit"
+          },
+          {
+            "id": "module_window",
+            "type": "container",
+            "x": 0.19791666666666666,
+            "y": 0.12037037037037036,
+            "w": 0.7673611111111112,
+            "h": 0.7361111111111112,
+            "style": {},
+            "clip": true
+          },
+          {
+            "id": "titlebar",
+            "type": "container",
+            "x": 0.02262443438914027,
+            "y": 0.007861635220125786,
+            "w": 0.9547511312217195,
+            "h": 0.06761006289308176,
+            "parent": "module_window",
+            "style": {}
+          },
+          {
+            "id": "title_desktop",
+            "type": "text",
+            "x": 0.026066350710900472,
+            "y": 0.23255813953488372,
+            "w": 0.6,
+            "h": 0.6046511627906976,
+            "text": "SABLE SYSTEM SHELL",
+            "parent": "titlebar",
+            "visibleIn": [
+              "desktop"
+            ],
+            "style": {
+              "color": "#e8ffff",
+              "align": "left",
+              "fontSize": "calc(var(--overlay-scale) * 18px)",
+              "lineHeight": "calc(var(--overlay-scale) * 20px)",
+              "letterSpacing": "0.06em",
+              "fontFamily": "MadouFutoMaru, NouveauIBM, monospace",
+              "fontWeight": 700
+            }
+          },
+          {
+            "id": "code_desktop",
+            "type": "text",
+            "x": 0.62,
+            "y": 0.27906976744186046,
+            "w": 0.32037914691943126,
+            "h": 0.5581395348837209,
+            "text": "ROOT/INDEX",
+            "parent": "titlebar",
+            "visibleIn": [
+              "desktop"
+            ],
+            "style": {
+              "color": "#5ca6aa",
+              "align": "right",
+              "fontSize": "calc(var(--overlay-scale) * 12px)",
+              "lineHeight": "calc(var(--overlay-scale) * 16px)",
+              "letterSpacing": "0.07em"
+            }
+          },
+          {
+            "id": "title_log",
+            "type": "text",
+            "x": 0.026066350710900472,
+            "y": 0.23255813953488372,
+            "w": 0.6,
+            "h": 0.6046511627906976,
+            "text": "SYSTEM LOG",
+            "parent": "titlebar",
+            "visibleIn": [
+              "log"
+            ],
+            "style": {
+              "color": "#e8ffff",
+              "align": "left",
+              "fontSize": "calc(var(--overlay-scale) * 18px)",
+              "lineHeight": "calc(var(--overlay-scale) * 20px)",
+              "letterSpacing": "0.06em",
+              "fontFamily": "MadouFutoMaru, NouveauIBM, monospace",
+              "fontWeight": 700
+            }
+          },
+          {
+            "id": "code_log",
+            "type": "text",
+            "x": 0.62,
+            "y": 0.27906976744186046,
+            "w": 0.32037914691943126,
+            "h": 0.5581395348837209,
+            "text": "SYS.LOG/ARCHIVE",
+            "parent": "titlebar",
+            "visibleIn": [
+              "log"
+            ],
+            "style": {
+              "color": "#5ca6aa",
+              "align": "right",
+              "fontSize": "calc(var(--overlay-scale) * 12px)",
+              "lineHeight": "calc(var(--overlay-scale) * 16px)",
+              "letterSpacing": "0.07em"
+            }
+          },
+          {
+            "id": "title_email",
+            "type": "text",
+            "x": 0.026066350710900472,
+            "y": 0.23255813953488372,
+            "w": 0.6,
+            "h": 0.6046511627906976,
+            "text": "INTERNAL MAIL",
+            "parent": "titlebar",
+            "visibleIn": [
+              "email"
+            ],
+            "style": {
+              "color": "#e8ffff",
+              "align": "left",
+              "fontSize": "calc(var(--overlay-scale) * 18px)",
+              "lineHeight": "calc(var(--overlay-scale) * 20px)",
+              "letterSpacing": "0.06em",
+              "fontFamily": "MadouFutoMaru, NouveauIBM, monospace",
+              "fontWeight": 700
+            }
+          },
+          {
+            "id": "code_email",
+            "type": "text",
+            "x": 0.62,
+            "y": 0.27906976744186046,
+            "w": 0.32037914691943126,
+            "h": 0.5581395348837209,
+            "text": "COM.MAIL/LOCAL",
+            "parent": "titlebar",
+            "visibleIn": [
+              "email"
+            ],
+            "style": {
+              "color": "#5ca6aa",
+              "align": "right",
+              "fontSize": "calc(var(--overlay-scale) * 12px)",
+              "lineHeight": "calc(var(--overlay-scale) * 16px)",
+              "letterSpacing": "0.07em"
+            }
+          },
+          {
+            "id": "title_map",
+            "type": "text",
+            "x": 0.026066350710900472,
+            "y": 0.23255813953488372,
+            "w": 0.6,
+            "h": 0.6046511627906976,
+            "text": "FACILITY MAP",
+            "parent": "titlebar",
+            "visibleIn": [
+              "map"
+            ],
+            "style": {
+              "color": "#e8ffff",
+              "align": "left",
+              "fontSize": "calc(var(--overlay-scale) * 18px)",
+              "lineHeight": "calc(var(--overlay-scale) * 20px)",
+              "letterSpacing": "0.06em",
+              "fontFamily": "MadouFutoMaru, NouveauIBM, monospace",
+              "fontWeight": 700
+            }
+          },
+          {
+            "id": "code_map",
+            "type": "text",
+            "x": 0.62,
+            "y": 0.27906976744186046,
+            "w": 0.32037914691943126,
+            "h": 0.5581395348837209,
+            "text": "NAV.OBELAB/SUB-2",
+            "parent": "titlebar",
+            "visibleIn": [
+              "map"
+            ],
+            "style": {
+              "color": "#5ca6aa",
+              "align": "right",
+              "fontSize": "calc(var(--overlay-scale) * 12px)",
+              "lineHeight": "calc(var(--overlay-scale) * 16px)",
+              "letterSpacing": "0.07em"
+            }
+          },
+          {
+            "id": "title_sysinfo",
+            "type": "text",
+            "x": 0.026066350710900472,
+            "y": 0.23255813953488372,
+            "w": 0.6,
+            "h": 0.6046511627906976,
+            "text": "SYSTEM INFORMATION",
+            "parent": "titlebar",
+            "visibleIn": [
+              "sysinfo"
+            ],
+            "style": {
+              "color": "#e8ffff",
+              "align": "left",
+              "fontSize": "calc(var(--overlay-scale) * 18px)",
+              "lineHeight": "calc(var(--overlay-scale) * 20px)",
+              "letterSpacing": "0.06em",
+              "fontFamily": "MadouFutoMaru, NouveauIBM, monospace",
+              "fontWeight": 700
+            }
+          },
+          {
+            "id": "code_sysinfo",
+            "type": "text",
+            "x": 0.62,
+            "y": 0.27906976744186046,
+            "w": 0.32037914691943126,
+            "h": 0.5581395348837209,
+            "text": "SYS.DIAG/READ-ONLY",
+            "parent": "titlebar",
+            "visibleIn": [
+              "sysinfo"
+            ],
+            "style": {
+              "color": "#5ca6aa",
+              "align": "right",
+              "fontSize": "calc(var(--overlay-scale) * 12px)",
+              "lineHeight": "calc(var(--overlay-scale) * 16px)",
+              "letterSpacing": "0.07em"
+            }
+          },
+          {
+            "id": "titlebar_close_mark",
+            "type": "text",
+            "x": 0.971563981042654,
+            "y": 0.18604651162790697,
+            "w": 0.03672985781990521,
+            "h": 0.6976744186046512,
+            "text": "×",
+            "parent": "titlebar",
+            "style": {
+              "color": "#ffffff",
+              "align": "center",
+              "fontSize": "calc(var(--overlay-scale) * 18px)",
+              "lineHeight": "calc(var(--overlay-scale) * 27px)",
+              "fontFamily": "MadouFutoMaru, monospace",
+              "fontWeight": 700
+            }
+          },
+          {
+            "id": "titlebar_close",
+            "type": "hotspot",
+            "x": 0.9632701421800948,
+            "y": 0.09302325581395349,
+            "w": 0.03672985781990521,
+            "h": 0.6976744186046512,
+            "label": "Return to terminal desktop",
+            "presentation": "control",
+            "events": {
+              "activate": {
+                "actions": [
+                  {
+                    "type": "setView",
+                    "view": "desktop"
+                  },
+                  {
+                    "type": "openInk",
+                    "knot": "desktop"
+                  }
+                ]
+              }
+            },
+            "parent": "titlebar"
+          },
+          {
+            "id": "content_frame",
+            "type": "container",
+            "x": 0.02262443438914027,
+            "y": 0.0880503144654088,
+            "w": 0.9547511312217195,
+            "h": 0.8018867924528302,
+            "parent": "module_window",
+            "style": {},
+            "clip": true
+          },
+          {
+            "id": "ink_lines",
+            "type": "container",
+            "x": 0.026066350710900472,
+            "y": 0.03137254901960784,
+            "w": 0.9478672985781991,
+            "h": 0.9333333333333333,
+            "parent": "content_frame",
+            "visibleIn": [
+              "desktop",
+              "log",
+              "email",
+              "sysinfo"
+            ],
+            "content": {
+              "source": "inkLines",
+              "tagStyles": {
+                "heading": "heading",
+                "warn": "warning",
+                "ok": "success",
+                "dim": "dim",
+                "divider": "divider"
+              }
+            },
+            "style": {
+              "color": "#8fd0ca",
+              "align": "left",
+              "fontSize": "calc(var(--overlay-scale) * 17px)",
+              "lineHeight": "calc(var(--overlay-scale) * 26px)",
+              "letterSpacing": "0.025em",
+              "whiteSpace": "pre",
+              "overflow": "hidden"
+            }
+          },
+          {
+            "id": "ink_lines_map",
+            "type": "container",
+            "x": 0.026066350710900472,
+            "y": 0.03137254901960784,
+            "w": 0.9478672985781991,
+            "h": 0.9333333333333333,
+            "parent": "content_frame",
+            "visibleIn": [
+              "map"
+            ],
+            "content": {
+              "source": "inkLines",
+              "tagStyles": {
+                "heading": "heading",
+                "warn": "warning",
+                "ok": "success",
+                "dim": "dim",
+                "divider": "divider"
+              }
+            },
+            "style": {
+              "color": "#82d5ce",
+              "align": "left",
+              "fontSize": "calc(var(--overlay-scale) * 15px)",
+              "lineHeight": "calc(var(--overlay-scale) * 23.5px)",
+              "whiteSpace": "pre",
+              "overflow": "hidden"
+            }
+          },
+          {
+            "id": "command_bar",
+            "type": "container",
+            "x": 0.5520361990950227,
+            "y": 0.9119496855345912,
+            "w": 0.4253393665158371,
+            "h": 0.07547169811320754,
+            "parent": "module_window",
+            "style": {}
+          },
+          {
+            "id": "ink_choices",
+            "type": "container",
+            "x": 0.5851063829787234,
+            "y": 0.14583333333333334,
+            "w": 0.40425531914893614,
+            "h": 0.6666666666666666,
+            "parent": "command_bar",
+            "content": {
+              "source": "inkChoices",
+              "controlPreset": "terminal-command"
+            },
+            "events": {
+              "choiceSelected": {
+                "actions": [
+                  {
+                    "type": "setView",
+                    "view": "desktop"
+                  }
+                ]
+              }
+            },
+            "style": {
+              "color": "#d9f5f2",
+              "align": "center",
+              "fontSize": "calc(var(--overlay-scale) * 13px)",
+              "lineHeight": "calc(var(--overlay-scale) * 18px)",
+              "letterSpacing": "0.06em",
+              "fontFamily": "MadouFutoMaru, NouveauIBM, monospace",
+              "fontWeight": 700
+            }
+          },
+          {
+            "id": "footer",
+            "type": "container",
+            "x": 0.034722222222222224,
+            "y": 0.9236111111111112,
+            "w": 0.9305555555555556,
+            "h": 0.05092592592592592,
+            "style": {}
+          },
+          {
+            "id": "footer_network",
+            "type": "text",
+            "x": 0.024253731343283583,
+            "y": 0.3181818181818182,
+            "w": 0.58,
+            "h": 0.5,
+            "text": "OBELAB INTERNAL NETWORK // NODE 07",
+            "parent": "footer",
+            "style": {
+              "color": "#71bab9",
+              "align": "left",
+              "fontSize": "calc(var(--overlay-scale) * 13px)",
+              "lineHeight": "calc(var(--overlay-scale) * 15px)",
+              "letterSpacing": "0.09em"
+            }
+          },
+          {
+            "id": "footer_desktop",
+            "type": "text",
+            "x": 0.62,
+            "y": 0.3181818181818182,
+            "w": 0.35574626865671644,
+            "h": 0.5,
+            "text": "SHELL READY",
+            "parent": "footer",
+            "visibleIn": [
+              "desktop"
+            ],
+            "style": {
+              "color": "#d6ece8",
+              "align": "right",
+              "fontSize": "calc(var(--overlay-scale) * 13px)",
+              "lineHeight": "calc(var(--overlay-scale) * 15px)",
+              "letterSpacing": "0.09em",
+              "fontWeight": 700
+            }
+          },
+          {
+            "id": "footer_log",
+            "type": "text",
+            "x": 0.62,
+            "y": 0.3181818181818182,
+            "w": 0.35574626865671644,
+            "h": 0.5,
+            "text": "LOG // ACTIVE",
+            "parent": "footer",
+            "visibleIn": [
+              "log"
+            ],
+            "style": {
+              "color": "#d6ece8",
+              "align": "right",
+              "fontSize": "calc(var(--overlay-scale) * 13px)",
+              "lineHeight": "calc(var(--overlay-scale) * 15px)",
+              "letterSpacing": "0.09em",
+              "fontWeight": 700
+            }
+          },
+          {
+            "id": "footer_email",
+            "type": "text",
+            "x": 0.62,
+            "y": 0.3181818181818182,
+            "w": 0.35574626865671644,
+            "h": 0.5,
+            "text": "EMAIL // ACTIVE",
+            "parent": "footer",
+            "visibleIn": [
+              "email"
+            ],
+            "style": {
+              "color": "#d6ece8",
+              "align": "right",
+              "fontSize": "calc(var(--overlay-scale) * 13px)",
+              "lineHeight": "calc(var(--overlay-scale) * 15px)",
+              "letterSpacing": "0.09em",
+              "fontWeight": 700
+            }
+          },
+          {
+            "id": "footer_map",
+            "type": "text",
+            "x": 0.62,
+            "y": 0.3181818181818182,
+            "w": 0.35574626865671644,
+            "h": 0.5,
+            "text": "MAP // ACTIVE",
+            "parent": "footer",
+            "visibleIn": [
+              "map"
+            ],
+            "style": {
+              "color": "#d6ece8",
+              "align": "right",
+              "fontSize": "calc(var(--overlay-scale) * 13px)",
+              "lineHeight": "calc(var(--overlay-scale) * 15px)",
+              "letterSpacing": "0.09em",
+              "fontWeight": 700
+            }
+          },
+          {
+            "id": "footer_sysinfo",
+            "type": "text",
+            "x": 0.62,
+            "y": 0.3181818181818182,
+            "w": 0.35574626865671644,
+            "h": 0.5,
+            "text": "SYSINFO // ACTIVE",
+            "parent": "footer",
+            "visibleIn": [
+              "sysinfo"
+            ],
+            "style": {
+              "color": "#d6ece8",
+              "align": "right",
+              "fontSize": "calc(var(--overlay-scale) * 13px)",
+              "lineHeight": "calc(var(--overlay-scale) * 15px)",
+              "letterSpacing": "0.09em",
+              "fontWeight": 700
+            }
+          }
+        ]
+      }
     },
     "ship_engine": {
       "id": "ship_engine",
@@ -653,7 +1697,7 @@
     "rusty_key": {
       "id": "rusty_key",
       "name": "Rusty Key",
-      "description": "An old iron key, stained with verdigris. The teeth are filed in an unusual pattern \u2014 military, maybe, or police. It weighs more than it should.",
+      "description": "An old iron key, stained with verdigris. The teeth are filed in an unusual pattern — military, maybe, or police. It weighs more than it should.",
       "icon": "assets/items/rusty_key.png",
       "key": true,
       "pickup_message": "You found a rusty key."
@@ -669,7 +1713,7 @@
     "battery": {
       "id": "battery",
       "name": "Battery",
-      "description": "A lithium cell still holding a partial charge. The label is in a script you can't read \u2014 Cyrillic, maybe, or something older. Smells faintly of ozone.",
+      "description": "A lithium cell still holding a partial charge. The label is in a script you can't read — Cyrillic, maybe, or something older. Smells faintly of ozone.",
       "icon": "assets/items/battery.png",
       "key": false,
       "pickup_message": "You pocketed a battery."

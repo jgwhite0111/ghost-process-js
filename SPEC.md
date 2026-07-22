@@ -139,7 +139,7 @@ Normalized coordinates `(x, y, w, h ∈ [0,1])` over the scene canvas. Two actio
 - `"target": "scene_id"` — transition to that scene on click.
 - `"item": "item_id"` — pick up item (added to inventory, hitbox becomes inactive).
 
-Each hitbox is single-use by default: clicking marks it in `STATE.spentHitboxes[sceneId:label]`, so subsequent clicks no-op. Item hitboxes additionally hide their label once the item is in `STATE.inventory` or `STATE.consumed`.
+Each hitbox is single-use by default: clicking marks it in `STATE.spentHitboxes[sceneId:label]`, so subsequent clicks no-op. Set `"repeatable": true` for navigation or other hitboxes that must remain usable after the player returns to the scene. Item hitboxes additionally hide their label once the item is in `STATE.inventory` or `STATE.consumed`.
 
 ### 3.3 Items
 

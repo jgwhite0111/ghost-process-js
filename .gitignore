@@ -9,5 +9,6 @@ package-lock.json
 .tmp/
 # Local dev artifacts — never committed.
 *.local
+artifacts/browser/
 __pycache__/
 *.pyc

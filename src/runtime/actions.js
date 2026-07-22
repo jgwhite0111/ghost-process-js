@@ -58,6 +58,8 @@
             },
             execute(action, context) {
                 const scene = context.scene;
+                const overlayResult = scene.overlayLayer?.openInk(action.knot);
+                if (overlayResult?.handled) return null;
                 if (!scene.dialogueRunner) return null;
                 try {
                     scene.dialogueRunner.story.ChoosePathString(action.knot);
@@ -69,6 +71,21 @@
                         : `hitbox ink ${action.knot}`;
                     console.warn(`[${scene.sceneId}] ${source} failed`, error);
                 }
+                return null;
+            },
+        }),
+
+        setView: Object.freeze({
+            validate(action) {
+                return requireString(action, 'view');
+            },
+            execute(action, context) {
+                const scene = context.scene;
+                if (!scene.overlayLayer?.setView) {
+                    console.warn(`[${scene.sceneId}] setView requires a mounted scene overlay`);
+                    return null;
+                }
+                scene.overlayLayer.setView(action.view);
                 return null;
             },
         }),

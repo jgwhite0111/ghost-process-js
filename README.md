@@ -16,7 +16,7 @@ npm start                    # boots Express on 127.0.0.1:8765
 Then open:
 - **Game**: http://127.0.0.1:8765/index.html
 - **Exploration demo**: http://127.0.0.1:8765/index.html?scene=exploration_demo
-- **Editor**: http://127.0.0.1:8765/editor.html
+- **Editor**: http://127.0.0.1:8765/editor.html — newcomer guide: [`EDITOR-MANUAL.md`](EDITOR-MANUAL.md)
 - **Asset desk**: http://127.0.0.1:8765/asset-generator.html
 
 By default the server is local-only (`127.0.0.1`). To serve over Tailscale/LAN, opt into a non-loopback bind and provide a secret of at least 16 non-whitespace characters:
@@ -57,6 +57,7 @@ boot.js            ← engine entry point
 index.html         ← game entry
 editor.html        ← scene editor (browser-based)
 editor.js          ← editor logic
+EDITOR-MANUAL.md   ← step-by-step guide for scene authors
 ```
 
 The 16-color palette / Bayer dither look is applied at runtime by the

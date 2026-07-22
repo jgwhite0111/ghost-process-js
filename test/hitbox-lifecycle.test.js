@@ -209,6 +209,27 @@ test('button hitbox is a semantic control with hand cursor and no item label vis
     layer.destroy();
 });
 
+test('repeatable hitboxes can be activated more than once without a spent-state lockout', () => {
+    const env = loadHitboxLayer();
+    const triggers = [];
+    const walkaway = {
+        x: 0.02, y: 0.45, w: 0.1, h: 0.3,
+        label: 'Walk away', target: 'exploration_demo', repeatable: true,
+    };
+    const layer = new env.HitboxLayer({
+        canvas: env.canvas,
+        sceneId: 'terminal_obelab',
+        sceneConfig: { kind: 'ink', hitboxes: [walkaway] },
+        onTrigger: (hb) => triggers.push(hb),
+    });
+
+    layer._hitboxEls[0].dispatch('pointerdown', { clientX: 130, clientY: 300 });
+    layer._hitboxEls[0].dispatch('pointerdown', { clientX: 130, clientY: 300 });
+    assert.deepEqual(triggers, [walkaway, walkaway]);
+    assert.deepEqual(env.window.STATE.spentHitboxes, {});
+    layer.destroy();
+});
+
 test('ink item labels return to inventory-aware baseline after both hover exit paths', () => {
     const env = loadHitboxLayer({ inventory: ['held_item'], consumed: ['used_item'] });
     const hitboxes = [

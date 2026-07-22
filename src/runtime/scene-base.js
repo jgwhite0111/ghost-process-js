@@ -32,6 +32,7 @@ class Scene {
         this.characters = [];      // CharacterSprite[]
         this.exploration = null;
         this.hitboxLayer = null;
+        this.overlayLayer = null;
         this.dialogueRunner = null;
         this.music = null;
         this._rafId = null;
@@ -128,6 +129,14 @@ class Scene {
             sceneConfig: this.sceneConfig,
             onTrigger: (hb, clientX, clientY) => this._triggerHitbox(hb, clientX, clientY)
         });
+        if (window.OverlayRuntime && this.sceneConfig.overlay) {
+            this.overlayLayer = new window.OverlayRuntime.OverlayLayer({
+                canvas: this.canvas,
+                scene: this,
+                sceneConfig: this.sceneConfig,
+            });
+            this.overlayLayer.mount();
+        }
         if (this.sceneConfig.kind === 'exploration') {
             const playerId = this.sceneConfig.exploration?.playerId || 'player';
             const playerSprite = this.characters.find((sprite) =>
@@ -144,7 +153,10 @@ class Scene {
         // Ink.
         if (this.sceneConfig.ink) {
             await this._startDialogue();
-            if (window.DialoguePanel) window.DialoguePanel.show();
+            if (window.DialoguePanel) {
+                if (this.overlayLayer?.hasInkContent()) window.DialoguePanel.hide();
+                else window.DialoguePanel.show();
+            }
         } else {
             if (window.DialoguePanel) window.DialoguePanel.hide();
         }
@@ -183,6 +195,11 @@ class Scene {
             window.Inventory.unlockForGameplay();
             window.__inventoryUnlocked = true;
         }
+        const inventoryButton = typeof document === 'undefined' ? null : document.getElementById('inventory-button');
+        if (inventoryButton) inventoryButton.hidden = this.sceneConfig.hud?.inventory === false;
+        if (this.sceneConfig.hud?.inventory === false && window.Inventory?._closePopup) {
+            window.Inventory._closePopup();
+        }
     }
 
     async _startDialogue() {
@@ -191,6 +208,12 @@ class Scene {
         // which is loaded once and stepped per pointerdown.
         if (!this.sceneConfig.ink) return;
         const inkSource = await (await fetch(this.sceneConfig.ink)).text();
+        if (this.overlayLayer?.hasInkContent()) {
+            const bound = this.overlayLayer.bindInk(inkSource);
+            if (bound.ok) this.overlayLayer.startInk();
+            if (window.DialoguePanel) window.DialoguePanel.hide();
+            return;
+        }
         try {
         const runner = new window.DialogueRunner(inkSource, {
             onLine: (text) => this._handleDialogueLine(text),
@@ -564,10 +587,12 @@ class Scene {
         // no letterbox) anchored CENTER. The GHOST PROCESS logo is
         // drawn as canvas overlay text by _drawTitleOverlay() AFTER
         // the source, so it's never cropped by cover-fit.
-        const rect = window.Runtime.coverRect(
-            this.bgImage.width, this.bgImage.height,
-            this.canvas.width, this.canvas.height,
-            'center');
+        const fit = this.sceneConfig.bgFit === 'contain' && window.Runtime.containRect
+            ? window.Runtime.containRect(this.bgImage.width, this.bgImage.height,
+                this.canvas.width, this.canvas.height)
+            : window.Runtime.coverRect(this.bgImage.width, this.bgImage.height,
+                this.canvas.width, this.canvas.height, 'center');
+        const rect = fit;
         if (this._ditheredBg) {
             this.ctx.fillStyle = letterbox;
             this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
@@ -699,6 +724,12 @@ class Scene {
         }
         if (this._rafId) cancelAnimationFrame(this._rafId);
         if (this.hitboxLayer) this.hitboxLayer.destroy();
+        if (this.overlayLayer) {
+            this.overlayLayer.destroy();
+            this.overlayLayer = null;
+        }
+        const inventoryButton = typeof document === 'undefined' ? null : document.getElementById('inventory-button');
+        if (inventoryButton) inventoryButton.hidden = false;
         this.canvas.removeEventListener('pointerdown', this._onPointerDown);
         // Tell the dialogue runner to stop producing line events.
         if (this.dialogueRunner) this.dialogueRunner.stop();

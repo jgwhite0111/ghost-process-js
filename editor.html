@@ -102,6 +102,15 @@
   }
   #scene-list li.has-bg .swatch { background: #3fb950; }
   #scene-list li .count, #item-list li .count { margin-left: auto; color: #6c7280; font-size: 11px; }
+  .overlay-authoring { margin-top: 16px; border-top: 1px solid #30363d; padding-top: 8px; }
+  .overlay-addrow { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; }
+  .overlay-addrow button { font-size: 10px; padding: 3px; }
+  #overlay-tree { list-style: none; margin: 0; padding: 0; }
+  #overlay-tree li { display: flex; align-items: center; gap: 3px; padding: 3px 4px; border: 1px solid transparent; cursor: pointer; font-size: 11px; }
+  #overlay-tree li:hover { background: #1c2129; }
+  #overlay-tree li.active { background: #1f4d80; border-color: #3470bd; }
+  #overlay-tree .overlay-kind { color: #70dcff; width: 12px; text-align: center; }
+  #overlay-tree .overlay-locked { color: #f0b760; margin-left: auto; }
 
   /* ---------- center / canvas ---------- */
   #viewport-toolbar { display: flex; gap: 8px; align-items: center; padding: 4px 8px;
@@ -199,6 +208,47 @@
     background: #6cba6c; border: 1px solid #0d1117; cursor: nwse-resize;
   }
   .hitbox-handle.button-control .resize { background: #70dcff; }
+  .overlay-element-handle {
+    position: absolute; box-sizing: border-box; outline: 1px dashed #d78cff;
+    background: rgba(215,140,255,.06); cursor: grab; touch-action: none; pointer-events: auto;
+  }
+  .overlay-element-handle.hidden-in-editor { opacity: .25; }
+  .overlay-element-handle.locked { cursor: not-allowed; }
+  .overlay-element-handle.selected { outline-style: solid; box-shadow: 0 0 0 1px rgba(215,140,255,.5); }
+  .overlay-element-handle.view-active { box-shadow: 0 0 0 2px rgba(89,220,170,.45); }
+  .view-membership, .tag-styles-editor, .overlay-content-editor, .scene-views-editor { display: grid; gap: 5px; }
+  .view-membership .check-row { display: flex; align-items: center; gap: 6px; color: #a7d8dc; }
+  .overlay-element-handle .label { position: absolute; left: 0; top: -16px; color: #d78cff; background: #0d1117; padding: 0 3px; font-size: 10px; white-space: nowrap; }
+  .overlay-element-handle .resize { position: absolute; right: -5px; bottom: -5px; width: 10px; height: 10px; background: #d78cff; border: 1px solid #0d1117; cursor: nwse-resize; }
+  .overlay-element-handle.locked .resize { display: none; }
+
+  /* Selection must remain unmistakable in dense authored overlays such as
+     terminal_ui. Keep this authoring-only treatment above neighboring boxes;
+     runtime rendering never loads editor.html. */
+  .sprite-handle.selected,
+  .hitbox-handle.selected,
+  .hitbox-handle.button-control.selected,
+  .overlay-element-handle.selected {
+    z-index: 30;
+    outline: 2px solid #ffe66d;
+    outline-offset: -2px;
+    background: rgba(255, 230, 109, 0.22);
+    box-shadow: 0 0 0 2px #0d1117, 0 0 0 4px #ffe66d, 0 0 14px rgba(255, 230, 109, 0.72);
+  }
+  .sprite-handle.selected .label,
+  .hitbox-handle.selected .label,
+  .overlay-element-handle.selected .label {
+    z-index: 31;
+    color: #0d1117;
+    background: #ffe66d;
+    font-weight: 700;
+  }
+  .sprite-handle.selected .resize,
+  .hitbox-handle.selected .resize,
+  .overlay-element-handle.selected .resize {
+    background: #ffe66d;
+    border-color: #0d1117;
+  }
 
   #draw-preview { /* removed: draw-hitbox tool no longer exists */ }
 
@@ -475,6 +525,16 @@
     <ul id="scene-list"></ul>
     <h3 style="margin-top: 16px">Items</h3>
     <ul id="item-list"></ul>
+    <section id="overlay-authoring" class="overlay-authoring">
+      <h3>Scene overlay</h3>
+      <div class="addrow overlay-addrow">
+        <button data-overlay-add="container">Container</button>
+        <button data-overlay-add="image">Image</button>
+        <button data-overlay-add="text">Text</button>
+        <button data-overlay-add="hotspot">Hotspot</button>
+      </div>
+      <ul id="overlay-tree"></ul>
+    </section>
   </aside>
 
   <main id="center">
@@ -491,6 +551,10 @@
         <input id="vw" type="number" min="100" max="4000" style="width:70px" />
         ×
         <input id="vh" type="number" min="100" max="4000" style="width:70px" />
+      </span>
+      <span id="overlay-view-preview" style="display:none;gap:4px;align-items:center;">
+        <label for="overlay-preview-view">Preview view:</label>
+        <select id="overlay-preview-view" aria-label="Preview overlay view"></select>
       </span>
       <span style="flex:1"></span>
       <label style="font-size:11px;color:#6c7280">runtime preview: palette + dither + scanlines</label>
@@ -539,6 +603,7 @@
 <script src="assets/palettes/dialogue.js"></script>
 <script src="assets/palettes/terminal_lab.js"></script>
 <script src="src/runtime/canvas.js"></script>
+<script src="src/runtime/overlay.js"></script>
 <script src="src/runtime/sprites.js"></script>
 <script src="editor.js"></script>
 </body>
